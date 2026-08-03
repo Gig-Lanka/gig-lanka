@@ -37,6 +37,7 @@ You do **not** need Android Studio or Xcode installed — Expo Go lets you run t
    (On Windows PowerShell: `copy .env.example .env`)
 2. Fill in the values in `.env` as needed. Currently:
    - `EXPO_PUBLIC_API_BASE_URL` — the base URL of the backend API.
+   - `EXPO_PUBLIC_USE_MOCK` — set to `false` to call the real API instead of the mock adapter. Defaults to mock (any value other than `false`, including leaving it unset).
 
    Variables must be prefixed with `EXPO_PUBLIC_` to be readable in app code (this is an Expo requirement — anything without that prefix is not exposed to the JS bundle). They're read through `src/constants/config.js`, so import from there rather than reading `process.env` directly elsewhere.
 
