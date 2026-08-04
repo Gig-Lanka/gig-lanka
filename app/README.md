@@ -57,17 +57,21 @@ This starts the Metro bundler and prints a QR code in the terminal.
 4. The app should build and load on your phone.
 
 **If your phone can't reach your computer** (different networks, restrictive Wi-Fi, VPN, etc.), press `s` in the terminal, or start with tunnel mode directly:
+
 ```
 npx expo start --tunnel
 ```
+
 This routes the connection through Expo's servers instead of your local network — slower, but works from anywhere with internet.
 
 ## Clearing the Metro cache
 
 If you pull changes that touch `tailwind.config.js`, `babel.config.js`, or `metro.config.js`, or if `className` styles stop applying for no obvious reason, restart with a cleared cache:
+
 ```
 npx expo start --clear
 ```
+
 A stale Metro cache is the most common cause of "NativeWind isn't working" — a `className` that silently renders unstyled usually means the cache needs clearing, not that the config is wrong.
 
 ## Troubleshooting

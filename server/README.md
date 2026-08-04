@@ -26,11 +26,11 @@ This is a free-tier instance, so it sleeps after periods of inactivity. The firs
 
 `npm run seed` creates one test user per role against the shared cluster. It is idempotent — an existing user (matched by email) is left untouched, so running it repeatedly never creates duplicates.
 
-| Role     | Email                     | Password      |
-|----------|----------------------------|--------------|
-| seeker   | seeker@giglanka.test       | Password123! |
-| business | business@giglanka.test     | Password123! |
-| admin    | admin@giglanka.test        | Password123! |
+| Role     | Email                  | Password     |
+| -------- | ---------------------- | ------------ |
+| seeker   | seeker@giglanka.test   | Password123! |
+| business | business@giglanka.test | Password123! |
+| admin    | admin@giglanka.test    | Password123! |
 
 These are dev/test-only credentials for the shared cluster, not real accounts. `admin` is only ever created this way or by direct database access — never through public registration.
 
@@ -62,23 +62,23 @@ Follow this pattern for every model added in Sprint 1 onward.
 **Example skeleton**
 
 ```js
-import mongoose from "mongoose";
+import mongoose from 'mongoose';
 
 const exampleSchema = new mongoose.Schema(
   {
     owner: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
+      ref: 'User',
       required: true,
     },
     status: {
       type: String,
-      enum: ["open", "closed"],
+      enum: ['open', 'closed'],
       required: true,
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
-export const Example = mongoose.model("Example", exampleSchema);
+export const Example = mongoose.model('Example', exampleSchema);
 ```

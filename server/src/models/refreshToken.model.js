@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+import mongoose from 'mongoose';
 
 const refreshTokenSchema = new mongoose.Schema({
   token: {
@@ -7,7 +7,7 @@ const refreshTokenSchema = new mongoose.Schema({
   },
   user: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: "User",
+    ref: 'User',
     required: true,
   },
   expiresAt: {
@@ -17,4 +17,4 @@ const refreshTokenSchema = new mongoose.Schema({
   },
 });
 
-export const RefreshToken = mongoose.model("RefreshToken", refreshTokenSchema);
+export const RefreshToken = mongoose.model('RefreshToken', refreshTokenSchema);
