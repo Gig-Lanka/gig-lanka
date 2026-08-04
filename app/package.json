@@ -22,10 +22,19 @@
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "lint": "eslint .",
+    "format": "prettier --write ."
   },
   "private": true,
   "devDependencies": {
-    "babel-preset-expo": "~54.0.12"
+    "@eslint/js": "^9.39.5",
+    "babel-preset-expo": "~54.0.12",
+    "eslint": "^9.39.5",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.9.0",
+    "prettier": "^3.9.6"
   }
 }
