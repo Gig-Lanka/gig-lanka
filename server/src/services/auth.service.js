@@ -1,7 +1,7 @@
 import bcrypt from "bcryptjs";
 import { User } from "../models/user.model.js";
 import { ApiError } from "../utils/ApiError.js";
-import { issueTokens, rotateRefreshToken } from "./token.service.js";
+import { issueTokens, rotateRefreshToken, revokeRefreshToken } from "./token.service.js";
 
 const SALT_ROUNDS = 10;
 
@@ -24,6 +24,8 @@ export const registerUser = async ({ email, password, role }) => {
 };
 
 export const refreshTokens = (refreshToken) => rotateRefreshToken(refreshToken);
+
+export const logoutUser = (refreshToken) => revokeRefreshToken(refreshToken);
 
 export const loginUser = async ({ email, password }) => {
   const user = await User.findOne({ email });

@@ -46,3 +46,7 @@ export const rotateRefreshToken = async (token) => {
 
   return issueTokens({ _id: decoded.id, role: decoded.role });
 };
+
+export const revokeRefreshToken = async (token) => {
+  await RefreshToken.deleteOne({ token });
+};
