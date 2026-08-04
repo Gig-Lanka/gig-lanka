@@ -1,15 +1,15 @@
-import jwt from "jsonwebtoken";
-import { env } from "../config/env.js";
-import { User } from "../models/user.model.js";
-import { ApiError } from "../utils/ApiError.js";
-import { asyncHandler } from "../utils/asyncHandler.js";
+import jwt from 'jsonwebtoken';
+import { env } from '../config/env.js';
+import { User } from '../models/user.model.js';
+import { ApiError } from '../utils/ApiError.js';
+import { asyncHandler } from '../utils/asyncHandler.js';
 
 const UNAUTHENTICATED = () =>
-  new ApiError(401, "UNAUTHENTICATED", "You must be logged in to do this.");
+  new ApiError(401, 'UNAUTHENTICATED', 'You must be logged in to do this.');
 
 export const requireAuth = asyncHandler(async (req, res, next) => {
   const header = req.headers.authorization;
-  const token = header?.startsWith("Bearer ") ? header.slice(7) : null;
+  const token = header?.startsWith('Bearer ') ? header.slice(7) : null;
 
   if (!token) {
     throw UNAUTHENTICATED();

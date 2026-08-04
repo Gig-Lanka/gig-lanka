@@ -1,6 +1,6 @@
-import { asyncHandler } from "../utils/asyncHandler.js";
-import { sendSuccess } from "../utils/response.js";
-import { registerUser, loginUser, refreshTokens, logoutUser } from "../services/auth.service.js";
+import { asyncHandler } from '../utils/asyncHandler.js';
+import { sendSuccess } from '../utils/response.js';
+import { registerUser, loginUser, refreshTokens, logoutUser } from '../services/auth.service.js';
 
 export const register = asyncHandler(async (req, res) => {
   const { user, accessToken, refreshToken } = await registerUser(req.body);
