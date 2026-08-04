@@ -4,7 +4,8 @@ import { User } from "../models/user.model.js";
 import { ApiError } from "../utils/ApiError.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 
-const UNAUTHENTICATED = () => new ApiError(401, "UNAUTHENTICATED", "You must be logged in to do this.");
+const UNAUTHENTICATED = () =>
+  new ApiError(401, "UNAUTHENTICATED", "You must be logged in to do this.");
 
 export const requireAuth = asyncHandler(async (req, res, next) => {
   const header = req.headers.authorization;
@@ -17,7 +18,7 @@ export const requireAuth = asyncHandler(async (req, res, next) => {
   let decoded;
   try {
     decoded = jwt.verify(token, env.jwtAccessSecret);
-  } catch (err) {
+  } catch {
     throw UNAUTHENTICATED();
   }
 
