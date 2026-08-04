@@ -6,6 +6,22 @@ This is where express code exists (Back-end)
 2. `npm install`
 3. `npm run dev`
 
+## Deployed dev environment
+
+The API is deployed from `dev-release` to Render, auto-deploying on every push.
+
+- **Public URL**: https://gig-lanka.onrender.com
+- **Dashboard**: https://dashboard.render.com/web/srv-d9olmnjl550s73etkmg0
+- **Health check**: https://gig-lanka.onrender.com/api/health
+
+### Adding an environment variable
+
+In the dashboard, go to **Environment** in the left sidebar, add the key/value pair, and save — Render redeploys automatically to apply it. Never commit secrets to `.env`; they're set through the dashboard only.
+
+### Cold starts
+
+This is a free-tier instance, so it sleeps after periods of inactivity. The first request after a quiet period can take several seconds to respond while the instance spins back up — this is expected, not a bug.
+
 ## Seeding test data
 
 `npm run seed` creates one test user per role against the shared cluster. It is idempotent — an existing user (matched by email) is left untouched, so running it repeatedly never creates duplicates.
