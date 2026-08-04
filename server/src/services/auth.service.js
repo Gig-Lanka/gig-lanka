@@ -43,3 +43,21 @@ export const registerUser = async ({ email, password, role }) => {
 
   return { user, accessToken, refreshToken };
 };
+
+export const loginUser = async ({ email, password }) => {
+  const user = await User.findOne({ email });
+
+  if (!user) {
+    throw new ApiError(401, "INVALID_CREDENTIALS", "Email or password is incorrect.");
+  }
+
+  const isMatch = await bcrypt.compare(password, user.passwordHash);
+
+  if (!isMatch) {
+    throw new ApiError(401, "INVALID_CREDENTIALS", "Email or password is incorrect.");
+  }
+
+  const { accessToken, refreshToken } = await generateTokens(user);
+
+  return { user, accessToken, refreshToken };
+};
