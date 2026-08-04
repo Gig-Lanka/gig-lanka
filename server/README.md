@@ -8,7 +8,7 @@ This is where express code exists (Back-end)
 
 ## Deployed dev environment
 
-The API is deployed from `develop` to Render, auto-deploying on every push.
+The API is deployed from `dev-release` to Render, auto-deploying on every push.
 
 - **Public URL**: https://gig-lanka.onrender.com
 - **Dashboard**: https://dashboard.render.com/web/srv-d9olmnjl550s73etkmg0
