@@ -262,6 +262,34 @@ Routes are plural, lowercase, hyphenated: `/api/gigs`, `/api/skill-trials`.
 
 ---
 
+## Linting, formatting, and the pre-commit hook
+
+Both `app/` and `server/` share one Prettier config (`.prettierrc.json` at the repo root) and each has its own ESLint config (`app/eslint.config.js`, `server/eslint.config.js`). `eslint-config-prettier` is applied in both so ESLint never fights Prettier over formatting — ESLint owns code-quality rules, Prettier owns style.
+
+**Run locally**, from inside `app/` or `server/`:
+
+```bash
+npm run lint      # ESLint — code-quality rules, fails on errors
+npm run format     # Prettier --write — reformats files in place
+```
+
+`npm run lint` is also what CI runs on every pull request targeting `develop` or `main` (`.github/workflows/ci.yml`), for both `app/` and `server/`. **The check is required on `develop`** — a PR cannot be merged while it's red.
+
+**Pre-commit hook (Husky + lint-staged).** On every `git commit`, `.husky/pre-commit` runs `npx lint-staged`, which reads `app/.lintstagedrc.json` / `server/.lintstagedrc.json` and runs `eslint --fix` then `prettier --write` against **staged files only** — not the whole project, so it stays fast.
+
+- Pure formatting issues (spacing, quotes, semicolons) are auto-fixed and silently re-staged — you won't see a rejection for those.
+- Real lint errors (e.g. `no-unused-vars`, a broken React Hooks rule) can't be auto-fixed. The commit is **aborted** and lint-staged prints the offending file(s) and rule(s).
+
+**When a commit is rejected:**
+
+1. Read the error output — it names the file, line, and rule.
+2. Fix the issue (or run `npm run lint -- --fix` / `npm run format` in the relevant directory for anything auto-fixable).
+3. `git add` the fixed file(s) and commit again.
+
+Don't reach for `git commit --no-verify` to skip this — it only defers the same failure to CI, where it blocks the PR instead.
+
+---
+
 ## Rules for an agent implementing a sub-task
 
 1. **Read `docs/api-contract.md` first** if the task touches an endpoint or an API call. The response envelope is fixed and both sides depend on it.
