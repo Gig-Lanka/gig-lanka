@@ -11,9 +11,7 @@ export default function TextInput({
 }) {
   return (
     <View className={['mb-4', containerClassName].filter(Boolean).join(' ')}>
-      {label ? (
-        <Text className="mb-1.5 text-sm font-medium text-text-primary">{label}</Text>
-      ) : null}
+      {label ? <Text className="mb-1.5 text-sm font-medium text-text-primary">{label}</Text> : null}
 
       <RNTextInput
         editable={!disabled}

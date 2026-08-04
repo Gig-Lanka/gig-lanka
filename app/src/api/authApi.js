@@ -3,7 +3,7 @@
 // index.js can swap between them with no other code change.
 
 function notImplemented() {
-  return Promise.reject(new Error("Real auth API not implemented yet — see GL-74."));
+  return Promise.reject(new Error('Real auth API not implemented yet — see GL-74.'));
 }
 
 export default {
