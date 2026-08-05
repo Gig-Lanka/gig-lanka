@@ -1,4 +1,5 @@
-import { Text, View } from 'react-native';
+import { useState } from 'react';
+import { Pressable, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 
 import Button from '../../components/ui/Button';
@@ -10,35 +11,32 @@ const ROLES = [
     role: 'seeker',
     title: "I'm looking for work",
     description: 'Browse gigs, apply, and get hired by businesses near you.',
-    label: 'Continue as a seeker',
   },
   {
     role: 'business',
     title: "I'm hiring",
     description: 'Post gigs and find people to get the work done.',
-    label: 'Continue as a business',
   },
 ];
 
-function RoleOption({ title, description, label, onSelect }) {
+function RoleOption({ title, description, selected, onPress }) {
   return (
-    <Card className="gap-3">
-      <View>
+    <Pressable onPress={onPress}>
+      <Card className={selected ? 'border-2 border-primary bg-primary-soft' : 'border-2 border-transparent'}>
         <Text className="text-lg font-semibold text-text-primary">{title}</Text>
         <Text className="mt-1 text-sm text-text-secondary">{description}</Text>
-      </View>
-      <Button onPress={onSelect} fullWidth>
-        {label}
-      </Button>
-    </Card>
+      </Card>
+    </Pressable>
   );
 }
 
 export default function RoleSelectScreen() {
   const navigation = useNavigation();
+  const [selectedRole, setSelectedRole] = useState(null);
 
-  const selectRole = (role) => {
-    navigation.navigate('SignUp', { role });
+  const handleNext = () => {
+    if (!selectedRole) return;
+    navigation.navigate('SignUp', { role: selectedRole });
   };
 
   return (
@@ -51,15 +49,21 @@ export default function RoleSelectScreen() {
       </View>
 
       <View className="gap-4">
-        {ROLES.map(({ role, title, description, label }) => (
+        {ROLES.map(({ role, title, description }) => (
           <RoleOption
             key={role}
             title={title}
             description={description}
-            label={label}
-            onSelect={() => selectRole(role)}
+            selected={selectedRole === role}
+            onPress={() => setSelectedRole(role)}
           />
         ))}
+      </View>
+
+      <View className="mb-4 mt-auto">
+        <Button onPress={handleNext} disabled={!selectedRole} fullWidth>
+          Next
+        </Button>
       </View>
     </Screen>
   );
