@@ -44,7 +44,7 @@ export default function RoleSelectScreen() {
       <View className="mt-8 mb-8">
         <Text className="text-2xl font-bold text-text-primary">Join Gig Lanka</Text>
         <Text className="mt-1 text-base text-text-secondary">
-          Choose how you'll use the app. You can't change this later.
+          Choose how you&apos;ll use the app. You can&apos;t change this later.
         </Text>
       </View>
 
