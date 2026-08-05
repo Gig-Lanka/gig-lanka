@@ -34,6 +34,50 @@ This is a free-tier instance, so it sleeps after periods of inactivity. The firs
 
 These are dev/test-only credentials for the shared cluster, not real accounts. `admin` is only ever created this way or by direct database access — never through public registration.
 
+## Auth middleware — protecting a route
+
+`requireAuth` and `requireRole` live in `src/middleware/auth.middleware.js`. `requireAuth` verifies the bearer token, loads the user from the database, and attaches it to `req.user`. `requireRole` is a factory that must run **after** `requireAuth` — it checks `req.user.role` against the roles you pass in.
+
+- `requireAuth` alone → any authenticated user, any role.
+- `requireAuth` + `requireRole("business")` → businesses only.
+- `requireAuth` + `requireRole("business", "admin")` → either role.
+- `requireRole` used without `requireAuth` first fails closed with `401 UNAUTHENTICATED` — it never trusts a missing `req.user`.
+
+**Any authenticated user:**
+
+```js
+import { requireAuth } from '../middleware/auth.middleware.js';
+
+router.get('/me', requireAuth, me);
+```
+
+**Business-only route:**
+
+```js
+import { requireAuth, requireRole } from '../middleware/auth.middleware.js';
+
+router.post('/gigs', requireAuth, requireRole('business'), createGig);
+```
+
+**Admin-only route:**
+
+```js
+import { requireAuth, requireRole } from '../middleware/auth.middleware.js';
+
+router.post('/businesses/:id/verify', requireAuth, requireRole('admin'), verifyBusiness);
+```
+
+**Error codes from `requireAuth`** (all `401`, distinct `code` so the client knows when to trigger a refresh vs. show a login screen):
+
+| Code                  | Meaning                                      |
+| --------------------- | --------------------------------------------- |
+| `AUTH_HEADER_MISSING` | No `Authorization` header sent                |
+| `AUTH_HEADER_MALFORMED` | Header isn't `Bearer <token>`               |
+| `TOKEN_INVALID`       | Bad signature, malformed JWT, or user no longer exists |
+| `TOKEN_EXPIRED`       | Token signature is valid but it has expired   |
+
+`requireRole` responds `401 UNAUTHENTICATED` if reached with no `req.user`, and `403 FORBIDDEN` if the user's role isn't allowed.
+
 ## Schema conventions
 
 Follow this pattern for every model added in Sprint 1 onward.
