@@ -4,28 +4,38 @@ import { User } from '../models/user.model.js';
 import { ApiError } from '../utils/ApiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 
-const UNAUTHENTICATED = () =>
-  new ApiError(401, 'UNAUTHENTICATED', 'You must be logged in to do this.');
-
 export const requireAuth = asyncHandler(async (req, res, next) => {
   const header = req.headers.authorization;
-  const token = header?.startsWith('Bearer ') ? header.slice(7) : null;
 
-  if (!token) {
-    throw UNAUTHENTICATED();
+  if (!header) {
+    throw new ApiError(401, 'AUTH_HEADER_MISSING', 'Authorization header is missing.');
   }
+
+  if (!header.startsWith('Bearer ') || !header.slice(7).trim()) {
+    throw new ApiError(
+      401,
+      'AUTH_HEADER_MALFORMED',
+
+      'Authorization header must be in the format "Bearer <token>".',
+    );
+  }
+
+  const token = header.slice(7);
 
   let decoded;
   try {
     decoded = jwt.verify(token, env.jwtAccessSecret);
-  } catch {
-    throw UNAUTHENTICATED();
+  } catch (err) {
+    if (err.name === 'TokenExpiredError') {
+      throw new ApiError(401, 'TOKEN_EXPIRED', 'Access token has expired.');
+    }
+    throw new ApiError(401, 'TOKEN_INVALID', 'Access token is invalid.');
   }
 
   const user = await User.findById(decoded.id);
 
   if (!user) {
-    throw UNAUTHENTICATED();
+    throw new ApiError(401, 'TOKEN_INVALID', 'Access token is invalid.');
   }
 
   req.user = user;
