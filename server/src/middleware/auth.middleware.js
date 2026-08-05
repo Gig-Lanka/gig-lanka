@@ -41,3 +41,17 @@ export const requireAuth = asyncHandler(async (req, res, next) => {
   req.user = user;
   next();
 });
+
+export const requireRole =
+  (...roles) =>
+  (req, res, next) => {
+    if (!req.user) {
+      throw new ApiError(401, 'UNAUTHENTICATED', 'You must be logged in to do this.');
+    }
+
+    if (!roles.includes(req.user.role)) {
+      throw new ApiError(403, 'FORBIDDEN', 'You do not have permission to perform this action.');
+    }
+
+    next();
+  };
