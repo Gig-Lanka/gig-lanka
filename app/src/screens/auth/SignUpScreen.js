@@ -4,20 +4,21 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 
 import { authApi } from '../../api';
 import Button from '../../components/ui/Button';
+import Dropdown from '../../components/ui/Dropdown';
 import Screen from '../../components/ui/Screen';
 import TextInput from '../../components/ui/TextInput';
 import { validateSignUpForm } from '../../utils/validation';
 
-const ROLE_LABELS = {
-  seeker: "I'm looking for work",
-  business: "I'm hiring",
-};
+const ROLE_OPTIONS = [
+  { label: "I'm looking for work", value: 'seeker' },
+  { label: "I'm hiring", value: 'business' },
+];
 
 export default function SignUpScreen() {
   const navigation = useNavigation();
   const route = useRoute();
-  const role = route.params?.role;
 
+  const [role, setRole] = useState(route.params?.role);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -66,20 +67,13 @@ export default function SignUpScreen() {
           <Text className="text-2xl font-bold text-text-primary">Create your account</Text>
         </View>
 
-        <View className="mb-6 flex-row items-center justify-between rounded-md border border-border bg-bg-card px-4 py-3">
-          <Text className="text-sm text-text-secondary">
-            Signing up as{' '}
-            <Text className="font-semibold text-text-primary">{ROLE_LABELS[role] ?? role}</Text>
-          </Text>
-          <Button
-            variant="outline"
-            size="small"
-            onPress={() => navigation.goBack()}
-            disabled={submitting}
-          >
-            Change
-          </Button>
-        </View>
+        <Dropdown
+          label="Role"
+          options={ROLE_OPTIONS}
+          value={role}
+          onChange={setRole}
+          disabled={submitting}
+        />
 
         <TextInput
           label="Email"
