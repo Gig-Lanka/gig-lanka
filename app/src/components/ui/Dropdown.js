@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { FlatList, Modal, Pressable, Text, View } from 'react-native';
+import { useRef, useState } from 'react';
+import { Modal, Pressable, Text, View } from 'react-native';
 
 export default function Dropdown({
   label,
@@ -14,14 +14,25 @@ export default function Dropdown({
   ...props
 }) {
   const [open, setOpen] = useState(false);
+  const [anchor, setAnchor] = useState(null);
+  const triggerRef = useRef(null);
   const selected = options.find((option) => option.value === value);
+
+  const openMenu = () => {
+    if (disabled) return;
+    triggerRef.current?.measureInWindow((x, y, width, height) => {
+      setAnchor({ x, y, width, height });
+      setOpen(true);
+    });
+  };
 
   return (
     <View className={['mb-4', containerClassName].filter(Boolean).join(' ')}>
       {label ? <Text className="mb-1.5 text-sm font-medium text-text-primary">{label}</Text> : null}
 
       <Pressable
-        onPress={() => !disabled && setOpen(true)}
+        ref={triggerRef}
+        onPress={openMenu}
         disabled={disabled}
         className={[
           'flex-row items-center justify-between rounded-md border px-4 py-2.5',
@@ -41,35 +52,43 @@ export default function Dropdown({
 
       {error ? <Text className="mt-1 text-xs text-danger-text">{error}</Text> : null}
 
-      <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
-        <Pressable className="flex-1 justify-end bg-black/40" onPress={() => setOpen(false)}>
-          <Pressable className="rounded-t-lg bg-bg-card pb-6 pt-2" onPress={() => {}}>
-            <FlatList
-              data={options}
-              keyExtractor={(item) => String(item.value)}
-              renderItem={({ item }) => (
+      <Modal
+        visible={open}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setOpen(false)}
+      >
+        <Pressable className="flex-1" onPress={() => setOpen(false)}>
+          {anchor ? (
+            <View
+              className="absolute rounded-md border border-border bg-bg-card"
+              style={{ top: anchor.y + anchor.height + 4, left: anchor.x, width: anchor.width }}
+            >
+              {options.map((option) => (
                 <Pressable
+                  key={option.value}
                   onPress={() => {
-                    onChange?.(item.value);
+                    onChange?.(option.value);
                     setOpen(false);
                   }}
-                  className={['px-4 py-3', item.value === value ? 'bg-primary-soft' : '']
+                  className={['px-4 py-3', option.value === value ? 'bg-primary-soft' : '']
                     .filter(Boolean)
                     .join(' ')}
                 >
                   <Text
                     className={
-                      item.value === value
+                      option.value === value
                         ? 'text-base font-semibold text-primary'
                         : 'text-base text-text-primary'
                     }
                   >
-                    {item.label}
+                    {option.label}
                   </Text>
                 </Pressable>
-              )}
-            />
-          </Pressable>
+              ))}
+            </View>
+          ) : null}
         </Pressable>
       </Modal>
     </View>

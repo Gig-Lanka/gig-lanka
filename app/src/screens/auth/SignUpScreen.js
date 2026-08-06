@@ -10,8 +10,8 @@ import TextInput from '../../components/ui/TextInput';
 import { validateSignUpForm } from '../../utils/validation';
 
 const ROLE_OPTIONS = [
-  { label: "I'm looking for work", value: 'seeker' },
-  { label: "I'm hiring", value: 'business' },
+  { label: 'seeker', value: 'seeker' },
+  { label: 'business', value: 'business' },
 ];
 
 export default function SignUpScreen() {
