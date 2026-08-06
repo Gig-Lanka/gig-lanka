@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 
 import { authApi } from '../../api';
@@ -84,6 +84,12 @@ export default function SignUpScreen() {
       <Button onPress={handleSubmit} fullWidth>
         Sign Up
       </Button>
+
+      <Pressable onPress={() => navigation.navigate('Login')} className="mt-6">
+        <Text className="text-center text-sm text-text-secondary">
+          Already have an account? <Text className="font-semibold text-primary">Log in</Text>
+        </Text>
+      </Pressable>
     </Screen>
   );
 }
