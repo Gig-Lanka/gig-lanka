@@ -22,7 +22,11 @@ const ROLES = [
 function RoleOption({ title, description, selected, onPress }) {
   return (
     <Pressable onPress={onPress}>
-      <Card className={selected ? 'border-2 border-primary bg-primary-soft' : 'border-2 border-transparent'}>
+      <Card
+        className={
+          selected ? 'border-2 border-primary bg-primary-soft' : 'border-2 border-transparent'
+        }
+      >
         <Text className="text-lg font-semibold text-text-primary">{title}</Text>
         <Text className="mt-1 text-sm text-text-secondary">{description}</Text>
       </Card>

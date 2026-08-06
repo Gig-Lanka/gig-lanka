@@ -62,7 +62,7 @@ export default function SignUpScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       className="flex-1"
     >
-      <Screen scroll>
+      <Screen scroll contentClassName="flex-grow justify-center">
         <View className="mb-6 mt-8">
           <Text className="text-2xl font-bold text-text-primary">Create your account</Text>
         </View>
