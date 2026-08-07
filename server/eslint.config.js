@@ -17,6 +17,14 @@ export default [
       'no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
     },
   },
+  {
+    files: ['tests/**/*.js'],
+    languageOptions: {
+      globals: {
+        ...globals.jest,
+      },
+    },
+  },
   prettierConfig,
   {
     ignores: ['node_modules/**', 'coverage/**'],
