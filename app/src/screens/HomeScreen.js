@@ -18,6 +18,15 @@ export default function HomeScreen() {
           Dev: Component Kit
         </Button>
       ) : null}
+      {__DEV__ ? (
+        <Button
+          className="mt-4"
+          variant="outline"
+          onPress={() => navigation.navigate('RoleSelect')}
+        >
+          Dev: Auth Screens
+        </Button>
+      ) : null}
     </View>
   );
 }
