@@ -24,6 +24,11 @@ let sessionExpiredHandler = null;
 // import cycle with authApi.js). Nothing subscribes yet.
 export function onSessionExpired(handler) {
   sessionExpiredHandler = handler;
+  return () => {
+    if (sessionExpiredHandler === handler) {
+      sessionExpiredHandler = null;
+    }
+  };
 }
 
 let isRefreshing = false;
