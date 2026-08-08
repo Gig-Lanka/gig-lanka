@@ -1,7 +1,7 @@
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import AuthStack from './AuthStack';
-import TabNavigator from './TabNavigator';
+import SeekerTabs from './SeekerTabs';
 import Loader from '../components/ui/Loader';
 import ComponentDemoScreen from '../screens/dev/ComponentDemoScreen';
 import useAuth from '../hooks/useAuth';
@@ -12,7 +12,7 @@ const Stack = createNativeStackNavigator();
 function AppStack() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="Main" component={TabNavigator} />
+      <Stack.Screen name="Main" component={SeekerTabs} />
       {__DEV__ ? (
         <Stack.Screen
           name="ComponentDemo"
