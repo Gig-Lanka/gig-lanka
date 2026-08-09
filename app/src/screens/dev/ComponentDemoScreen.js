@@ -105,6 +105,18 @@ function LoaderSection() {
   );
 }
 
+function DesignTokensSection() {
+  return (
+    <Section title="Design tokens — GL-82">
+      <Text className="font-display text-h1 text-ink">Aa</Text>
+      <Text className="mt-2 text-sm text-text-secondary">
+        font-display text-h1 text-ink — verifies the GL-82 token set (Schibsted Grotesk, size, and
+        color) renders correctly on device.
+      </Text>
+    </Section>
+  );
+}
+
 function ScreenSection() {
   return (
     <Section title="Screen">
@@ -121,6 +133,7 @@ export default function ComponentDemoScreen() {
     <Screen scroll>
       <Text className="mb-6 text-2xl font-bold text-text-primary">UI Kit</Text>
       <ScreenSection />
+      <DesignTokensSection />
       <ButtonSection />
       <TextInputSection />
       <CardSection />
