@@ -1,21 +1,22 @@
 import { KeyboardAvoidingView, Platform, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { LinearGradient } from 'expo-linear-gradient';
-import { cssInterop } from 'nativewind';
 import { SafeAreaView } from 'react-native-safe-area-context';
-
-cssInterop(LinearGradient, { className: 'style' });
+import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
 
 function EmberGlow() {
   return (
-    <LinearGradient
-      pointerEvents="none"
-      colors={['rgba(255, 74, 28, 0.34)', 'rgba(255, 74, 28, 0.08)', 'transparent']}
-      locations={[0, 0.46, 0.72]}
-      start={{ x: 0.25, y: 0.25 }}
-      end={{ x: 0.8, y: 0.8 }}
-      className="absolute -right-[110px] -top-[120px] h-[340px] w-[340px] rounded-full"
-    />
+    <View pointerEvents="none" className="absolute -right-[110px] -top-[120px] h-[340px] w-[340px]">
+      <Svg width={340} height={340} viewBox="0 0 340 340">
+        <Defs>
+          <RadialGradient id="emberGlow" cx="50%" cy="50%" r="50%">
+            <Stop offset="0%" stopColor="rgb(255, 74, 28)" stopOpacity={0.34} />
+            <Stop offset="46%" stopColor="rgb(255, 74, 28)" stopOpacity={0.08} />
+            <Stop offset="72%" stopColor="rgb(255, 74, 28)" stopOpacity={0} />
+          </RadialGradient>
+        </Defs>
+        <Rect width="340" height="340" fill="url(#emberGlow)" />
+      </Svg>
+    </View>
   );
 }
 
