@@ -16,7 +16,6 @@ module.exports = {
         'cta-text': '#4a3500',
 
         // Status
-        danger: '#ff6b6b',
         success: '#22c55e',
         warning: '#f59e0b',
 
@@ -38,12 +37,31 @@ module.exports = {
         // Role tints
         'primary-soft': '#eef1ff',
         'primary-muted': '#c7d2fe',
-        'danger-soft': '#fef2f2',
         'danger-text': '#dc2626',
         'success-soft': '#f0fdf4',
         'success-text': '#15803d',
         'warning-soft': '#fffbeb',
         'warning-text': '#92400e',
+
+        // GL-82 design tokens — values read from the `:root` block of
+        // docs/mockups/gig-lanka-auth-v2.html. `danger` and `danger-soft`
+        // above were removed from the legacy groups and redefined here
+        // because the mockup reuses those exact names with new values;
+        // every other legacy color above is untouched and still used by
+        // components/screens until GL-83/GL-84 migrate them onto this set.
+        ink: '#101114',
+        'ink-hi': '#1C1D23',
+        paper: '#FFFFFF',
+        haze: '#F4F4F6',
+        line: '#E7E7EC',
+        muted: '#71727C',
+        'muted-dark': '#9A9BA6',
+        signal: '#FF4A1C',
+        'signal-soft': '#FFF1EC',
+        'signal-ink': '#8A3517',
+        danger: '#E5484D',
+        'danger-soft': '#FDEDED',
+        'danger-ink': '#8A2A2D',
       },
       spacing: {
         1: '0.25rem',
@@ -65,6 +83,26 @@ module.exports = {
         md: '0.5rem',
         lg: '0.625rem',
         xl: '0.875rem',
+
+        // GL-82 design tokens — from the parent story's radius table.
+        // `lg`/`md`/`sm` would collide with the legacy scale above at
+        // different pixel values, and Button/Card/Dropdown/TextInput/
+        // ComponentDemoScreen still use those legacy names, so this new
+        // scale is namespaced `ds-*` until GL-83/GL-84 migrate those
+        // components onto it, at which point the legacy keys above can
+        // be retired and this namespace dropped.
+        'ds-sheet': '34px',
+        'ds-lg': '18px',
+        'ds-card': '22px',
+        'ds-md': '14px',
+        'ds-sm': '10px',
+      },
+      fontFamily: {
+        // GL-82 design tokens. `display` is always used at weight 700 in
+        // the type scale below, so it maps directly to the bold static
+        // font loaded in App.js rather than a separate weight utility.
+        display: ['SchibstedGrotesk_700Bold'],
+        body: ['InterTight_400Regular'],
       },
       fontSize: {
         xs: '0.75rem',
@@ -74,6 +112,17 @@ module.exports = {
         xl: '1.25rem',
         '2xl': '1.5rem',
         '3xl': '1.875rem',
+
+        // GL-82 design tokens — from the parent story's type-scale table.
+        h1: ['42px', { lineHeight: '1.02', letterSpacing: '-0.042em', fontWeight: '700' }],
+        title: ['19px', { letterSpacing: '-0.02em', fontWeight: '700' }],
+        wordmark: ['16px', { letterSpacing: '-0.02em', fontWeight: '700' }],
+        body: '16px',
+        lede: ['15px', { lineHeight: '1.5', fontWeight: '400' }],
+        desc: ['14px', { lineHeight: '1.45', fontWeight: '400' }],
+        label: ['13px', { fontWeight: '600' }],
+        caption: ['12px', { letterSpacing: '0.04em', fontWeight: '600' }],
+        overline: ['11px', { letterSpacing: '0.06em', fontWeight: '600' }],
       },
     },
   },
