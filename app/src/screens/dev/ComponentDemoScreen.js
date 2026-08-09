@@ -20,23 +20,29 @@ function Section({ title, children }) {
 function ButtonSection() {
   return (
     <>
-      <Section title="Button — variants">
-        <Button variant="primary">Primary</Button>
-        <Button variant="secondary">Secondary</Button>
-        <Button variant="outline">Outline</Button>
-        <Button variant="danger">Danger</Button>
+      <Section title="Button — primary">
+        <Button trailingArrow>Continue</Button>
+        <Button fullWidth={false} trailingArrow className="self-start">
+          Inline action
+        </Button>
       </Section>
 
-      <Section title="Button — sizes">
-        <Button size="small">Small</Button>
-        <Button size="medium">Medium</Button>
-        <Button size="large">Large</Button>
+      <Section title="Button — small">
+        <Button variant="small" fullWidth={false} className="self-start">
+          Change
+        </Button>
       </Section>
 
       <Section title="Button — states">
-        <Button disabled>Disabled</Button>
-        <Button loading>Loading</Button>
-        <Button fullWidth>Full width</Button>
+        <Button trailingArrow loading>
+          Continue
+        </Button>
+        <Button trailingArrow disabled>
+          Disabled
+        </Button>
+        <Button variant="small" fullWidth={false} disabled className="self-start">
+          Change
+        </Button>
       </Section>
     </>
   );
@@ -44,25 +50,25 @@ function ButtonSection() {
 
 function TextInputSection() {
   const [email, setEmail] = useState('');
-  const [amount, setAmount] = useState('');
+  const [focusedValue, setFocusedValue] = useState('');
 
   return (
     <Section title="TextInput">
       <TextInput
-        label="Email"
+        label="Resting field"
         placeholder="you@example.com"
         keyboardType="email-address"
         value={email}
         onChangeText={setEmail}
       />
-      <TextInput label="Password" placeholder="Password" secureTextEntry />
       <TextInput
-        label="Amount"
-        placeholder="0"
-        keyboardType="numeric"
-        value={amount}
-        onChangeText={setAmount}
+        autoFocus
+        label="Focused field"
+        placeholder="Tap to focus"
+        value={focusedValue}
+        onChangeText={setFocusedValue}
       />
+      <TextInput label="Password" placeholder="Password" secureTextEntry />
       <TextInput label="With error" placeholder="Username" error="This field is required" />
       <TextInput label="Disabled" placeholder="Can't touch this" disabled />
     </Section>
@@ -71,14 +77,30 @@ function TextInputSection() {
 
 function CardSection() {
   return (
-    <Section title="Card">
-      <Card>
-        <Text className="text-base font-medium text-text-primary">Card title</Text>
-        <Text className="mt-1 text-sm text-text-secondary">
-          Consistent padding, background, and border radius for list items and content blocks.
-        </Text>
-      </Card>
-    </Section>
+    <>
+      <Section title="Card — base">
+        <Card>
+          <Text className="font-display text-title text-ink">Card title</Text>
+          <Text className="mt-[5px] text-desc text-muted">
+            Consistent padding, background, and border radius for list items and content blocks.
+          </Text>
+        </Card>
+      </Section>
+
+      <Section title="Card — selectable">
+        <Card
+          title="I'm looking for work"
+          description="Browse gigs, apply, and get hired by businesses near you."
+          onPress={() => {}}
+        />
+        <Card
+          title="I'm hiring"
+          description="Post gigs and find people to get the work done."
+          selected
+          onPress={() => {}}
+        />
+      </Section>
+    </>
   );
 }
 
