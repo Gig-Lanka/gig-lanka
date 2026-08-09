@@ -36,6 +36,7 @@ export default function LoginScreen() {
 
   return (
     <AuthShell
+      scroll
       header={
         <>
           <Brand />

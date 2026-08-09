@@ -1,4 +1,4 @@
-import { KeyboardAvoidingView, Platform, View } from 'react-native';
+import { Keyboard, KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
@@ -33,6 +33,7 @@ export default function AuthShell({
   headerClassName,
   sheetClassName,
   contentClassName,
+  scroll = false,
   keyboardVerticalOffset = 0,
 }) {
   return (
@@ -58,13 +59,31 @@ export default function AuthShell({
             .join(' ')}
         >
           <SafeAreaView edges={['bottom']} className="flex-1">
-            <View
-              className={['flex-1 flex-col px-[26px] pt-[30px]', contentClassName]
-                .filter(Boolean)
-                .join(' ')}
-            >
-              {children}
-            </View>
+            {scroll ? (
+              <ScrollView
+                className="flex-1"
+                contentContainerClassName="flex-grow"
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+                onTouchStart={Keyboard.dismiss}
+              >
+                <View
+                  className={['flex-1 flex-col px-[26px] pt-[30px]', contentClassName]
+                    .filter(Boolean)
+                    .join(' ')}
+                >
+                  {children}
+                </View>
+              </ScrollView>
+            ) : (
+              <View
+                className={['flex-1 flex-col px-[26px] pt-[30px]', contentClassName]
+                  .filter(Boolean)
+                  .join(' ')}
+              >
+                {children}
+              </View>
+            )}
           </SafeAreaView>
         </View>
       </View>
