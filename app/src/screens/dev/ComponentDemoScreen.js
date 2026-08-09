@@ -1,10 +1,14 @@
 import { useState } from 'react';
 import { Text, View } from 'react-native';
 
+import Brand from '../../components/ui/Brand';
 import Button from '../../components/ui/Button';
 import Card from '../../components/ui/Card';
 import EmptyState from '../../components/ui/EmptyState';
 import Loader from '../../components/ui/Loader';
+import Notice from '../../components/ui/Notice';
+import ProgressPips from '../../components/ui/ProgressPips';
+import RoleStrip from '../../components/ui/RoleStrip';
 import Screen from '../../components/ui/Screen';
 import TextInput from '../../components/ui/TextInput';
 
@@ -139,6 +143,23 @@ function DesignTokensSection() {
   );
 }
 
+function AuthPrimitivesSection() {
+  return (
+    <Section title="Auth primitives">
+      <View className="self-start rounded-ds-lg bg-ink p-4">
+        <Brand />
+      </View>
+      <ProgressPips total={4} current={2} caption />
+      <Notice>
+        This sets up your whole account, so pick the one that fits how you&apos;ll mostly use Gig
+        Lanka.
+      </Notice>
+      <Notice variant="error">Something went wrong. Please try again.</Notice>
+      <RoleStrip value="I'm looking for work" onAction={() => {}} />
+    </Section>
+  );
+}
+
 function ScreenSection() {
   return (
     <Section title="Screen">
@@ -156,6 +177,7 @@ export default function ComponentDemoScreen() {
       <Text className="mb-6 text-2xl font-bold text-text-primary">UI Kit</Text>
       <ScreenSection />
       <DesignTokensSection />
+      <AuthPrimitivesSection />
       <ButtonSection />
       <TextInputSection />
       <CardSection />
