@@ -2,15 +2,16 @@ import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 
-import { authApi } from '../../api';
 import AuthShell from '../../components/ui/AuthShell';
 import Brand from '../../components/ui/Brand';
 import Button from '../../components/ui/Button';
 import Notice from '../../components/ui/Notice';
 import TextInput from '../../components/ui/TextInput';
+import useAuth from '../../hooks/useAuth';
 
 export default function LoginScreen() {
   const navigation = useNavigation();
+  const { login } = useAuth();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -22,7 +23,7 @@ export default function LoginScreen() {
     setFormError('');
     setSubmitting(true);
     try {
-      await authApi.login({
+      await login({
         email: email.trim().toLowerCase(),
         password,
       });
