@@ -62,6 +62,12 @@ module.exports = {
         danger: '#E5484D',
         'danger-soft': '#FDEDED',
         'danger-ink': '#8A2A2D',
+
+        // GL-90 — the mockup's `.field-hint` placeholder color is a literal
+        // #A3A4AE, not one of the `:root` custom properties, so it has no
+        // named token of its own upstream. Added here so TextInput's
+        // placeholder can still be styled by class name instead of a raw hex.
+        placeholder: '#A3A4AE',
       },
       spacing: {
         1: '0.25rem',

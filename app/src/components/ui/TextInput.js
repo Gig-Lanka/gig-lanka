@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Text, TextInput as RNTextInput, View } from 'react-native';
 
 export default function TextInput({
@@ -7,20 +8,37 @@ export default function TextInput({
   secureTextEntry = false,
   className,
   containerClassName,
+  onFocus,
+  onBlur,
   ...props
 }) {
+  const [isFocused, setIsFocused] = useState(false);
+  const hasError = Boolean(error);
+
   return (
     <View className={['mb-4', containerClassName].filter(Boolean).join(' ')}>
-      {label ? <Text className="mb-1.5 text-sm font-medium text-text-primary">{label}</Text> : null}
+      {label ? <Text className="mb-2 text-label text-ink">{label}</Text> : null}
 
       <RNTextInput
         editable={!disabled}
         secureTextEntry={secureTextEntry}
-        placeholderTextColor="#9ca3af"
+        onFocus={(event) => {
+          setIsFocused(true);
+          onFocus?.(event);
+        }}
+        onBlur={(event) => {
+          setIsFocused(false);
+          onBlur?.(event);
+        }}
         className={[
-          'rounded-md border px-4 py-2.5 text-base text-text-primary',
-          error ? 'border-danger' : 'border-border',
-          disabled ? 'bg-bg-soft opacity-60' : 'bg-bg-card',
+          'h-[58px] rounded-ds-lg border-[1.5px] px-[18px] text-body font-medium text-ink',
+          'placeholder:font-normal placeholder:text-placeholder',
+          hasError
+            ? 'border-danger bg-paper'
+            : isFocused
+              ? 'border-ink bg-paper'
+              : 'border-transparent bg-haze',
+          disabled && 'opacity-40',
           className,
         ]
           .filter(Boolean)
@@ -28,7 +46,9 @@ export default function TextInput({
         {...props}
       />
 
-      {error ? <Text className="mt-1 text-xs text-danger-text">{error}</Text> : null}
+      {hasError ? (
+        <Text className="mt-1.5 text-[13px] font-medium text-danger">{error}</Text>
+      ) : null}
     </View>
   );
 }
