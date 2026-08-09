@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Gig Lanka — Auth, v2</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@500;600;700;800&family=Inter+Tight:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #101114;
+    --ink-hi: #1C1D23;
+    --paper: #FFFFFF;
+    --haze: #F4F4F6;
+    --line: #E7E7EC;
+    --muted: #71727C;
+    --muted-dark: #9A9BA6;
+    --signal: #FF4A1C;
+    --signal-soft: #FFF1EC;
+    --danger: #E5484D;
+
+    --r-sheet: 34px;
+    --r-lg: 18px;
+    --r-md: 14px;
+    --r-sm: 10px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #DCDCE1;
+    font-family: 'Inter Tight', -apple-system, system-ui, sans-serif;
+    padding: 56px 40px 80px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .canvas { display: flex; gap: 52px; justify-content: center; align-items: flex-start; flex-wrap: wrap; }
+  .frame-wrap { display: flex; flex-direction: column; gap: 12px; }
+  .frame-label {
+    font-size: 11px; font-weight: 600; letter-spacing: 0.14em;
+    text-transform: uppercase; color: #86868F;
+  }
+
+  .frame {
+    position: relative; width: 390px; height: 844px;
+    background: var(--ink); border-radius: 38px; overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+
+  .frame-ember {
+    position: absolute; top: -120px; right: -110px;
+    width: 340px; height: 340px;
+    background: radial-gradient(ellipse at 50% 50%, rgba(255, 74, 28, 0.34) 0%, rgba(255, 74, 28, 0.08) 46%, rgba(255, 74, 28, 0) 72%);
+  }
+
+  /* ---------- status bar ---------- */
+  .status {
+    position: relative;
+    height: 54px; display: flex; align-items: flex-end; justify-content: space-between;
+    padding: 0 28px 8px; font-size: 14px; font-weight: 600; color: var(--paper);
+  }
+  .status-icons { display: flex; gap: 5px; align-items: flex-end; }
+  .bar { width: 3px; background: var(--paper); border-radius: 1px; }
+  .bar-a { height: 5px; } .bar-b { height: 8px; } .bar-c { height: 11px; }
+  .battery {
+    width: 24px; height: 12px; border: 1.5px solid var(--paper);
+    border-radius: 3px; padding: 2px; margin-left: 3px;
+  }
+  .battery-fill { width: 72%; height: 100%; background: var(--paper); border-radius: 1px; }
+
+  /* ---------- dark header ---------- */
+  .header { position: relative; padding: 0 26px 34px; }
+
+  .mark { display: flex; align-items: center; gap: 9px; }
+  .mark-tile {
+    width: 30px; height: 30px; border-radius: 9px; background: var(--signal);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .mark-slash { width: 3px; height: 13px; background: var(--paper); border-radius: 2px; }
+  .mark-slash-b { width: 3px; height: 8px; background: rgba(255,255,255,0.55); border-radius: 2px; margin-left: 3px; }
+  .mark-inner { display: flex; align-items: flex-end; }
+  .wordmark {
+    font-family: 'Schibsted Grotesk', sans-serif;
+    font-size: 16px; font-weight: 700; letter-spacing: -0.02em; color: var(--paper);
+  }
+
+  h1 {
+    font-family: 'Schibsted Grotesk', sans-serif;
+    font-size: 42px; line-height: 1.02; font-weight: 700;
+    letter-spacing: -0.042em; color: var(--paper);
+  }
+  .lede { font-size: 15px; line-height: 1.5; font-weight: 400; color: var(--muted-dark); }
+
+  /* ---------- white sheet ---------- */
+  .sheet {
+    position: relative; flex: 1;
+    background: var(--paper);
+    border-top-left-radius: var(--r-sheet);
+    border-top-right-radius: var(--r-sheet);
+    padding: 30px 26px 26px;
+    display: flex; flex-direction: column;
+  }
+
+  /* ---------- progress ---------- */
+  .progress { display: flex; gap: 6px; }
+  .pip { height: 4px; border-radius: 2px; background: var(--line); flex: 1; }
+  .pip-on { background: var(--signal); }
+  .step-text { font-size: 12px; font-weight: 600; letter-spacing: 0.04em; color: var(--muted); text-transform: uppercase; }
+
+  /* ---------- fields ---------- */
+  .input-label {
+    font-size: 13px; font-weight: 600; color: var(--ink); margin-bottom: 8px;
+  }
+  .field {
+    height: 58px; border-radius: var(--r-lg);
+    background: var(--haze); border: 1.5px solid transparent;
+    padding: 0 18px; display: flex; align-items: center; gap: 10px;
+  }
+  .field-focus { background: var(--paper); border: 1.5px solid var(--ink); }
+  .field-text { font-size: 16px; font-weight: 500; color: var(--ink); }
+  .field-hint { font-size: 16px; font-weight: 400; color: #A3A4AE; }
+  .grow { flex: 1; }
+
+  /* ---------- buttons ---------- */
+  .btn {
+    height: 58px; border-radius: var(--r-lg); background: var(--signal);
+    color: var(--paper); font-size: 16px; font-weight: 600; letter-spacing: -0.01em;
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+  }
+  .btn-arrow { font-size: 15px; }
+  .btn-small {
+    height: 36px; padding: 0 16px; border-radius: var(--r-sm);
+    background: var(--paper); border: 1.5px solid var(--line);
+    color: var(--ink); font-size: 13px; font-weight: 600;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  /* ---------- role cards ---------- */
+  .card {
+    border-radius: 22px; padding: 20px;
+    background: var(--paper); border: 1.5px solid var(--line);
+    display: flex; gap: 14px; align-items: flex-start;
+  }
+  .card-on { background: var(--ink); border: 1.5px solid var(--ink); }
+  .card-title {
+    font-family: 'Schibsted Grotesk', sans-serif;
+    font-size: 19px; font-weight: 700; letter-spacing: -0.02em; color: var(--ink);
+  }
+  .card-title-on { color: var(--paper); }
+  .card-desc { font-size: 14px; line-height: 1.45; color: var(--muted); margin-top: 5px; }
+  .card-desc-on { color: var(--muted-dark); }
+  .radio {
+    width: 24px; height: 24px; border-radius: 50%; border: 1.5px solid var(--line);
+    flex-shrink: 0; margin-top: 2px;
+  }
+  .radio-on {
+    width: 24px; height: 24px; border-radius: 50%; background: var(--signal);
+    flex-shrink: 0; margin-top: 2px;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--paper); font-size: 13px; font-weight: 700;
+  }
+
+  /* ---------- role strip ---------- */
+  .strip {
+    border-radius: var(--r-lg); padding: 11px 11px 11px 18px;
+    background: var(--haze);
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  }
+  .strip-label { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+  .strip-value { font-size: 15px; font-weight: 600; color: var(--ink); margin-top: 2px; }
+
+  /* ---------- notice ---------- */
+  .notice {
+    border-radius: var(--r-md); padding: 12px 14px;
+    background: var(--signal-soft);
+    display: flex; gap: 10px; align-items: flex-start;
+  }
+  .notice-dot {
+    width: 18px; height: 18px; border-radius: 50%; background: var(--signal);
+    flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+    color: var(--paper); font-size: 11px; font-weight: 700;
+  }
+  .notice-text { font-size: 13px; line-height: 1.4; font-weight: 500; color: #8A3517; }
+
+  /* ---------- misc ---------- */
+  .self-end { display: flex; justify-content: flex-end; }
+  .toggle { font-size: 13px; font-weight: 600; color: var(--ink); }
+  .foot { font-size: 14.5px; font-weight: 400; color: var(--muted); text-align: center; }
+  .foot-link { font-weight: 600; color: var(--signal); }
+
+  .grow-space { flex: 1; }
+  .home-bar { width: 134px; height: 5px; border-radius: 3px; background: #D2D2D8; margin: 0 auto; }
+
+  .g1 { height: 4px; } .g2 { height: 8px; } .g3 { height: 12px; } .g4 { height: 16px; }
+  .g5 { height: 20px; } .g6 { height: 24px; } .g7 { height: 28px; } .g8 { height: 32px; }
+</style>
+</head>
+<body>
+<div class="canvas">
+
+  <!-- ============ LOGIN ============ -->
+  <div class="frame-wrap">
+    <div class="frame-label">LoginScreen.js</div>
+    <div class="frame">
+      <div class="frame-ember"></div>
+
+      <div class="status">
+        <span>9:41</span>
+        <div class="status-icons">
+          <div class="bar bar-a"></div><div class="bar bar-b"></div><div class="bar bar-c"></div>
+          <div class="battery"><div class="battery-fill"></div></div>
+        </div>
+      </div>
+
+      <div class="header">
+        <div class="mark">
+          <div class="mark-tile"><div class="mark-inner"><div class="mark-slash"></div><div class="mark-slash-b"></div></div></div>
+          <span class="wordmark">Gig Lanka</span>
+        </div>
+        <div class="g8"></div>
+        <h1>Log in</h1>
+        <div class="g3"></div>
+        <div class="lede">Pick up where you left off — your applications are waiting.</div>
+      </div>
+
+      <div class="sheet">
+        <div class="input-label">Email</div>
+        <div class="field field-focus"><span class="field-hint">you@example.com</span></div>
+
+        <div class="g5"></div>
+
+        <div class="input-label">Password</div>
+        <div class="field"><span class="field-hint">Password</span></div>
+
+        <div class="g3"></div>
+        <div class="self-end"><span class="toggle">Show password</span></div>
+
+        <div class="g7"></div>
+        <div class="btn"><span>Log In</span><span class="btn-arrow">→</span></div>
+
+        <div class="grow-space"></div>
+
+        <div class="foot">Don't have an account? <span class="foot-link">Sign up</span></div>
+        <div class="g6"></div>
+        <div class="home-bar"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ ROLE SELECT ============ -->
+  <div class="frame-wrap">
+    <div class="frame-label">RoleSelectScreen.js</div>
+    <div class="frame">
+      <div class="frame-ember"></div>
+
+      <div class="status">
+        <span>9:41</span>
+        <div class="status-icons">
+          <div class="bar bar-a"></div><div class="bar bar-b"></div><div class="bar bar-c"></div>
+          <div class="battery"><div class="battery-fill"></div></div>
+        </div>
+      </div>
+
+      <div class="header">
+        <div class="mark">
+          <div class="mark-tile"><div class="mark-inner"><div class="mark-slash"></div><div class="mark-slash-b"></div></div></div>
+          <span class="wordmark">Gig Lanka</span>
+        </div>
+        <div class="g8"></div>
+        <h1>Join<br>Gig Lanka</h1>
+      </div>
+
+      <div class="sheet">
+        <div class="progress">
+          <div class="pip pip-on"></div>
+          <div class="pip"></div>
+        </div>
+        <div class="g3"></div>
+        <div class="step-text">Step 1 of 2</div>
+
+        <div class="g5"></div>
+
+        <div class="lede" style="color:var(--muted); font-size:15px;">
+          Choose how you'll use the app. You can't change this later.
+        </div>
+
+        <div class="g6"></div>
+
+        <div class="card card-on">
+          <div style="flex:1">
+            <div class="card-title card-title-on">I'm looking for work</div>
+            <div class="card-desc card-desc-on">Browse gigs, apply, and get hired by businesses near you.</div>
+          </div>
+          <div class="radio-on">✓</div>
+        </div>
+
+        <div class="g3"></div>
+
+        <div class="card">
+          <div style="flex:1">
+            <div class="card-title">I'm hiring</div>
+            <div class="card-desc">Post gigs and find people to get the work done.</div>
+          </div>
+          <div class="radio"></div>
+        </div>
+
+        <div class="g5"></div>
+
+        <div class="notice">
+          <div class="notice-dot">!</div>
+          <div class="notice-text">This sets up your whole account, so pick the one that fits how you'll mostly use Gig Lanka.</div>
+        </div>
+
+        <div class="grow-space"></div>
+
+        <div class="btn"><span>Next</span><span class="btn-arrow">→</span></div>
+        <div class="g6"></div>
+        <div class="home-bar"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ SIGN UP ============ -->
+  <div class="frame-wrap">
+    <div class="frame-label">SignUpScreen.js</div>
+    <div class="frame">
+      <div class="frame-ember"></div>
+
+      <div class="status">
+        <span>9:41</span>
+        <div class="status-icons">
+          <div class="bar bar-a"></div><div class="bar bar-b"></div><div class="bar bar-c"></div>
+          <div class="battery"><div class="battery-fill"></div></div>
+        </div>
+      </div>
+
+      <div class="header">
+        <div class="mark">
+          <div class="mark-tile"><div class="mark-inner"><div class="mark-slash"></div><div class="mark-slash-b"></div></div></div>
+          <span class="wordmark">Gig Lanka</span>
+        </div>
+        <div class="g8"></div>
+        <h1>Create your<br>account</h1>
+      </div>
+
+      <div class="sheet">
+        <div class="progress">
+          <div class="pip pip-on"></div>
+          <div class="pip pip-on"></div>
+        </div>
+        <div class="g3"></div>
+        <div class="step-text">Step 2 of 2</div>
+
+        <div class="g5"></div>
+
+        <div class="strip">
+          <div>
+            <div class="strip-label">Signing up as</div>
+            <div class="strip-value">I'm looking for work</div>
+          </div>
+          <div class="btn-small">Change</div>
+        </div>
+
+        <div class="g6"></div>
+
+        <div class="input-label">Email</div>
+        <div class="field field-focus"><span class="field-text">ashan.perera@gmail.com</span></div>
+
+        <div class="g4"></div>
+
+        <div class="input-label">Password</div>
+        <div class="field"><span class="field-hint">Password</span></div>
+
+        <div class="g4"></div>
+
+        <div class="input-label">Confirm password</div>
+        <div class="field"><span class="field-hint">Confirm password</span></div>
+
+        <div class="g7"></div>
+        <div class="btn"><span>Sign Up</span><span class="btn-arrow">→</span></div>
+
+        <div class="grow-space"></div>
+
+        <div class="foot">Already have an account? <span class="foot-link">Log in</span></div>
+        <div class="g6"></div>
+        <div class="home-bar"></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
