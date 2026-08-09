@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 
-import { authApi } from '../../api';
 import AuthShell from '../../components/ui/AuthShell';
 import Brand from '../../components/ui/Brand';
 import Button from '../../components/ui/Button';
@@ -10,6 +9,7 @@ import Notice from '../../components/ui/Notice';
 import ProgressPips from '../../components/ui/ProgressPips';
 import RoleStrip from '../../components/ui/RoleStrip';
 import TextInput from '../../components/ui/TextInput';
+import useAuth from '../../hooks/useAuth';
 import { validateSignUpForm } from '../../utils/validation';
 
 const ROLE_LABELS = {
@@ -20,6 +20,7 @@ const ROLE_LABELS = {
 export default function SignUpScreen() {
   const navigation = useNavigation();
   const route = useRoute();
+  const { register } = useAuth();
 
   const [role] = useState(route.params?.role);
   const [email, setEmail] = useState('');
@@ -37,7 +38,7 @@ export default function SignUpScreen() {
 
     setSubmitting(true);
     try {
-      await authApi.register({
+      await register({
         email: email.trim().toLowerCase(),
         password,
         role,
