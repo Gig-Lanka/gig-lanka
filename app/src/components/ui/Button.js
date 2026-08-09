@@ -2,58 +2,40 @@ import { ActivityIndicator, Pressable, Text } from 'react-native';
 
 const VARIANT_STYLES = {
   primary: {
-    container: 'bg-primary active:bg-primary-hover',
-    text: 'text-white',
-    spinnerColor: '#ffffff',
+    container: 'h-[58px] rounded-ds-lg bg-signal gap-[10px]',
+    text: 'text-body font-semibold text-paper tracking-[-0.01em]',
+    spinnerClassName: 'text-paper',
   },
-  secondary: {
-    container: 'bg-secondary active:bg-primary-soft',
-    text: 'text-primary',
-    spinnerColor: '#5b4bff',
+  small: {
+    container: 'h-9 rounded-ds-sm border-[1.5px] border-line bg-paper px-4',
+    text: 'text-label text-ink',
+    spinnerClassName: 'text-ink',
   },
-  outline: {
-    container: 'bg-transparent border border-primary active:bg-primary-soft',
-    text: 'text-primary',
-    spinnerColor: '#5b4bff',
-  },
-  danger: {
-    container: 'bg-danger active:bg-danger-text',
-    text: 'text-white',
-    spinnerColor: '#ffffff',
-  },
-};
-
-const SIZE_STYLES = {
-  small: { container: 'px-3 py-1.5', text: 'text-sm' },
-  medium: { container: 'px-4 py-2.5', text: 'text-base' },
-  large: { container: 'px-6 py-3.5', text: 'text-lg' },
 };
 
 export default function Button({
   children,
   variant = 'primary',
-  size = 'medium',
+  trailingArrow = false,
   disabled = false,
   loading = false,
-  fullWidth = false,
+  fullWidth = true,
   onPress,
   className,
   ...props
 }) {
   const isDisabled = disabled || loading;
-  const variantStyles = VARIANT_STYLES[variant] ?? VARIANT_STYLES.primary;
-  const sizeStyles = SIZE_STYLES[size] ?? SIZE_STYLES.medium;
+  const styles = VARIANT_STYLES[variant] ?? VARIANT_STYLES.primary;
 
   return (
     <Pressable
       onPress={isDisabled ? undefined : onPress}
       disabled={isDisabled}
       className={[
-        'flex-row items-center justify-center rounded-md',
-        sizeStyles.container,
-        variantStyles.container,
+        'flex-row items-center justify-center',
+        styles.container,
         fullWidth && 'w-full',
-        isDisabled && 'opacity-50',
+        isDisabled && 'opacity-40',
         className,
       ]
         .filter(Boolean)
@@ -61,15 +43,14 @@ export default function Button({
       {...props}
     >
       {loading ? (
-        <ActivityIndicator color={variantStyles.spinnerColor} />
+        <ActivityIndicator className={styles.spinnerClassName} />
       ) : (
-        <Text
-          className={['font-semibold', sizeStyles.text, variantStyles.text]
-            .filter(Boolean)
-            .join(' ')}
-        >
-          {children}
-        </Text>
+        <>
+          <Text className={styles.text}>{children}</Text>
+          {variant === 'primary' && trailingArrow && (
+            <Text className="text-[15px] font-semibold text-paper tracking-[-0.01em]">→</Text>
+          )}
+        </>
       )}
     </Pressable>
   );
