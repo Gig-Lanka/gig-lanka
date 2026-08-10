@@ -143,6 +143,78 @@ function DesignTokensSection() {
   );
 }
 
+const COLOR_TOKEN_SWATCHES = [
+  { name: 'ink', className: 'bg-ink' },
+  { name: 'paper', className: 'bg-paper' },
+  { name: 'haze', className: 'bg-haze' },
+  { name: 'line', className: 'bg-line' },
+  { name: 'muted', className: 'bg-muted' },
+  { name: 'muted-dark', className: 'bg-muted-dark' },
+  { name: 'signal', className: 'bg-signal' },
+  { name: 'signal-soft', className: 'bg-signal-soft' },
+  { name: 'signal-ink', className: 'bg-signal-ink' },
+  { name: 'danger', className: 'bg-danger' },
+  { name: 'danger-soft', className: 'bg-danger-soft' },
+  { name: 'danger-ink', className: 'bg-danger-ink' },
+  { name: 'success-soft', className: 'bg-success-soft' },
+  { name: 'success-ink', className: 'bg-success-ink' },
+  { name: 'warning-soft', className: 'bg-warning-soft' },
+  { name: 'warning-ink', className: 'bg-warning-ink' },
+];
+
+const RADIUS_TOKEN_SWATCHES = [
+  { name: 'ds-sheet', className: 'rounded-ds-sheet bg-haze' },
+  { name: 'ds-lg', className: 'rounded-ds-lg bg-haze' },
+  { name: 'ds-md', className: 'rounded-ds-md bg-haze' },
+  { name: 'ds-sm', className: 'rounded-ds-sm bg-haze' },
+];
+
+function TokenSwatch({ name, prefix, swatchClassName }) {
+  return (
+    <View className="w-[84px] items-center gap-1.5">
+      <View className={['h-12 w-12 border border-line', swatchClassName].join(' ')} />
+      <Text className="text-center text-[10px] text-text-secondary">
+        {prefix}
+        {name}
+      </Text>
+    </View>
+  );
+}
+
+function TokenSwatchSection() {
+  return (
+    <Section title="Design tokens — v3 swatches (GL-101)">
+      <Text className="text-sm text-text-secondary">
+        Every v3 colour token and radius from GL-127, rendered from its Tailwind class name so the
+        set can be checked on a device instead of read out of tailwind.config.js.
+      </Text>
+
+      <View className="mt-1 flex-row flex-wrap gap-4">
+        {COLOR_TOKEN_SWATCHES.map((token) => (
+          <TokenSwatch
+            key={token.name}
+            name={token.name}
+            prefix="bg-"
+            swatchClassName={token.className}
+          />
+        ))}
+      </View>
+
+      <Text className="mb-1 mt-6 text-sm font-medium text-text-primary">Radius — ds-*</Text>
+      <View className="flex-row flex-wrap gap-4">
+        {RADIUS_TOKEN_SWATCHES.map((token) => (
+          <TokenSwatch
+            key={token.name}
+            name={token.name}
+            prefix="rounded-"
+            swatchClassName={token.className}
+          />
+        ))}
+      </View>
+    </Section>
+  );
+}
+
 function AuthPrimitivesSection() {
   return (
     <Section title="Auth primitives">
@@ -177,6 +249,7 @@ export default function ComponentDemoScreen() {
       <Text className="mb-6 text-2xl font-bold text-text-primary">UI Kit</Text>
       <ScreenSection />
       <DesignTokensSection />
+      <TokenSwatchSection />
       <AuthPrimitivesSection />
       <ButtonSection />
       <TextInputSection />
