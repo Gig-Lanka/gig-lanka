@@ -38,17 +38,17 @@ module.exports = {
         'primary-soft': '#eef1ff',
         'primary-muted': '#c7d2fe',
         'danger-text': '#dc2626',
-        'success-soft': '#f0fdf4',
         'success-text': '#15803d',
-        'warning-soft': '#fffbeb',
         'warning-text': '#92400e',
 
-        // GL-82 design tokens — values read from the `:root` block of
-        // docs/mockups/gig-lanka-auth-v2.html. `danger` and `danger-soft`
-        // above were removed from the legacy groups and redefined here
-        // because the mockup reuses those exact names with new values;
-        // every other legacy color above is untouched and still used by
-        // components/screens until GL-83/GL-84 migrate them onto this set.
+        // GL-82/GL-127 design tokens — the v3 set shared by all four v3
+        // mockups' `:root` blocks. `danger`, `danger-soft`, `success-soft`
+        // and `warning-soft` above were removed from the legacy groups and
+        // redefined here because the mockups reuse those exact names with
+        // new values; every other legacy color above is untouched and
+        // still used by components/screens until GL-83/GL-84 migrate them
+        // onto this set. `-ink` names replace the mockups' `-text` CSS
+        // variable names (and `--signal-deep`) per GL-82's convention.
         ink: '#101114',
         'ink-hi': '#1C1D23',
         paper: '#FFFFFF',
@@ -60,8 +60,12 @@ module.exports = {
         'signal-soft': '#FFF1EC',
         'signal-ink': '#8A3517',
         danger: '#E5484D',
-        'danger-soft': '#FDEDED',
-        'danger-ink': '#8A2A2D',
+        'danger-soft': '#FDECEC',
+        'danger-ink': '#C22F35',
+        'success-soft': '#E8F6EE',
+        'success-ink': '#16794C',
+        'warning-soft': '#FFF3DF',
+        'warning-ink': '#96570A',
 
         // GL-90 — the mockup's `.field-hint` placeholder color is a literal
         // #A3A4AE, not one of the `:root` custom properties, so it has no
