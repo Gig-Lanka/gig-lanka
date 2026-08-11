@@ -335,7 +335,121 @@ Returns the authenticated user. Requires `Authorization: Bearer <accessToken>`.
 
 ---
 
-## 6. Adding a new endpoint later
+## 6. Vocabularies
+
+These are the closed vocabularies used throughout the product. "Closed" means nothing outside the list can be selected or stored. They are defined once, in `app/src/constants/enums.js`, with each entry carrying a stored `value` and a display `label`. That file is not imported into the server — duplicating it across the monorepo halves is worse than duplicating the list once in a validator — so this section is the shared reference that keeps the server's Joi schemas and the client's pickers in step. If a validator and a picker disagree, this table is correct and both are fixed to match it.
+
+### 6.1 Gig categories
+
+| Value | Label |
+|---|---|
+| `tutoring` | Tutoring |
+| `delivery` | Delivery |
+| `event_help` | Event help |
+| `retail` | Retail |
+| `hospitality` | Hospitality |
+| `admin_data_entry` | Admin & data entry |
+| `creative` | Creative |
+| `tech` | Tech |
+| `other` | Other |
+
+### 6.2 Pay types
+
+| Value | Label |
+|---|---|
+| `per_hour` | Per hour |
+| `per_day` | Per day |
+| `fixed_price` | Fixed price |
+
+### 6.3 Schedule tags
+
+| Value | Label |
+|---|---|
+| `weekday_mornings` | Weekday mornings |
+| `weekday_evenings` | Weekday evenings |
+| `weekends` | Weekends |
+| `flexible_hours` | Flexible hours |
+
+### 6.4 Commitment lengths
+
+| Value | Label |
+|---|---|
+| `one_off` | One-off |
+| `under_a_week` | Under a week |
+| `one_to_four_weeks` | 1-4 weeks |
+| `ongoing` | Ongoing |
+
+### 6.5 Gig statuses
+
+| Value | Label |
+|---|---|
+| `draft` | Draft |
+| `open` | Open |
+| `closed` | Closed |
+| `filled` | Filled |
+
+### 6.6 Gig sort orders
+
+| Value | Label |
+|---|---|
+| `newest` | Newest |
+| `highest_pay` | Highest pay |
+| `starting_soon` | Starting soon |
+
+### 6.7 Application statuses
+
+| Value | Label |
+|---|---|
+| `applied` | Applied |
+| `viewed` | Viewed |
+| `shortlisted` | Shortlisted |
+| `hired` | Hired |
+| `rejected` | Rejected |
+| `withdrawn` | Withdrawn |
+| `closed_filled` | Closed – position filled |
+
+### 6.8 Rejection reason codes
+
+The seven business-selectable reasons, plus one system-only code that is never offered as a choice.
+
+| Value | Label | Selectable by a business |
+|---|---|---|
+| `schedule_mismatch` | Schedule did not match | Yes |
+| `location_too_far` | Location too far | Yes |
+| `skill_trial_not_passed` | Skill trial not passed | Yes |
+| `skill_trial_not_attempted` | Skill trial not attempted | Yes |
+| `looking_for_more_experience` | Looking for more relevant experience | Yes |
+| `another_applicant_closer_fit` | Another applicant was a closer fit | Yes |
+| `role_no_longer_needed` | Role no longer needed | Yes |
+| `positions_filled` | Positions filled | No — system-only |
+
+### 6.9 Review categories
+
+Business set (rated by the youth worker):
+
+| Value | Label |
+|---|---|
+| `fair_payment` | Fair payment |
+| `clear_job_description` | Clear job description |
+| `communication` | Communication |
+| `respectful_treatment` | Respectful treatment |
+| `payment_on_time` | Payment on time |
+| `safe_working_environment` | Safe working environment |
+
+Youth worker set (rated by the business):
+
+| Value | Label |
+|---|---|
+| `work_quality` | Work quality |
+| `punctuality` | Punctuality |
+| `communication` | Communication |
+| `professionalism` | Professionalism |
+| `reliability` | Reliability |
+| `ability_to_follow_instructions` | Ability to follow instructions |
+
+---
+
+## 7. Adding a new endpoint later
 
 1. Pick a plural, lowercase, hyphenated resource name.
 2. Reuse the envelopes in sections 2 and 3 exactly — don't invent a new outer shape.
