@@ -4,6 +4,7 @@ import { Text, TextInput as RNTextInput, View } from 'react-native';
 export default function TextInput({
   label,
   error,
+  hint,
   disabled = false,
   secureTextEntry = false,
   className,
@@ -48,6 +49,8 @@ export default function TextInput({
 
       {hasError ? (
         <Text className="mt-1.5 text-[13px] font-medium text-danger">{error}</Text>
+      ) : hint ? (
+        <Text className="mt-1.5 text-[13px] font-medium text-muted">{hint}</Text>
       ) : null}
     </View>
   );
