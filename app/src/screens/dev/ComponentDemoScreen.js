@@ -19,6 +19,7 @@ import ScreenHeader from '../../components/ui/ScreenHeader';
 import SectionLabel from '../../components/ui/SectionLabel';
 import SegmentedControl from '../../components/ui/SegmentedControl';
 import TextInput from '../../components/ui/TextInput';
+import { formatDeadline, formatLocation, formatPay, formatRelativeTime } from '../../utils/format';
 
 function Section({ title, children }) {
   return (
@@ -460,6 +461,62 @@ function ConfirmDialogSection() {
   );
 }
 
+function FormattersSection() {
+  const now = new Date();
+  const DAY_MS = 24 * 60 * 60 * 1000;
+
+  const relativeTimeExamples = [
+    { label: 'Under a minute', date: new Date(now.getTime() - 30 * 1000) },
+    { label: 'Under an hour', date: new Date(now.getTime() - 20 * 60 * 1000) },
+    { label: 'Under a day', date: new Date(now.getTime() - 3 * 60 * 60 * 1000) },
+    { label: 'Under a week', date: new Date(now.getTime() - 5 * DAY_MS) },
+    { label: 'Beyond a week', date: new Date(now.getTime() - 20 * DAY_MS) },
+  ];
+
+  const deadlineExamples = [
+    { label: 'Past', date: new Date(now.getTime() - DAY_MS) },
+    { label: 'Today', date: now },
+    { label: 'Tomorrow', date: new Date(now.getTime() + DAY_MS) },
+    { label: 'In three days', date: new Date(now.getTime() + 3 * DAY_MS) },
+    { label: 'Beyond three days', date: new Date(now.getTime() + 10 * DAY_MS) },
+  ];
+
+  return (
+    <Section title="Formatters — GL-104">
+      <Text className="text-sm font-medium text-text-primary">Pay</Text>
+      <Text className="text-sm text-text-secondary">{formatPay(2500, 'per_hour')}</Text>
+      <Text className="text-sm text-text-secondary">{formatPay(4500, 'per_day')}</Text>
+      <Text className="text-sm text-text-secondary">{formatPay(18000, 'fixed_price')}</Text>
+
+      <Text className="mt-3 text-sm font-medium text-text-primary">Relative time</Text>
+      {relativeTimeExamples.map((example) => (
+        <Text key={example.label} className="text-sm text-text-secondary">
+          {example.label}: {formatRelativeTime(example.date, now)}
+        </Text>
+      ))}
+
+      <Text className="mt-3 text-sm font-medium text-text-primary">Deadline</Text>
+      {deadlineExamples.map((example) => {
+        const { label, urgent } = formatDeadline(example.date, now);
+        return (
+          <Text key={example.label} className="text-sm text-text-secondary">
+            {example.label}: {label} ({urgent ? 'urgent' : 'not urgent'})
+          </Text>
+        );
+      })}
+
+      <Text className="mt-3 text-sm font-medium text-text-primary">Location</Text>
+      <Text className="text-sm text-text-secondary">{formatLocation({ isRemote: true })}</Text>
+      <Text className="text-sm text-text-secondary">
+        {formatLocation({ isRemote: false, area: 'Nugegoda', city: 'Colombo' })}
+      </Text>
+      <Text className="text-sm text-text-secondary">
+        {formatLocation({ isRemote: false, city: 'Colombo' })}
+      </Text>
+    </Section>
+  );
+}
+
 export default function ComponentDemoScreen() {
   return (
     <Screen scroll>
@@ -481,6 +538,7 @@ export default function ComponentDemoScreen() {
       <HeroHeaderSection />
       <SegmentedControlSection />
       <ConfirmDialogSection />
+      <FormattersSection />
     </Screen>
   );
 }
