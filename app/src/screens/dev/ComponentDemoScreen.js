@@ -1,15 +1,23 @@
 import { useState } from 'react';
-import { Text, View } from 'react-native';
+import { ScrollView, Text, View } from 'react-native';
 
+import Avatar from '../../components/ui/Avatar';
+import Badge from '../../components/ui/Badge';
 import Brand from '../../components/ui/Brand';
 import Button from '../../components/ui/Button';
 import Card from '../../components/ui/Card';
+import Chip from '../../components/ui/Chip';
+import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import EmptyState from '../../components/ui/EmptyState';
+import HeroHeader, { HeroSheet, HeroStickyBar } from '../../components/ui/HeroHeader';
 import Loader from '../../components/ui/Loader';
 import Notice from '../../components/ui/Notice';
 import ProgressPips from '../../components/ui/ProgressPips';
 import RoleStrip from '../../components/ui/RoleStrip';
 import Screen from '../../components/ui/Screen';
+import ScreenHeader from '../../components/ui/ScreenHeader';
+import SectionLabel from '../../components/ui/SectionLabel';
+import SegmentedControl from '../../components/ui/SegmentedControl';
 import TextInput from '../../components/ui/TextInput';
 
 function Section({ title, children }) {
@@ -75,6 +83,17 @@ function TextInputSection() {
       <TextInput label="Password" placeholder="Password" secureTextEntry />
       <TextInput label="With error" placeholder="Username" error="This field is required" />
       <TextInput label="Disabled" placeholder="Can't touch this" disabled />
+      <TextInput
+        label="With hint"
+        placeholder="Display name"
+        hint="This is shown on your public profile."
+      />
+      <TextInput
+        label="Error replaces hint"
+        placeholder="Display name"
+        hint="This is shown on your public profile."
+        error="Display name is required"
+      />
     </Section>
   );
 }
@@ -243,6 +262,204 @@ function ScreenSection() {
   );
 }
 
+function BadgeSection() {
+  return (
+    <Section title="Badge — GL-129">
+      <View className="flex-row flex-wrap gap-2">
+        <Badge variant="neutral">Neutral</Badge>
+        <Badge variant="positive">Positive</Badge>
+        <Badge variant="strong">Strong</Badge>
+        <Badge variant="muted">Muted</Badge>
+        <Badge variant="warning">Warning</Badge>
+        <Badge variant="danger">Danger</Badge>
+      </View>
+    </Section>
+  );
+}
+
+function ChipSection() {
+  const [scheduleValue, setScheduleValue] = useState('weekday');
+  const [skillSelected, setSkillSelected] = useState(true);
+
+  return (
+    <Section title="Chip — GL-129">
+      <Text className="text-sm text-text-secondary">Default size, selectable</Text>
+      <View className="flex-row flex-wrap gap-2">
+        <Chip selected={scheduleValue === 'weekday'} onPress={() => setScheduleValue('weekday')}>
+          Weekday evenings
+        </Chip>
+        <Chip selected={scheduleValue === 'weekends'} onPress={() => setScheduleValue('weekends')}>
+          Weekends
+        </Chip>
+      </View>
+
+      <Text className="mt-3 text-sm text-text-secondary">Small size, selectable</Text>
+      <View className="flex-row flex-wrap gap-2">
+        <Chip size="sm" selected={skillSelected} onPress={() => setSkillSelected((v) => !v)}>
+          Tutoring
+        </Chip>
+        <Chip size="sm" selected={!skillSelected} onPress={() => setSkillSelected((v) => !v)}>
+          Excel
+        </Chip>
+      </View>
+
+      <Text className="mt-3 text-sm text-text-secondary">Static (no onPress)</Text>
+      <View className="flex-row flex-wrap gap-2">
+        <Chip>Customer service</Chip>
+      </View>
+    </Section>
+  );
+}
+
+function AvatarSection() {
+  const imageUri = 'https://i.pravatar.cc/150?img=12';
+
+  return (
+    <Section title="Avatar — GL-130">
+      <Text className="text-sm text-text-secondary">With image</Text>
+      <View className="flex-row items-center gap-4">
+        <Avatar uri={imageUri} name="Ashan Perera" size="sm" />
+        <Avatar uri={imageUri} name="Ashan Perera" size="md" />
+        <Avatar uri={imageUri} name="Ashan Perera" size="lg" />
+      </View>
+
+      <Text className="mt-3 text-sm text-text-secondary">No image — initials fallback</Text>
+      <View className="flex-row items-center gap-4">
+        <Avatar name="Ashan Perera" size="sm" />
+        <Avatar name="Ashan Perera" size="md" />
+        <Avatar name="Ashan Perera" size="lg" />
+      </View>
+    </Section>
+  );
+}
+
+function SectionLabelSection() {
+  return (
+    <Section title="SectionLabel — GL-130">
+      <SectionLabel>Skills</SectionLabel>
+    </Section>
+  );
+}
+
+function ScreenHeaderSection() {
+  return (
+    <Section title="ScreenHeader — GL-131">
+      <Text className="text-sm text-text-secondary">Default title, avatar right slot</Text>
+      <View className="overflow-hidden rounded-lg border border-border bg-paper">
+        <ScreenHeader title="Find a gig" rightSlot={<Avatar name="Ashan Perera" size="sm" />} />
+      </View>
+
+      <Text className="mt-3 text-sm text-text-secondary">Small title, back button</Text>
+      <View className="overflow-hidden rounded-lg border border-border bg-paper">
+        <ScreenHeader title="Work experience" small onBack={() => {}} />
+      </View>
+
+      <Text className="mt-3 text-sm text-text-secondary">
+        Small title, back button, text action right slot
+      </Text>
+      <View className="overflow-hidden rounded-lg border border-border bg-paper">
+        <ScreenHeader
+          title="Work experience"
+          small
+          onBack={() => {}}
+          rightSlot={<Text className="text-[14px] font-bold text-signal">+ Add</Text>}
+        />
+      </View>
+    </Section>
+  );
+}
+
+function HeroHeaderSection() {
+  const [stickyVisible, setStickyVisible] = useState(false);
+
+  return (
+    <Section title="HeroHeader — GL-131">
+      <Text className="text-sm text-text-secondary">
+        Scroll inside the box below: the ink hero scrolls away with the content and the white sticky
+        bar takes over, exactly as a screen composing HeroHeader/HeroStickyBar/HeroSheet would wire
+        it.
+      </Text>
+      <View className="h-[420px] overflow-hidden rounded-lg border border-border">
+        <ScrollView
+          onScroll={(event) => setStickyVisible(event.nativeEvent.contentOffset.y > 160)}
+          scrollEventThrottle={16}
+        >
+          <HeroHeader>
+            <Text className="text-center font-display text-[22px] text-paper">Ashan Perera</Text>
+            <Text className="mt-1 text-center text-[13px] text-muted-dark">
+              Job Seeker · Colombo
+            </Text>
+          </HeroHeader>
+          <HeroSheet>
+            <View className="gap-3 px-5 py-6">
+              {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((row) => (
+                <View key={row} className="h-12 rounded-md bg-haze" />
+              ))}
+            </View>
+          </HeroSheet>
+        </ScrollView>
+
+        <View className="absolute left-0 right-0 top-0">
+          <HeroStickyBar title="Ashan Perera" visible={stickyVisible} onBack={() => {}} />
+        </View>
+      </View>
+    </Section>
+  );
+}
+
+function SegmentedControlSection() {
+  const [status, setStatus] = useState('all');
+
+  return (
+    <Section title="SegmentedControl — GL-132">
+      <SegmentedControl
+        options={[
+          { value: 'all', label: 'All 7' },
+          { value: 'live', label: 'Live 3' },
+          { value: 'decided', label: 'Decided 4' },
+        ]}
+        value={status}
+        onChange={setStatus}
+      />
+    </Section>
+  );
+}
+
+function ConfirmDialogSection() {
+  const [openDialog, setOpenDialog] = useState(null);
+
+  return (
+    <Section title="ConfirmDialog — GL-132">
+      <Button variant="small" fullWidth={false} onPress={() => setOpenDialog('default')}>
+        Open — default
+      </Button>
+      <Button variant="small" fullWidth={false} onPress={() => setOpenDialog('destructive')}>
+        Open — destructive
+      </Button>
+
+      <ConfirmDialog
+        visible={openDialog === 'default'}
+        title="Close this gig?"
+        body="Seekers will no longer be able to apply."
+        confirmLabel="Close gig"
+        cancelLabel="Keep it open"
+        onConfirm={() => setOpenDialog(null)}
+        onCancel={() => setOpenDialog(null)}
+      />
+      <ConfirmDialog
+        visible={openDialog === 'destructive'}
+        destructive
+        title="Withdraw this application?"
+        body="You're currently shortlisted for this gig."
+        confirmLabel="Withdraw"
+        cancelLabel="Keep my application"
+        onConfirm={() => setOpenDialog(null)}
+        onCancel={() => setOpenDialog(null)}
+      />
+    </Section>
+  );
+}
+
 export default function ComponentDemoScreen() {
   return (
     <Screen scroll>
@@ -256,6 +473,14 @@ export default function ComponentDemoScreen() {
       <CardSection />
       <EmptyStateSection />
       <LoaderSection />
+      <BadgeSection />
+      <ChipSection />
+      <AvatarSection />
+      <SectionLabelSection />
+      <ScreenHeaderSection />
+      <HeroHeaderSection />
+      <SegmentedControlSection />
+      <ConfirmDialogSection />
     </Screen>
   );
 }
