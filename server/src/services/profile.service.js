@@ -1,4 +1,6 @@
+import mongoose from 'mongoose';
 import { Profile } from '../models/profile.model.js';
+import { User } from '../models/user.model.js';
 import { ApiError } from '../utils/ApiError.js';
 
 const NAME_MAX_LENGTH = 60;
@@ -78,6 +80,64 @@ export const updateMyProfile = async (user, body) => {
   await profile.save();
 
   return profile.toJSON();
+};
+
+// Criteria 11 and 12. Built as a whitelist rather than by deleting private
+// fields from the full profile: a field added to the schema later — a contact
+// number, an account status — is absent here until someone deliberately lists
+// it, instead of leaking the day it lands. Email never appears because it lives
+// on User and is never read into this shape.
+const PUBLIC_SHARED_FIELDS = ['photo', 'name', 'city', 'bio'];
+const PUBLIC_SEEKER_FIELDS = ['skills', 'workExperience', 'education', 'skillTrialResults'];
+const PUBLIC_BUSINESS_FIELDS = ['category'];
+
+const toPublicProfile = (user, profile) => {
+  const json = profile.toJSON();
+  const roleFields = user.role === 'seeker' ? PUBLIC_SEEKER_FIELDS : PUBLIC_BUSINESS_FIELDS;
+
+  const publicProfile = {
+    userId: user._id.toString(),
+    ratingSummary: json.ratingSummary,
+  };
+
+  [...PUBLIC_SHARED_FIELDS, ...roleFields].forEach((field) => {
+    publicProfile[field] = json[field];
+  });
+
+  return publicProfile;
+};
+
+export const getPublicProfile = async (userId) => {
+  // Every rejection below is the same 404. Which ids exist, which belong to an
+  // admin and which have been deactivated are all not public information.
+  const profileNotFound = () => new ApiError(404, 'NOT_FOUND', 'Profile not found.');
+
+  if (!mongoose.isValidObjectId(userId)) {
+    throw profileNotFound();
+  }
+
+  // Read lean so the isActive check below sees the stored document rather than
+  // only the paths the schema declares today — a hydrated document hides fields
+  // the schema has not caught up with, which would silently disable that guard.
+  const user = await User.findById(userId).lean();
+
+  // Admins have no profile (criterion 7), so there is nothing to show for one
+  // and nothing may be created for one either.
+  if (!user || user.role === 'admin') {
+    throw profileNotFound();
+  }
+
+  // Criterion 13, written before the flag exists: isActive arrives in Sprint 3,
+  // so only an explicit false hides a profile and accounts stored without the
+  // field stay visible. The 404 is identical to a missing profile on purpose —
+  // a deactivated account must not be distinguishable from one that never was.
+  if (user.isActive === false) {
+    throw profileNotFound();
+  }
+
+  const profile = await getOrCreateProfile(user);
+
+  return toPublicProfile(user, profile);
 };
 
 // The name and photo any other feature embeds when it shows who someone is —
