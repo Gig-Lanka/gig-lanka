@@ -447,6 +447,20 @@ Youth worker set (rated by the business):
 | `reliability` | Reliability |
 | `ability_to_follow_instructions` | Ability to follow instructions |
 
+### 6.10 Rating aggregate shape
+
+The summary that lands on a profile once reviews exist for it. Flat by design — an average, a count, and a short list of common categories, nothing here needs a histogram in Sprint 1.
+
+```json
+{
+  "averageRating": 4.6,
+  "reviewCount": 12,
+  "topCategories": ["communication", "punctuality"]
+}
+```
+
+**Ownership boundary**, stated in both directions so neither epic computes the other's number: the Review component (this contract's `6.9`) owns the aggregate and is the only thing that writes it, computed from the reviews collection starting in Sprint 2. User & Profile stores the aggregate on the profile document and displays it, and never writes it.
+
 ---
 
 ## 7. Adding a new endpoint later
