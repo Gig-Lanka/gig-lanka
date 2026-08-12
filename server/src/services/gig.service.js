@@ -75,7 +75,6 @@ export const getGigById = async (id) => {
   // User holds credentials and a role, the profile holds what everyone else
   // sees. A business that has not filled in a profile yet reads back as nulls.
   const business = await getPublicIdentity(gigJson.postedBy);
-  gigJson.postedBy = business.id;
 
   return { gig: gigJson, business };
 };
