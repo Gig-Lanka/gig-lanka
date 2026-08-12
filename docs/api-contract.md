@@ -463,7 +463,36 @@ The summary that lands on a profile once reviews exist for it. Flat by design �
 
 ---
 
-## 7. Adding a new endpoint later
+## 7. Review document shape
+
+`server/src/models/review.model.js`. No endpoint reads or writes this yet — that's GL-111 — but the shape is fixed here so GL-115's components are built against something stable.
+
+```json
+{
+  "id": "64f1a2b3c4d5e6f7a8b9c0d2",
+  "application": "64f1a2b3c4d5e6f7a8b9c0d3",
+  "author": "64f1a2b3c4d5e6f7a8b9c0d1",
+  "subject": "64f1a2b3c4d5e6f7a8b9c0d4",
+  "direction": "seeker_to_business",
+  "rating": 5,
+  "categories": ["fair_payment", "communication"],
+  "text": "Paid on time and communicated clearly throughout the gig.",
+  "createdAt": "2026-08-12T09:15:00.000Z"
+}
+```
+
+- `application` — the application this review came from. A review can only exist because that application reached `hired` (§6.7); it points at the application, not directly at a user.
+- `author`, `subject` — always derived from the application and the authenticated user, never accepted from a request body. Reference ids only — no author name or photo is copied onto the review, so a profile edit is reflected on every past review instead of being frozen into it. The opposite of the application's frozen snapshot, and for the opposite reason: an application records what was true then, a review shows who someone is now. Author and subject are never the same user.
+- `direction` — one of exactly two values: `seeker_to_business` or `business_to_seeker`. There is no third kind of review.
+- `rating` — a whole number, 1 to 5. No half stars, no zero, no decimals.
+- `categories` — optional, may be empty. Validated against `direction`: `seeker_to_business` accepts only the business set, `business_to_seeker` accepts only the youth worker set (§6.9).
+- `text` — required, 20–1000 characters, not whitespace-only.
+- `createdAt` — set once, on creation. There is no `updatedAt`: reviews are permanent, with no edit or delete path. Correcting one is a dispute, handled by Admin in Sprint 4.
+- At most one review per `(application, direction)` pair — a unique index enforces it, so the same person can't review the same completed gig twice.
+
+---
+
+## 8. Adding a new endpoint later
 
 1. Pick a plural, lowercase, hyphenated resource name.
 2. Reuse the envelopes in sections 2 and 3 exactly — don't invent a new outer shape.
