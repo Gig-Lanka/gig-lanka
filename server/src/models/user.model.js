@@ -18,6 +18,14 @@ const userSchema = new mongoose.Schema(
       enum: ['seeker', 'business', 'admin'],
       required: true,
     },
+    name: {
+      type: String,
+      trim: true,
+    },
+    photo: {
+      type: String,
+      trim: true,
+    },
   },
   {
     timestamps: true,

@@ -4,6 +4,7 @@ import cors from 'cors';
 import morgan from 'morgan';
 import healthRoutes from './routes/health.routes.js';
 import authRoutes from './routes/auth.routes.js';
+import gigRoutes from './routes/gig.routes.js';
 import { notFound } from './middleware/notFound.js';
 import { errorHandler } from './middleware/errorHandler.js';
 
@@ -16,6 +17,7 @@ app.use(morgan('dev'));
 
 app.use('/api/health', healthRoutes);
 app.use('/api/auth', authRoutes);
+app.use('/api/gigs', gigRoutes);
 
 app.use(notFound);
 app.use(errorHandler);
