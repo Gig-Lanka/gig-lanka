@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import { Gig } from '../models/gig.model.js';
 import { ApiError } from '../utils/ApiError.js';
+import { getPublicIdentity } from './profile.service.js';
 
 const PAGE_SIZE = 10;
 
@@ -63,18 +64,17 @@ export const getGigById = async (id) => {
     throw new ApiError(404, 'NOT_FOUND', 'Gig not found.');
   }
 
-  const gig = await Gig.findById(id).populate('postedBy', 'name photo');
+  const gig = await Gig.findById(id);
 
   if (!gig) {
     throw new ApiError(404, 'NOT_FOUND', 'Gig not found.');
   }
 
   const gigJson = gig.toJSON();
-  const business = {
-    id: gigJson.postedBy.id,
-    name: gigJson.postedBy.name ?? null,
-    photo: gigJson.postedBy.photo ?? null,
-  };
+  // Name and photo come from the poster's profile, not the User record —
+  // User holds credentials and a role, the profile holds what everyone else
+  // sees. A business that has not filled in a profile yet reads back as nulls.
+  const business = await getPublicIdentity(gigJson.postedBy);
   gigJson.postedBy = business.id;
 
   return { gig: gigJson, business };
