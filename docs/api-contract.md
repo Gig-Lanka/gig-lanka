@@ -97,6 +97,7 @@ Every error response — regardless of cause — returns the same outer shape:
 | `FILE_TYPE_MISMATCH` | An uploaded file's extension doesn't match its reported MIME type. |
 | `FILE_TOO_LARGE` | An uploaded file exceeds the 5MB limit. |
 | `STORAGE_UNAVAILABLE` | The storage backend (Supabase) failed or was unreachable. Always `502`. |
+| `GIG_CLOSED` | Attempted to apply to or save a gig whose status isn't `open`. Always `409`. |
 
 New codes may be added for later sprints' resources; existing codes are never repurposed for a different meaning.
 
