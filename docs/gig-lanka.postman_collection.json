@@ -1,14 +1,19 @@
 {
   "info": {
     "_postman_id": "b1a2c3d4-5e6f-4a7b-8c9d-0e1f2a3b4c5d",
-    "name": "Gig Lanka - Auth API",
-    "description": "Covers the five Sprint 0 auth endpoints defined in docs/api-contract.md. Set baseUrl to point at a running server; accessToken/refreshToken are populated automatically by the Register/Login/Refresh requests.",
+    "name": "Gig Lanka API",
+    "description": "Covers the Sprint 0 auth endpoints (§5) and the Sprint 1 profile endpoints (§8) defined in docs/api-contract.md. Set baseUrl to point at a running server; accessToken/refreshToken are populated automatically by the Register/Login/Refresh requests.\n\nProfiles folder — run in order. 'Register seeker' and 'Register business' each store their own token (seekerToken/businessToken) and user id (seekerUserId/businessUserId), so the refusal requests can act as one role against the other without re-logging in.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
     { "key": "baseUrl", "value": "http://localhost:5000/api" },
     { "key": "accessToken", "value": "" },
-    { "key": "refreshToken", "value": "" }
+    { "key": "refreshToken", "value": "" },
+    { "key": "seekerToken", "value": "" },
+    { "key": "seekerUserId", "value": "" },
+    { "key": "businessToken", "value": "" },
+    { "key": "businessUserId", "value": "" },
+    { "key": "adminToken", "value": "" }
   ],
   "item": [
     {
@@ -122,6 +127,424 @@
         ],
         "url": "{{baseUrl}}/auth/me"
       }
+    },
+    {
+      "name": "Profiles",
+      "description": "Sprint 1 profile endpoints — see §8 of docs/api-contract.md. Run top to bottom: the two Register requests seed the tokens and user ids everything below uses.",
+      "item": [
+        {
+          "name": "Setup - Register seeker",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const body = pm.response.json();",
+                  "  pm.collectionVariables.set(\"seekerToken\", body.data.accessToken);",
+                  "  pm.collectionVariables.set(\"seekerUserId\", body.data.user.id);",
+                  "}",
+                  "pm.test(\"registered or already exists\", function () {",
+                  "  pm.expect([201, 409]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"profile.seeker@giglanka.test\",\n  \"password\": \"Password123!\",\n  \"role\": \"seeker\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/register"
+          }
+        },
+        {
+          "name": "Setup - Register business",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const body = pm.response.json();",
+                  "  pm.collectionVariables.set(\"businessToken\", body.data.accessToken);",
+                  "  pm.collectionVariables.set(\"businessUserId\", body.data.user.id);",
+                  "}",
+                  "pm.test(\"registered or already exists\", function () {",
+                  "  pm.expect([201, 409]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"profile.business@giglanka.test\",\n  \"password\": \"Password123!\",\n  \"role\": \"business\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/register"
+          }
+        },
+        {
+          "name": "Get own profile (seeker)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 and envelope\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json().success).to.eql(true);",
+                  "});",
+                  "pm.test(\"name is always present, created lazily if needed\", function () {",
+                  "  pm.expect(pm.response.json().data.profile.name).to.be.a(\"string\").and.not.empty;",
+                  "});",
+                  "pm.test(\"system-owned fields are present and defaulted\", function () {",
+                  "  const p = pm.response.json().data.profile;",
+                  "  pm.expect(p.ratingSummary).to.have.keys(\"averageRating\", \"reviewCount\", \"topCategories\");",
+                  "  pm.expect(p.skillTrialResults).to.be.an(\"array\");",
+                  "});",
+                  "pm.test(\"no credential fields\", function () {",
+                  "  const p = pm.response.json().data.profile;",
+                  "  pm.expect(p).to.not.have.property(\"email\");",
+                  "  pm.expect(p).to.not.have.property(\"passwordHash\");",
+                  "  pm.expect(p).to.not.have.property(\"role\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{seekerToken}}" }],
+            "url": "{{baseUrl}}/profiles/me"
+          }
+        },
+        {
+          "name": "Update own profile (seeker)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 and fields persisted\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const p = pm.response.json().data.profile;",
+                  "  pm.expect(p.name).to.eql(\"Nimal Perera\");",
+                  "  pm.expect(p.skills).to.include(\"barista\");",
+                  "  pm.expect(p.workExperience).to.have.lengthOf(1);",
+                  "  pm.expect(p.education).to.have.lengthOf(1);",
+                  "});",
+                  "pm.test(\"system-owned fields untouched\", function () {",
+                  "  const p = pm.response.json().data.profile;",
+                  "  pm.expect(p.ratingSummary.reviewCount).to.eql(0);",
+                  "  pm.expect(p.skillTrialResults).to.be.an(\"array\").that.is.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{seekerToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Nimal Perera\",\n  \"photo\": \"https://cdn.giglanka.test/u/nimal.jpg\",\n  \"bio\": \"Second-year student, free weekday evenings and weekends.\",\n  \"city\": \"Colombo\",\n  \"skills\": [\"barista\", \"cashier\", \"customer service\"],\n  \"workExperience\": [\n    {\n      \"roleTitle\": \"Barista\",\n      \"employer\": \"Cafe Kandy\",\n      \"startDate\": \"2025-06-01\",\n      \"endDate\": \"2025-12-31\",\n      \"ongoing\": false,\n      \"description\": \"Weekend shifts making coffee and handling the till.\"\n    }\n  ],\n  \"education\": [\n    {\n      \"institution\": \"University of Colombo\",\n      \"qualification\": \"BSc Computer Science\",\n      \"startDate\": \"2024-01-15\",\n      \"endDate\": \"2027-12-01\"\n    }\n  ]\n}"
+            },
+            "url": "{{baseUrl}}/profiles/me"
+          }
+        },
+        {
+          "name": "Update own profile (business)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 and category persisted\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json().data.profile.category).to.eql(\"Hospitality\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{businessToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Kandy Coffee Co\",\n  \"photo\": \"https://cdn.giglanka.test/u/kandy.jpg\",\n  \"bio\": \"Independent coffee shop on Peradeniya Road.\",\n  \"city\": \"Kandy\",\n  \"category\": \"Hospitality\"\n}"
+            },
+            "url": "{{baseUrl}}/profiles/me"
+          }
+        },
+        {
+          "name": "Read another user's profile (business reads seeker)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 and public seeker shape\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const p = pm.response.json().data.profile;",
+                  "  pm.expect(p.userId).to.eql(pm.collectionVariables.get(\"seekerUserId\"));",
+                  "  pm.expect(p).to.have.property(\"skills\");",
+                  "  pm.expect(p).to.have.property(\"ratingSummary\");",
+                  "});",
+                  "pm.test(\"never leaks private fields\", function () {",
+                  "  const p = pm.response.json().data.profile;",
+                  "  [\"email\", \"role\", \"passwordHash\", \"isActive\", \"createdAt\", \"updatedAt\"].forEach(function (k) {",
+                  "    pm.expect(p).to.not.have.property(k);",
+                  "  });",
+                  "  pm.expect(pm.response.text()).to.not.include(\"@giglanka.test\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{businessToken}}" }],
+            "url": "{{baseUrl}}/profiles/{{seekerUserId}}"
+          }
+        },
+        {
+          "name": "Read another user's profile (seeker reads business)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 with category, without seeker fields\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const p = pm.response.json().data.profile;",
+                  "  pm.expect(p.category).to.eql(\"Hospitality\");",
+                  "  [\"skills\", \"workExperience\", \"education\", \"skillTrialResults\"].forEach(function (k) {",
+                  "    pm.expect(p).to.not.have.property(k);",
+                  "  });",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{seekerToken}}" }],
+            "url": "{{baseUrl}}/profiles/{{businessUserId}}"
+          }
+        },
+        {
+          "name": "Refusal - 401 no token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"401 AUTH_HEADER_MISSING\", function () {",
+                  "  pm.response.to.have.status(401);",
+                  "  pm.expect(pm.response.json().error.code).to.eql(\"AUTH_HEADER_MISSING\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/profiles/me" }
+        },
+        {
+          "name": "Refusal - 403 admin token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Needs adminToken set manually: log in as the seeded admin",
+                  "// (admin@giglanka.test) and paste its accessToken into the",
+                  "// adminToken collection variable. Admins cannot self-register.",
+                  "pm.test(\"403 FORBIDDEN\", function () {",
+                  "  pm.response.to.have.status(403);",
+                  "  pm.expect(pm.response.json().error.code).to.eql(\"FORBIDDEN\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": "{{baseUrl}}/profiles/me"
+          }
+        },
+        {
+          "name": "Refusal - 400 system-owned field",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"400 naming every offending field\", function () {",
+                  "  pm.response.to.have.status(400);",
+                  "  const err = pm.response.json().error;",
+                  "  pm.expect(err.code).to.eql(\"VALIDATION_ERROR\");",
+                  "  const fields = err.errors.map(function (e) { return e.field; });",
+                  "  pm.expect(fields).to.include.members([\"ratingSummary\", \"skillTrialResults\", \"role\", \"email\"]);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{seekerToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Nimal Perera\",\n  \"ratingSummary\": { \"averageRating\": 5, \"reviewCount\": 99, \"topCategories\": [] },\n  \"skillTrialResults\": [{ \"skill\": \"barista\", \"passed\": true }],\n  \"role\": \"admin\",\n  \"email\": \"someone.else@giglanka.test\"\n}"
+            },
+            "url": "{{baseUrl}}/profiles/me"
+          }
+        },
+        {
+          "name": "Refusal - 400 seeker sending business field",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"400 naming category\", function () {",
+                  "  pm.response.to.have.status(400);",
+                  "  const err = pm.response.json().error;",
+                  "  pm.expect(err.code).to.eql(\"VALIDATION_ERROR\");",
+                  "  pm.expect(err.errors.map(function (e) { return e.field; })).to.include(\"category\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{seekerToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Nimal Perera\",\n  \"category\": \"Retail\"\n}"
+            },
+            "url": "{{baseUrl}}/profiles/me"
+          }
+        },
+        {
+          "name": "Refusal - 400 business sending seeker field",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"400 naming skills\", function () {",
+                  "  pm.response.to.have.status(400);",
+                  "  const err = pm.response.json().error;",
+                  "  pm.expect(err.code).to.eql(\"VALIDATION_ERROR\");",
+                  "  pm.expect(err.errors.map(function (e) { return e.field; })).to.include(\"skills\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{businessToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Kandy Coffee Co\",\n  \"skills\": [\"retail\"]\n}"
+            },
+            "url": "{{baseUrl}}/profiles/me"
+          }
+        },
+        {
+          "name": "Refusal - 404 unknown user id",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"404 NOT_FOUND\", function () {",
+                  "  pm.response.to.have.status(404);",
+                  "  pm.expect(pm.response.json().error.code).to.eql(\"NOT_FOUND\");",
+                  "});",
+                  "pm.test(\"reveals nothing about why\", function () {",
+                  "  pm.expect(pm.response.json().error.message).to.eql(\"Profile not found.\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{seekerToken}}" }],
+            "url": "{{baseUrl}}/profiles/64f1a2b3c4d5e6f7a8b9c0d1"
+          }
+        },
+        {
+          "name": "Refusal - 403 updating someone else",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"403, not 404 - not allowed, ever\", function () {",
+                  "  pm.response.to.have.status(403);",
+                  "  pm.expect(pm.response.json().error.code).to.eql(\"FORBIDDEN\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{seekerToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Hacked\"\n}"
+            },
+            "url": "{{baseUrl}}/profiles/{{businessUserId}}"
+          }
+        }
+      ]
     }
   ]
 }

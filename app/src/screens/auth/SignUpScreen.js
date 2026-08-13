@@ -1,24 +1,28 @@
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 
-import { authApi } from '../../api';
+import AuthShell from '../../components/ui/AuthShell';
+import Brand from '../../components/ui/Brand';
 import Button from '../../components/ui/Button';
-import Dropdown from '../../components/ui/Dropdown';
-import Screen from '../../components/ui/Screen';
+import Notice from '../../components/ui/Notice';
+import ProgressPips from '../../components/ui/ProgressPips';
+import RoleStrip from '../../components/ui/RoleStrip';
 import TextInput from '../../components/ui/TextInput';
+import useAuth from '../../hooks/useAuth';
 import { validateSignUpForm } from '../../utils/validation';
 
-const ROLE_OPTIONS = [
-  { label: 'seeker', value: 'seeker' },
-  { label: 'business', value: 'business' },
-];
+const ROLE_LABELS = {
+  seeker: 'Seeker',
+  business: 'Business',
+};
 
 export default function SignUpScreen() {
   const navigation = useNavigation();
   const route = useRoute();
+  const { register } = useAuth();
 
-  const [role, setRole] = useState(route.params?.role);
+  const [role] = useState(route.params?.role);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -34,7 +38,7 @@ export default function SignUpScreen() {
 
     setSubmitting(true);
     try {
-      await authApi.register({
+      await register({
         email: email.trim().toLowerCase(),
         password,
         role,
@@ -58,68 +62,75 @@ export default function SignUpScreen() {
   };
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      className="flex-1"
+    <AuthShell
+      scroll
+      header={
+        <>
+          <Brand />
+          <Text className="mt-8 font-display text-h1 text-paper">Create your{`\n`}account</Text>
+        </>
+      }
     >
-      <Screen scroll contentClassName="flex-grow justify-center">
-        <View className="mb-6 mt-8">
-          <Text className="text-2xl font-bold text-text-primary">Create your account</Text>
-        </View>
+      <ProgressPips total={2} current={2} caption />
 
-        <Dropdown
-          label="Role"
-          options={ROLE_OPTIONS}
-          value={role}
-          onChange={setRole}
-          disabled={submitting}
-        />
+      <RoleStrip
+        className="mt-5"
+        value={ROLE_LABELS[role]}
+        onAction={submitting ? undefined : () => navigation.navigate('RoleSelect')}
+      />
 
-        <TextInput
-          label="Email"
-          placeholder="you@example.com"
-          keyboardType="email-address"
-          autoCapitalize="none"
-          value={email}
-          onChangeText={setEmail}
-          error={errors.email}
-          disabled={submitting}
-        />
-        <TextInput
-          label="Password"
-          placeholder="Password"
-          secureTextEntry
-          value={password}
-          onChangeText={setPassword}
-          error={errors.password}
-          disabled={submitting}
-        />
-        <TextInput
-          label="Confirm password"
-          placeholder="Confirm password"
-          secureTextEntry
-          value={confirmPassword}
-          onChangeText={setConfirmPassword}
-          error={errors.confirmPassword}
-          disabled={submitting}
-        />
+      <TextInput
+        label="Email"
+        placeholder="you@example.com"
+        keyboardType="email-address"
+        autoCapitalize="none"
+        value={email}
+        onChangeText={setEmail}
+        error={errors.email}
+        disabled={submitting}
+        containerClassName="mt-6"
+      />
+      <TextInput
+        label="Password"
+        placeholder="Password"
+        secureTextEntry
+        value={password}
+        onChangeText={setPassword}
+        error={errors.password}
+        disabled={submitting}
+      />
+      <TextInput
+        label="Confirm password"
+        placeholder="Confirm password"
+        secureTextEntry
+        value={confirmPassword}
+        onChangeText={setConfirmPassword}
+        error={errors.confirmPassword}
+        disabled={submitting}
+        containerClassName="mb-7"
+      />
 
-        {formError ? <Text className="mb-4 text-sm text-danger-text">{formError}</Text> : null}
+      {formError ? (
+        <Notice variant="error" className="mb-4">
+          {formError}
+        </Notice>
+      ) : null}
 
-        <Button onPress={handleSubmit} fullWidth loading={submitting}>
-          Sign Up
-        </Button>
+      <Button trailingArrow onPress={handleSubmit} fullWidth loading={submitting}>
+        Sign Up
+      </Button>
 
-        <Pressable
-          onPress={() => navigation.navigate('Login')}
-          className="mt-6"
-          disabled={submitting}
-        >
-          <Text className="text-center text-sm text-text-secondary">
-            Already have an account? <Text className="font-semibold text-primary">Log in</Text>
-          </Text>
-        </Pressable>
-      </Screen>
-    </KeyboardAvoidingView>
+      <View className="flex-1" />
+
+      <Pressable
+        onPress={() => navigation.navigate('Login')}
+        className="py-6"
+        disabled={submitting}
+      >
+        <Text className="text-center text-[14.5px] text-muted">
+          Already have an account? <Text className="font-semibold text-signal">Log in</Text>
+        </Text>
+      </Pressable>
+    </AuthShell>
   );
 }
