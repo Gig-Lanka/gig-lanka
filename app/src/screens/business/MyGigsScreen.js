@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
-import { FlatList } from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { FlatList, View } from 'react-native';
 
 import gigApi from '../../api/gigApi';
 import BusinessGigCard from '../../components/gig/BusinessGigCard';
+import GigActionRow from '../../components/gig/GigActionRow';
 import GigStatusFilter from '../../components/gig/GigStatusFilter';
 import EmptyState from '../../components/ui/EmptyState';
 import Loader from '../../components/ui/Loader';
@@ -47,6 +48,10 @@ export default function MyGigsScreen() {
 
   const filteredGigs = useMemo(() => gigs.filter((gig) => gig.status === status), [gigs, status]);
 
+  const handleGigUpdated = useCallback((updatedGig) => {
+    setGigs((prev) => prev.map((gig) => (gig.id === updatedGig.id ? updatedGig : gig)));
+  }, []);
+
   if (loading) {
     return <Loader fullScreen />;
   }
@@ -62,7 +67,12 @@ export default function MyGigsScreen() {
         <FlatList
           data={filteredGigs}
           keyExtractor={(gig) => gig.id}
-          renderItem={({ item }) => <BusinessGigCard gig={item} />}
+          renderItem={({ item }) => (
+            <View className="gap-[10px]">
+              <BusinessGigCard gig={item} />
+              <GigActionRow gig={item} onGigUpdated={handleGigUpdated} />
+            </View>
+          )}
           contentContainerClassName="gap-3 pb-6"
           ListEmptyComponent={<EmptyState message="No gigs with this status." />}
         />
