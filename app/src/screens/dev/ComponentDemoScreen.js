@@ -19,6 +19,9 @@ import ScreenHeader from '../../components/ui/ScreenHeader';
 import SectionLabel from '../../components/ui/SectionLabel';
 import SegmentedControl from '../../components/ui/SegmentedControl';
 import TextInput from '../../components/ui/TextInput';
+import CategoryChipGroup from '../../components/review/CategoryChipGroup';
+import ReviewCard from '../../components/review/ReviewCard';
+import { BUSINESS_REVIEW_CATEGORIES, YOUTH_WORKER_REVIEW_CATEGORIES } from '../../constants/enums';
 import { formatDeadline, formatLocation, formatPay, formatRelativeTime } from '../../utils/format';
 
 function Section({ title, children }) {
@@ -334,6 +337,96 @@ function AvatarSection() {
   );
 }
 
+function ReviewCardSection() {
+  const now = new Date();
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  const longText = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. '
+    .repeat(18)
+    .slice(0, 1000);
+
+  const noCategoriesReview = {
+    id: 'demo-review-1',
+    application: 'demo-application-1',
+    author: 'demo-author-1',
+    subject: 'demo-subject-1',
+    direction: 'seeker_to_business',
+    rating: 4,
+    categories: [],
+    text: 'Great to work with, showed up on time and the brief was easy to follow.',
+    createdAt: new Date(now.getTime() - 6 * 60 * 60 * 1000),
+  };
+
+  const sixCategoriesReview = {
+    id: 'demo-review-2',
+    application: 'demo-application-2',
+    author: 'demo-author-2',
+    subject: 'demo-subject-2',
+    direction: 'business_to_seeker',
+    rating: 5,
+    categories: YOUTH_WORKER_REVIEW_CATEGORIES.map((category) => category.value),
+    text: 'Consistently reliable across the whole engagement, would hire again without hesitation.',
+    createdAt: new Date(now.getTime() - 9 * DAY_MS),
+  };
+
+  const longTextReview = {
+    id: 'demo-review-3',
+    application: 'demo-application-3',
+    author: 'demo-author-3',
+    subject: 'demo-subject-3',
+    direction: 'seeker_to_business',
+    rating: 3,
+    categories: ['fair_payment', 'communication'],
+    text: longText,
+    createdAt: new Date(now.getTime() - 45 * 60 * 1000),
+  };
+
+  return (
+    <Section title="ReviewCard — GL-199">
+      <Text className="text-sm text-text-secondary">No categories</Text>
+      <ReviewCard
+        review={noCategoriesReview}
+        authorName="Amaya's Café"
+        authorAvatarUrl="https://i.pravatar.cc/150?img=32"
+      />
+
+      <Text className="mt-3 text-sm text-text-secondary">Six categories</Text>
+      <ReviewCard review={sixCategoriesReview} authorName="Nuwan Fernando" />
+
+      <Text className="mt-3 text-sm text-text-secondary">1000-character text</Text>
+      <ReviewCard
+        review={longTextReview}
+        authorName="Sanduni Perera"
+        authorAvatarUrl="https://i.pravatar.cc/150?img=47"
+      />
+    </Section>
+  );
+}
+
+function CategoryChipGroupSection() {
+  const [selected, setSelected] = useState(['work_quality', 'punctuality']);
+
+  return (
+    <Section title="CategoryChipGroup — GL-199">
+      <Text className="text-sm text-text-secondary">Interactive — multi-select</Text>
+      <CategoryChipGroup
+        categories={YOUTH_WORKER_REVIEW_CATEGORIES}
+        value={selected}
+        onChange={setSelected}
+      />
+
+      <Text className="mt-3 text-sm text-text-secondary">Nothing selected</Text>
+      <CategoryChipGroup categories={BUSINESS_REVIEW_CATEGORIES} value={[]} onChange={() => {}} />
+
+      <Text className="mt-3 text-sm text-text-secondary">Everything selected</Text>
+      <CategoryChipGroup
+        categories={BUSINESS_REVIEW_CATEGORIES}
+        value={BUSINESS_REVIEW_CATEGORIES.map((category) => category.value)}
+        onChange={() => {}}
+      />
+    </Section>
+  );
+}
+
 function SectionLabelSection() {
   return (
     <Section title="SectionLabel — GL-130">
@@ -533,6 +626,8 @@ export default function ComponentDemoScreen() {
       <BadgeSection />
       <ChipSection />
       <AvatarSection />
+      <ReviewCardSection />
+      <CategoryChipGroupSection />
       <SectionLabelSection />
       <ScreenHeaderSection />
       <HeroHeaderSection />
