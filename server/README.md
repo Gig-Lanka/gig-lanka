@@ -3,8 +3,9 @@ This is where express code exists (Back-end)
 ## Setup
 
 1. Copy `.env.example` to `.env` and fill in `MONGODB_URI` (ask a teammate for the shared Atlas connection string — never commit this file).
-2. `npm install`
-3. `npm run dev`
+2. Fill in `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` and `SUPABASE_BUCKET_NAME` the same way — ask a teammate for the shared Supabase project credentials. The API fails loudly on startup if any of these three are missing, rather than only failing the first time something tries to upload a file.
+3. `npm install`
+4. `npm run dev`
 
 ## Testing
 

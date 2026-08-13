@@ -92,6 +92,11 @@ Every error response — regardless of cause — returns the same outer shape:
 | `FORBIDDEN` | Authenticated, but the user's role isn't allowed to do this. |
 | `NOT_FOUND` | The requested resource doesn't exist. |
 | `INTERNAL_ERROR` | Unhandled server-side failure. |
+| `FILE_MISSING` | An upload request had no file in the fixed field name. |
+| `UNSUPPORTED_FILE_TYPE` | An uploaded file's MIME type isn't PNG, JPG or PDF. |
+| `FILE_TYPE_MISMATCH` | An uploaded file's extension doesn't match its reported MIME type. |
+| `FILE_TOO_LARGE` | An uploaded file exceeds the 5MB limit. |
+| `STORAGE_UNAVAILABLE` | The storage backend (Supabase) failed or was unreachable. Always `502`. |
 
 New codes may be added for later sprints' resources; existing codes are never repurposed for a different meaning.
 
@@ -109,6 +114,7 @@ New codes may be added for later sprints' resources; existing codes are never re
 | `404 Not Found` | The resource, or the route, doesn't exist. |
 | `409 Conflict` | The request conflicts with existing state — e.g. registering an email that's already taken. |
 | `500 Internal Server Error` | Unhandled failure on the server. Never leaks stack traces or internals to the client in production. |
+| `502 Bad Gateway` | A dependency the server calls out to (e.g. Supabase Storage) failed or was unreachable. Distinguishes "the thing you sent was fine but our infrastructure isn't" from a `400`/`500`. |
 
 ---
 
@@ -850,7 +856,95 @@ It returns `403` rather than `404` so the answer reads as "not allowed, ever" in
 
 ---
 
-## 9. Adding a new endpoint later
+## 9. Upload endpoint (Sprint 1)
+
+Backs profile photos this sprint; skill trial file submissions and resume PDFs reuse the same endpoint from Sprint 3 onward. See GL-105 for the storage design — the client never talks to Supabase directly, only to this endpoint.
+
+### 9.1 Upload a file — `POST /api/uploads`
+
+**Request:** `multipart/form-data`, not JSON.
+
+| Field | Rule |
+|---|---|
+| `file` | **Required.** The file itself. PNG, JPG or PDF only, checked against both its MIME type and its extension. Max 5MB. |
+| `folder` | **Required.** A closed list of purposes, not a free path — a caller can't write anywhere else in the bucket. Only `avatars` this sprint. |
+
+**Success — `201 Created`**
+
+```json
+{
+  "success": true,
+  "data": {
+    "url": "https://<project>.supabase.co/storage/v1/object/public/<bucket>/avatars/9b1e3f2a-....png"
+  }
+}
+```
+
+The returned name is generated server-side and unguessable — never the filename the client sent, and never derived from the caller's user id.
+
+**Failure — `400 Bad Request`** (bad `folder`, same shape as any other `VALIDATION_ERROR`):
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Request validation failed.",
+    "errors": [
+      { "field": "folder", "message": "must be one of [avatars]" }
+    ]
+  }
+}
+```
+
+**Failure — `400 Bad Request`** (no file in the `file` field):
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "FILE_MISSING",
+    "message": "No file was provided."
+  }
+}
+```
+
+**Failure — `400 Bad Request`** (wrong type, mismatched extension, or oversize) — see 9.2 for the three distinct codes.
+
+**Failure — `401 Unauthorized`** — as in 8.3. Guests cannot upload.
+
+**Failure — `502 Bad Gateway`** (Supabase is down or rejects the request):
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "STORAGE_UNAVAILABLE",
+    "message": "Could not upload the file. Please try again."
+  }
+}
+```
+
+A `502` means the file itself may have been fine — try again. A `400` means the file or request was the problem — retrying unchanged won't help.
+
+### 9.2 Error codes for this endpoint
+
+| Status | Code | When |
+|---|---|---|
+| `400` | `VALIDATION_ERROR` | `folder` missing or not in the closed list. Carries `errors`. |
+| `400` | `FILE_MISSING` | No file in the `file` field. |
+| `400` | `UNSUPPORTED_FILE_TYPE` | File's MIME type isn't PNG, JPG or PDF. |
+| `400` | `FILE_TYPE_MISMATCH` | File's extension doesn't match its reported MIME type — catches a renamed file. |
+| `400` | `FILE_TOO_LARGE` | File exceeds 5MB. |
+| `401` | `AUTH_HEADER_MISSING` | No `Authorization` header. |
+| `401` | `AUTH_HEADER_MALFORMED` | Header present but not `Bearer <token>`. |
+| `401` | `TOKEN_EXPIRED` | Access token expired. |
+| `401` | `TOKEN_INVALID` | Access token invalid, or its user no longer exists. |
+| `502` | `STORAGE_UNAVAILABLE` | Supabase failed or was unreachable. The request may have been valid — safe to retry. |
+
+---
+
+## 10. Adding a new endpoint later
 
 1. Pick a plural, lowercase, hyphenated resource name.
 2. Reuse the envelopes in sections 2 and 3 exactly — don't invent a new outer shape.
