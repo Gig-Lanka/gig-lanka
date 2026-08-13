@@ -20,7 +20,9 @@ import SectionLabel from '../../components/ui/SectionLabel';
 import SegmentedControl from '../../components/ui/SegmentedControl';
 import TextInput from '../../components/ui/TextInput';
 import CategoryChipGroup from '../../components/review/CategoryChipGroup';
+import RatingBars from '../../components/review/RatingBars';
 import ReviewCard from '../../components/review/ReviewCard';
+import StarRating from '../../components/review/StarRating';
 import { BUSINESS_REVIEW_CATEGORIES, YOUTH_WORKER_REVIEW_CATEGORIES } from '../../constants/enums';
 import { formatDeadline, formatLocation, formatPay, formatRelativeTime } from '../../utils/format';
 
@@ -337,6 +339,34 @@ function AvatarSection() {
   );
 }
 
+function StarRatingSection() {
+  const [interactiveLg, setInteractiveLg] = useState(4);
+  const [interactiveSm, setInteractiveSm] = useState(3);
+  const [interactiveZero, setInteractiveZero] = useState(0);
+
+  return (
+    <Section title="StarRating — GL-198">
+      <Text className="text-sm text-text-secondary">Read-only — large</Text>
+      <StarRating value={4} size="lg" />
+
+      <Text className="mt-3 text-sm text-text-secondary">Read-only — small</Text>
+      <StarRating value={4} size="sm" />
+
+      <Text className="mt-3 text-sm text-text-secondary">Read-only — zero (nothing selected)</Text>
+      <StarRating value={0} size="lg" />
+
+      <Text className="mt-3 text-sm text-text-secondary">Interactive — large</Text>
+      <StarRating value={interactiveLg} size="lg" onChange={setInteractiveLg} />
+
+      <Text className="mt-3 text-sm text-text-secondary">Interactive — small</Text>
+      <StarRating value={interactiveSm} size="sm" onChange={setInteractiveSm} />
+
+      <Text className="mt-3 text-sm text-text-secondary">Interactive — zero (tap to set)</Text>
+      <StarRating value={interactiveZero} size="lg" onChange={setInteractiveZero} />
+    </Section>
+  );
+}
+
 function ReviewCardSection() {
   const now = new Date();
   const DAY_MS = 24 * 60 * 60 * 1000;
@@ -423,6 +453,18 @@ function CategoryChipGroupSection() {
         value={BUSINESS_REVIEW_CATEGORIES.map((category) => category.value)}
         onChange={() => {}}
       />
+    </Section>
+  );
+}
+
+function RatingBarsSection() {
+  return (
+    <Section title="RatingBars — GL-200">
+      <Text className="text-sm text-text-secondary">Normal distribution</Text>
+      <RatingBars distribution={{ 5: 9, 4: 2, 3: 1, 2: 0, 1: 0 }} />
+
+      <Text className="mt-3 text-sm text-text-secondary">Zero reviews</Text>
+      <RatingBars distribution={{}} />
     </Section>
   );
 }
@@ -626,8 +668,10 @@ export default function ComponentDemoScreen() {
       <BadgeSection />
       <ChipSection />
       <AvatarSection />
+      <StarRatingSection />
       <ReviewCardSection />
       <CategoryChipGroupSection />
+      <RatingBarsSection />
       <SectionLabelSection />
       <ScreenHeaderSection />
       <HeroHeaderSection />
