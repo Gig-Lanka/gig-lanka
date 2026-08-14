@@ -6,6 +6,7 @@ import BusinessTabs from './BusinessTabs';
 import SeekerTabs from './SeekerTabs';
 import Loader from '../components/ui/Loader';
 import ComponentDemoScreen from '../screens/dev/ComponentDemoScreen';
+import EditProfileScreen from '../screens/shared/EditProfileScreen';
 import PostGigScreen from '../screens/business/PostGigScreen';
 import useAuth from '../hooks/useAuth';
 import { AUTH_STATUS } from '../store/AuthContext';
@@ -18,6 +19,7 @@ function AppStack({ role }) {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="Main" component={RoleTabs} />
+      <Stack.Screen name="EditProfile" component={EditProfileScreen} />
       {role === 'business' ? (
         <Stack.Screen
           name="PostGig"
