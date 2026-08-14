@@ -1,6 +1,7 @@
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import { useCallback, useRef, useState } from 'react';
 import { Text, View } from 'react-native';
+import { View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import gigApi from '../../api/gigApi';
@@ -84,6 +85,8 @@ export default function EditGigScreen() {
 
   const busy = submitting || closing || deleting;
 
+  const hasLoadedRef = useRef(false);
+
   const fetchGig = useCallback(async () => {
     try {
       const { gig } = await gigApi.getGig(gigId);
@@ -116,6 +119,7 @@ export default function EditGigScreen() {
 
   async function handleSubmit() {
     if (busy) return;
+    if (submitting) return;
 
     const validationErrors = validateGigForm(values);
     setErrors(validationErrors);
@@ -141,6 +145,7 @@ export default function EditGigScreen() {
         // to edit, so drop into the same "no longer exists" state the
         // initial fetch uses, rather than leaving a Notice on a dead form.
         setLoadError('This gig no longer exists.');
+        setFormError('This gig no longer exists.');
       } else {
         setFormError(apiError?.message || GENERIC_SAVE_ERROR);
       }
@@ -286,6 +291,14 @@ export default function EditGigScreen() {
         onConfirm={handleConfirmDelete}
         onCancel={() => setDeleteConfirmVisible(false)}
       />
+          disabled={submitting}
+          footer={
+            <Button loading={submitting} trailingArrow onPress={handleSubmit}>
+              Save changes
+            </Button>
+          }
+        />
+      </View>
     </SafeAreaView>
   );
 }
