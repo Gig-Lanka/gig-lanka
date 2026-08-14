@@ -1,8 +1,8 @@
 // Gig client — GL-107. The only place E3 screens talk to the network for
 // gigs; screens never import axios or touch a token, `client` handles auth
 // headers the same way it does for auth (see ./client.js).
-// Covers the six gig endpoints E3 needs this sprint (docs/api-contract.md
-// §10.3–10.8). Delete (§10.9) lives with the edit screen, GL-120.
+// Covers all seven gig endpoints E3 needs this sprint (docs/api-contract.md
+// §10.3–10.9).
 
 import client from './client';
 
@@ -36,6 +36,11 @@ async function closeGig(id) {
   return response.data.data;
 }
 
+async function deleteGig(id) {
+  const response = await client.delete(`/gigs/${id}`);
+  return response.data.data;
+}
+
 export default {
   createGig,
   listGigs,
@@ -43,4 +48,5 @@ export default {
   getMyGigs,
   updateGig,
   closeGig,
+  deleteGig,
 };
