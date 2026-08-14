@@ -137,7 +137,10 @@ export default function EditGigScreen() {
       } else if (apiError?.code === 'FORBIDDEN') {
         setFormError("You don't have permission to edit this gig.");
       } else if (apiError?.code === 'NOT_FOUND') {
-        setFormError('This gig no longer exists.');
+        // The gig was deleted elsewhere between load and save — nothing left
+        // to edit, so drop into the same "no longer exists" state the
+        // initial fetch uses, rather than leaving a Notice on a dead form.
+        setLoadError('This gig no longer exists.');
       } else {
         setFormError(apiError?.message || GENERIC_SAVE_ERROR);
       }
@@ -156,7 +159,14 @@ export default function EditGigScreen() {
       setCloseConfirmVisible(false);
     } catch (error) {
       const apiError = error.response?.data?.error;
-      setCloseError(apiError?.message || GENERIC_CLOSE_ERROR);
+      if (apiError?.code === 'FORBIDDEN') {
+        setCloseError("You don't have permission to close this gig.");
+      } else if (apiError?.code === 'NOT_FOUND') {
+        setCloseConfirmVisible(false);
+        setLoadError('This gig no longer exists.');
+      } else {
+        setCloseError(apiError?.message || GENERIC_CLOSE_ERROR);
+      }
     } finally {
       setClosing(false);
     }
@@ -171,8 +181,16 @@ export default function EditGigScreen() {
       navigation.goBack();
     } catch (error) {
       const apiError = error.response?.data?.error;
-      setDeleteError(apiError?.message || GENERIC_DELETE_ERROR);
-      setDeleting(false);
+      if (apiError?.code === 'FORBIDDEN') {
+        setDeleteError("You don't have permission to delete this gig.");
+        setDeleting(false);
+      } else if (apiError?.code === 'NOT_FOUND') {
+        // Already gone — the outcome the user wanted is already true.
+        navigation.goBack();
+      } else {
+        setDeleteError(apiError?.message || GENERIC_DELETE_ERROR);
+        setDeleting(false);
+      }
     }
   }
 
