@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import AuthStack from './AuthStack';
@@ -32,9 +33,29 @@ function AppStack({ role }) {
 export default function RootNavigator() {
   const { status, user } = useAuth();
 
+  // A brand-new install should land on RoleSelect (choose seeker/business,
+  // sign up) — but anyone who signs out after having been authenticated
+  // already has an account, so they belong on Login instead. Adjusted
+  // during render rather than in an effect, per React's own pattern for
+  // deriving state from a prior render's value — it only ever flips
+  // false → true, guarded so it can't loop.
+  const [prevStatus, setPrevStatus] = useState(status);
+  const [wasAuthenticated, setWasAuthenticated] = useState(status === AUTH_STATUS.AUTHENTICATED);
+
+  if (status !== prevStatus) {
+    setPrevStatus(status);
+    if (status === AUTH_STATUS.AUTHENTICATED) {
+      setWasAuthenticated(true);
+    }
+  }
+
   if (status === AUTH_STATUS.LOADING) {
     return <Loader fullScreen />;
   }
 
-  return status === AUTH_STATUS.AUTHENTICATED ? <AppStack role={user?.role} /> : <AuthStack />;
+  if (status === AUTH_STATUS.AUTHENTICATED) {
+    return <AppStack role={user?.role} />;
+  }
+
+  return <AuthStack initialRouteName={wasAuthenticated ? 'Login' : 'RoleSelect'} />;
 }

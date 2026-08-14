@@ -1,15 +1,138 @@
+import { useEffect, useState } from 'react';
+import { Animated, Pressable, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
+
+import { profileApi } from '../../api';
+import Avatar from '../../components/ui/Avatar';
+import Button from '../../components/ui/Button';
+import Chip from '../../components/ui/Chip';
 import EmptyState from '../../components/ui/EmptyState';
+import HeroHeader, { HeroSheet, HeroStickyBar } from '../../components/ui/HeroHeader';
+import Loader from '../../components/ui/Loader';
+import ProfileSectionHeader from '../../components/profile/ProfileSectionHeader';
 import useAuth from '../../hooks/useAuth';
+import useHeroScroll from '../../hooks/useHeroScroll';
+
+const STATUS = { LOADING: 'loading', READY: 'ready', ERROR: 'error' };
 
 export default function ProfileScreen() {
+  const navigation = useNavigation();
   const { logout } = useAuth();
+  const hero = useHeroScroll();
+
+  const [profile, setProfile] = useState(null);
+  const [status, setStatus] = useState(STATUS.LOADING);
+  const [reloadToken, setReloadToken] = useState(0);
+
+  // Same shape as the seeker screen's fetch — state only ever changes after
+  // the `await`, so this stays clear of the set-state-in-effect lint rule.
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadProfile() {
+      try {
+        const data = await profileApi.getMyProfile();
+        if (!cancelled) {
+          setProfile(data);
+          setStatus(STATUS.READY);
+        }
+      } catch {
+        if (!cancelled) setStatus(STATUS.ERROR);
+      }
+    }
+
+    loadProfile();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [reloadToken]);
+
+  if (status === STATUS.LOADING) {
+    return <Loader fullScreen />;
+  }
+
+  if (status === STATUS.ERROR) {
+    return (
+      <EmptyState
+        className="bg-paper"
+        message="We couldn't load your profile."
+        actionLabel="Retry"
+        onAction={() => {
+          setStatus(STATUS.LOADING);
+          setReloadToken((token) => token + 1);
+        }}
+      />
+    );
+  }
+
+  const { name, photo, bio, city, category } = profile;
 
   return (
-    <EmptyState
-      className="bg-bg-main"
-      message="Your profile arrives in a later sprint."
-      actionLabel="Log Out"
-      onAction={logout}
-    />
+    <View className="flex-1 bg-ink">
+      <Animated.ScrollView
+        onScroll={hero.onScroll}
+        scrollEventThrottle={hero.scrollEventThrottle}
+        contentContainerClassName="grow"
+      >
+        <View onLayout={hero.onHeroLayout}>
+          <HeroHeader
+            rightSlot={
+              <Pressable onPress={() => navigation.navigate('EditProfile')}>
+                <Text className="text-[14px] font-bold text-signal">Edit</Text>
+              </Pressable>
+            }
+          >
+            <Avatar uri={photo} name={name} size="lg" square className="self-center" />
+            <Text className="mt-3 text-center font-display text-[22px] tracking-[-0.025em] text-paper">
+              {name}
+            </Text>
+            <View className="mt-[7px] flex-row flex-wrap items-center justify-center gap-2">
+              <Text className="rounded-full border border-white/[0.16] bg-white/10 px-[11px] py-[5px] text-[11.5px] font-bold text-paper">
+                Business
+              </Text>
+              {city ? (
+                <Text className="text-[13px] font-medium text-muted-dark">{city}</Text>
+              ) : null}
+            </View>
+          </HeroHeader>
+        </View>
+
+        <HeroSheet className="px-[22px] pb-8 pt-[22px]">
+          {/* Rating summary slot — GL-116 renders here. Nothing until it lands. */}
+
+          {bio ? <Text className="text-desc leading-[21px] text-muted">{bio}</Text> : null}
+
+          {category ? (
+            <View className="mt-5">
+              <ProfileSectionHeader title="Category" />
+              <View className="mt-[10px]">
+                <Chip size="sm">{category}</Chip>
+              </View>
+            </View>
+          ) : null}
+
+          {/*
+            TEMP — testing only, not part of GL-147. Account Settings
+            (Sprint 2, unticketed) is where Log Out actually belongs per the
+            mockup index; remove this once that screen exists.
+          */}
+          <Button variant="small" fullWidth={false} onPress={logout} className="mt-8 self-center">
+            Log Out
+          </Button>
+        </HeroSheet>
+      </Animated.ScrollView>
+
+      <Animated.View
+        pointerEvents={hero.stickyPointerEvents}
+        style={hero.stickyStyle}
+        className="absolute left-0 right-0 top-0"
+      >
+        <SafeAreaView edges={['top']} className="bg-paper">
+          <HeroStickyBar title={name} visible />
+        </SafeAreaView>
+      </Animated.View>
+    </View>
   );
 }
