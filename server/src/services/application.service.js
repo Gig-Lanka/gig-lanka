@@ -36,6 +36,7 @@ const TRANSITION_RULES = {
 };
 
 const TERMINAL_STATUSES = ['hired', 'rejected', 'withdrawn', 'closed_filled'];
+const LIVE_STATUSES = ['applied', 'viewed', 'shortlisted', 'hired'];
 
 // The two Skill Trial reason codes only make sense once a gig can carry a
 // trial, which arrives in Sprint 3. `gig.skillTrial` does not exist on the
@@ -49,6 +50,25 @@ const BUSINESS_SELECTABLE_REASON_CODES = REJECTION_REASON_CODES.filter(
 
 const FORBIDDEN_ERROR = () =>
   new ApiError(403, 'FORBIDDEN', 'You do not have permission to perform this action.');
+
+// The applicant count lives on the gig — declared and defaulted to zero by
+// GL-158 — but is maintained here, not by the marketplace. It counts live
+// applications only (Applied, Viewed, Shortlisted, Hired); Withdrawn and
+// Rejected applications drop out of it. Every write to it goes through this
+// helper, in the same operation as the status change that caused it, never
+// a separate call a client can forget to make — a count that drifts from
+// reality is worse than no count. GL-110 calls this directly with +1 when
+// an application is created; transitionApplicationStatus below calls it
+// with -1 the moment an application leaves the live set.
+export const adjustGigApplicantCount = async (gigId, delta) => {
+  const gig = await Gig.findByIdAndUpdate(
+    gigId,
+    { $inc: { applicantCount: delta } },
+    { returnDocument: 'after', runValidators: true },
+  );
+
+  return gig?.applicantCount;
+};
 
 // Confirms `actor` — a plain `{ id, role }`, or null/undefined for a
 // system-triggered call — is the kind of actor this transition requires.
@@ -146,6 +166,9 @@ export const transitionApplicationStatus = async (application, targetStatus, act
     }
   }
 
+  const wasLive = LIVE_STATUSES.includes(currentStatus);
+  const isLive = LIVE_STATUSES.includes(targetStatus);
+
   application.status = targetStatus;
 
   // Set once, on the way in, and never touched again — that is what makes
@@ -159,6 +182,15 @@ export const transitionApplicationStatus = async (application, targetStatus, act
   }
 
   await application.save();
+
+  // Every transition this function permits either stays within the live
+  // set (Applied -> Viewed -> Shortlisted -> Hired) or leaves it for good —
+  // terminal statuses have no outgoing moves, so this only ever fires once
+  // per application, adjusting the gig in the same operation as the status
+  // change that caused it.
+  if (wasLive && !isLive) {
+    await adjustGigApplicantCount(application.gig, -1);
+  }
 
   return application;
 };
