@@ -72,8 +72,12 @@ export default function ProfileScreen() {
   const { name, photo, bio, city, skills = [], workExperience = [], education = [] } = profile;
 
   return (
-    <View className="flex-1 bg-paper">
-      <Animated.ScrollView onScroll={hero.onScroll} scrollEventThrottle={hero.scrollEventThrottle}>
+    <View className="flex-1 bg-ink">
+      <Animated.ScrollView
+        onScroll={hero.onScroll}
+        scrollEventThrottle={hero.scrollEventThrottle}
+        contentContainerClassName="grow"
+      >
         <View onLayout={hero.onHeroLayout}>
           <HeroHeader
             rightSlot={
