@@ -11,6 +11,11 @@ const VARIANT_STYLES = {
     text: 'text-label text-ink',
     spinnerClassName: 'text-ink',
   },
+  'small-danger': {
+    container: 'h-9 rounded-ds-sm border-[1.5px] border-danger bg-paper px-4',
+    text: 'text-label text-danger-ink',
+    spinnerClassName: 'text-danger-ink',
+  },
 };
 
 export default function Button({
