@@ -84,8 +84,6 @@ export default function EditGigScreen() {
 
   const busy = submitting || closing || deleting;
 
-  const hasLoadedRef = useRef(false);
-
   const fetchGig = useCallback(async () => {
     try {
       const { gig } = await gigApi.getGig(gigId);
