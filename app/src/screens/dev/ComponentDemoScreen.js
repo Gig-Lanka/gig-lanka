@@ -19,6 +19,7 @@ import ScreenHeader from '../../components/ui/ScreenHeader';
 import SectionLabel from '../../components/ui/SectionLabel';
 import SegmentedControl from '../../components/ui/SegmentedControl';
 import TextInput from '../../components/ui/TextInput';
+import GigForm from '../../components/gig/GigForm';
 import CategoryChipGroup from '../../components/review/CategoryChipGroup';
 import RatingBars from '../../components/review/RatingBars';
 import ReviewCard from '../../components/review/ReviewCard';
@@ -469,6 +470,53 @@ function RatingBarsSection() {
   );
 }
 
+function GigFormSection() {
+  const [values, setValues] = useState({
+    title: '',
+    description: '',
+    category: undefined,
+    payAmount: '',
+    payType: undefined,
+    city: '',
+    area: '',
+    remote: false,
+    schedule: [],
+    commitment: undefined,
+    positions: '1',
+    startDate: null,
+    applicationsCloseDate: null,
+  });
+
+  function handleChange(field, value) {
+    setValues((prev) => ({ ...prev, [field]: value }));
+  }
+
+  return (
+    <Section title="GigForm — GL-119">
+      <Text className="text-sm text-text-secondary">
+        Controlled — values and onChange only, no network call. Scroll and open the keyboard inside
+        the box below to check keyboard avoidance.
+      </Text>
+      <View className="h-[560px] overflow-hidden rounded-lg border border-border">
+        <GigForm values={values} onChange={handleChange} />
+      </View>
+
+      <Text className="mt-3 text-sm text-text-secondary">With field errors and a form error</Text>
+      <View className="h-[560px] overflow-hidden rounded-lg border border-border">
+        <GigForm
+          values={values}
+          onChange={handleChange}
+          formError="Could not post this gig. Check your connection and try again."
+          errors={{
+            title: 'Title is required.',
+            schedule: 'Pick at least one schedule slot.',
+          }}
+        />
+      </View>
+    </Section>
+  );
+}
+
 function SectionLabelSection() {
   return (
     <Section title="SectionLabel — GL-130">
@@ -672,6 +720,7 @@ export default function ComponentDemoScreen() {
       <ReviewCardSection />
       <CategoryChipGroupSection />
       <RatingBarsSection />
+      <GigFormSection />
       <SectionLabelSection />
       <ScreenHeaderSection />
       <HeroHeaderSection />
