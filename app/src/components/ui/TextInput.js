@@ -7,6 +7,7 @@ export default function TextInput({
   hint,
   disabled = false,
   secureTextEntry = false,
+  multiline = false,
   className,
   containerClassName,
   onFocus,
@@ -23,6 +24,8 @@ export default function TextInput({
       <RNTextInput
         editable={!disabled}
         secureTextEntry={secureTextEntry}
+        multiline={multiline}
+        textAlignVertical={multiline ? 'top' : 'center'}
         onFocus={(event) => {
           setIsFocused(true);
           onFocus?.(event);
@@ -32,7 +35,8 @@ export default function TextInput({
           onBlur?.(event);
         }}
         className={[
-          'h-[58px] rounded-ds-lg border-[1.5px] px-[18px] text-body font-medium text-ink',
+          multiline ? 'min-h-[100px] py-[14px]' : 'h-[58px]',
+          'rounded-ds-lg border-[1.5px] px-[18px] text-body font-medium text-ink',
           'placeholder:font-normal placeholder:text-placeholder',
           hasError
             ? 'border-danger bg-paper'
