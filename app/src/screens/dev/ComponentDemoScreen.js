@@ -519,9 +519,9 @@ function GigFormRulesSection() {
   return (
     <Section title="GigForm — non-negotiable rules (GL-166)">
       <Text className="text-sm text-text-secondary">
-        Pay starts at 0, positions starts blank and nothing is remote. Tap Validate to run
-        validateGigForm against the four rules, then flip the remote toggle to see the City
-        requirement change.
+        Title/description are blank, pay starts at 0, positions starts blank and nothing is remote.
+        Tap Validate to run validateGigForm, then flip the remote toggle to see the City requirement
+        change.
       </Text>
       <Button
         variant="small"
