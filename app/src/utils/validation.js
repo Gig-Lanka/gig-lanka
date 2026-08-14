@@ -115,3 +115,45 @@ export function validateGigForm({
 
   return errors;
 }
+
+const ROLE_TITLE_MAX_LENGTH = 80;
+const EMPLOYER_MAX_LENGTH = 80;
+export const WORK_EXPERIENCE_DESCRIPTION_MAX_LENGTH = 1000;
+
+// Mirrors docs/api-contract.md §8.4's workExperience rule: roleTitle and
+// employer are required, dates are optional, and an end date earlier than
+// its start date is rejected. An ongoing entry has no end date to compare.
+export function validateWorkExperienceEntry({
+  roleTitle,
+  employer,
+  startDate,
+  endDate,
+  ongoing,
+  description,
+}) {
+  const errors = {};
+  const trimmedRoleTitle = (roleTitle || '').trim();
+  const trimmedEmployer = (employer || '').trim();
+
+  if (!trimmedRoleTitle) {
+    errors.roleTitle = 'Enter a role title.';
+  } else if (trimmedRoleTitle.length > ROLE_TITLE_MAX_LENGTH) {
+    errors.roleTitle = `Role title must be ${ROLE_TITLE_MAX_LENGTH} characters or fewer.`;
+  }
+
+  if (!trimmedEmployer) {
+    errors.employer = 'Enter an employer.';
+  } else if (trimmedEmployer.length > EMPLOYER_MAX_LENGTH) {
+    errors.employer = `Employer must be ${EMPLOYER_MAX_LENGTH} characters or fewer.`;
+  }
+
+  if (description && description.length > WORK_EXPERIENCE_DESCRIPTION_MAX_LENGTH) {
+    errors.description = `Description must be ${WORK_EXPERIENCE_DESCRIPTION_MAX_LENGTH} characters or fewer.`;
+  }
+
+  if (!ongoing && startDate && endDate && parseDateOnly(endDate) < parseDateOnly(startDate)) {
+    errors.endDate = 'End date cannot be before the start date.';
+  }
+
+  return errors;
+}

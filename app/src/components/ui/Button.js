@@ -11,6 +11,11 @@ const VARIANT_STYLES = {
     text: 'text-label text-ink',
     spinnerClassName: 'text-ink',
   },
+  outline: {
+    container: 'h-[58px] rounded-ds-lg border-[1.5px] border-line bg-paper gap-[10px]',
+    text: 'text-body font-semibold text-ink tracking-[-0.01em]',
+    spinnerClassName: 'text-ink',
+  },
 };
 
 export default function Button({
