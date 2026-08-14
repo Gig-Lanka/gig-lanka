@@ -1,0 +1,178 @@
+import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
+import { useCallback, useRef, useState } from 'react';
+import { View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
+import gigApi from '../../api/gigApi';
+import GigForm, { createEmptyGigFormValues } from '../../components/gig/GigForm';
+import Button from '../../components/ui/Button';
+import EmptyState from '../../components/ui/EmptyState';
+import Loader from '../../components/ui/Loader';
+import Notice from '../../components/ui/Notice';
+import ScreenHeader from '../../components/ui/ScreenHeader';
+import { validateGigForm } from '../../utils/validation';
+
+const GENERIC_LOAD_ERROR = 'Could not load this gig. Check your connection and try again.';
+const GENERIC_SAVE_ERROR = 'Could not save these changes. Check your connection and try again.';
+
+// Same shape PostGigScreen sends to POST — PUT uses the same validation
+// (§10.7 reuses §10.3), and since PUT replaces the gig in full, every field
+// the form holds is sent, never only the ones that changed. status is never
+// included: closing is PATCH /gigs/:id/close, not this form.
+function buildGigPayload(values) {
+  const payload = {
+    title: values.title.trim(),
+    description: values.description.trim(),
+    category: values.category,
+    payAmount: Number(values.payAmount),
+    payType: values.payType,
+    remote: Boolean(values.remote),
+    schedule: values.schedule,
+    commitment: values.commitment,
+    positions: Number(values.positions),
+  };
+
+  if ((values.city || '').trim()) payload.city = values.city.trim();
+  if ((values.area || '').trim()) payload.area = values.area.trim();
+  if (values.startDate) payload.startDate = values.startDate;
+  if (values.applicationsCloseDate) payload.applicationsCloseDate = values.applicationsCloseDate;
+
+  return payload;
+}
+
+function gigToFormValues(gig) {
+  return {
+    title: gig.title ?? '',
+    description: gig.description ?? '',
+    category: gig.category,
+    payAmount: gig.payAmount != null ? String(gig.payAmount) : '',
+    payType: gig.payType,
+    city: gig.city ?? '',
+    area: gig.area ?? '',
+    remote: Boolean(gig.remote),
+    schedule: gig.schedule ?? [],
+    commitment: gig.commitment,
+    positions: gig.positions != null ? String(gig.positions) : '1',
+    startDate: gig.startDate ?? null,
+    applicationsCloseDate: gig.applicationsCloseDate ?? null,
+  };
+}
+
+export default function EditGigScreen() {
+  const navigation = useNavigation();
+  const { params } = useRoute();
+  const { gigId } = params;
+
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
+  const [applicantCount, setApplicantCount] = useState(0);
+  const [values, setValues] = useState(createEmptyGigFormValues());
+  const [errors, setErrors] = useState({});
+  const [formError, setFormError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const hasLoadedRef = useRef(false);
+
+  const fetchGig = useCallback(async () => {
+    try {
+      const { gig } = await gigApi.getGig(gigId);
+      setValues(gigToFormValues(gig));
+      setApplicantCount(gig.applicantCount ?? 0);
+    } catch (error) {
+      const apiError = error.response?.data?.error;
+      setLoadError(
+        apiError?.code === 'NOT_FOUND' ? 'This gig no longer exists.' : GENERIC_LOAD_ERROR,
+      );
+    } finally {
+      setLoading(false);
+      hasLoadedRef.current = true;
+    }
+  }, [gigId]);
+
+  // Fetches once — on first focus only, via hasLoadedRef — so re-focusing
+  // this screen (e.g. after a picker) never overwrites values the user has
+  // already started editing.
+  useFocusEffect(
+    useCallback(() => {
+      if (!hasLoadedRef.current) fetchGig();
+    }, [fetchGig]),
+  );
+
+  const handleChange = useCallback((field, value) => {
+    setValues((prev) => ({ ...prev, [field]: value }));
+  }, []);
+
+  async function handleSubmit() {
+    if (submitting) return;
+
+    const validationErrors = validateGigForm(values);
+    setErrors(validationErrors);
+    setFormError('');
+    if (Object.keys(validationErrors).length > 0) return;
+
+    setSubmitting(true);
+    try {
+      await gigApi.updateGig(gigId, buildGigPayload(values));
+      navigation.goBack();
+    } catch (error) {
+      const apiError = error.response?.data?.error;
+      if (apiError?.code === 'VALIDATION_ERROR' && apiError.errors) {
+        const fieldErrors = {};
+        apiError.errors.forEach(({ field, message }) => {
+          fieldErrors[field] = message;
+        });
+        setErrors(fieldErrors);
+      } else if (apiError?.code === 'FORBIDDEN') {
+        setFormError("You don't have permission to edit this gig.");
+      } else if (apiError?.code === 'NOT_FOUND') {
+        setFormError('This gig no longer exists.');
+      } else {
+        setFormError(apiError?.message || GENERIC_SAVE_ERROR);
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  if (loading) {
+    return <Loader fullScreen />;
+  }
+
+  if (loadError) {
+    return (
+      <SafeAreaView className="flex-1 bg-paper" edges={['top', 'bottom']}>
+        <ScreenHeader title="Edit gig" small onBack={() => navigation.goBack()} />
+        <EmptyState message={loadError} actionLabel="Go back" onAction={() => navigation.goBack()} />
+      </SafeAreaView>
+    );
+  }
+
+  const applicantsBanner =
+    applicantCount > 0 ? (
+      <Notice>
+        {applicantCount} {applicantCount === 1 ? 'person has' : 'people have'} already applied —
+        changes to the hours or pay affect them.
+      </Notice>
+    ) : null;
+
+  return (
+    <SafeAreaView className="flex-1 bg-paper" edges={['top', 'bottom']}>
+      <ScreenHeader title="Edit gig" small onBack={() => navigation.goBack()} />
+
+      <View className="flex-1 px-[22px]">
+        <GigForm
+          values={values}
+          onChange={handleChange}
+          errors={errors}
+          formError={formError}
+          banner={applicantsBanner}
+          disabled={submitting}
+          footer={
+            <Button loading={submitting} trailingArrow onPress={handleSubmit}>
+              Save changes
+            </Button>
+          }
+        />
+      </View>
+    </SafeAreaView>
+  );
+}
