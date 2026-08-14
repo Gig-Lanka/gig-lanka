@@ -1,11 +1,12 @@
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import { useCallback, useRef, useState } from 'react';
-import { View } from 'react-native';
+import { Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import gigApi from '../../api/gigApi';
 import GigForm, { createEmptyGigFormValues } from '../../components/gig/GigForm';
 import Button from '../../components/ui/Button';
+import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import EmptyState from '../../components/ui/EmptyState';
 import Loader from '../../components/ui/Loader';
 import Notice from '../../components/ui/Notice';
@@ -14,6 +15,8 @@ import { validateGigForm } from '../../utils/validation';
 
 const GENERIC_LOAD_ERROR = 'Could not load this gig. Check your connection and try again.';
 const GENERIC_SAVE_ERROR = 'Could not save these changes. Check your connection and try again.';
+const GENERIC_CLOSE_ERROR = 'Could not close this gig. Try again.';
+const GENERIC_DELETE_ERROR = 'Could not delete this gig. Try again.';
 
 // Same shape PostGigScreen sends to POST — PUT uses the same validation
 // (§10.7 reuses §10.3), and since PUT replaces the gig in full, every field
@@ -65,18 +68,28 @@ export default function EditGigScreen() {
 
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
+  const [status, setStatus] = useState(null);
   const [applicantCount, setApplicantCount] = useState(0);
   const [values, setValues] = useState(createEmptyGigFormValues());
   const [errors, setErrors] = useState({});
   const [formError, setFormError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [closeConfirmVisible, setCloseConfirmVisible] = useState(false);
+  const [closing, setClosing] = useState(false);
+  const [closeError, setCloseError] = useState('');
+  const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
   const hasLoadedRef = useRef(false);
+
+  const busy = submitting || closing || deleting;
 
   const fetchGig = useCallback(async () => {
     try {
       const { gig } = await gigApi.getGig(gigId);
       setValues(gigToFormValues(gig));
       setApplicantCount(gig.applicantCount ?? 0);
+      setStatus(gig.status);
     } catch (error) {
       const apiError = error.response?.data?.error;
       setLoadError(
@@ -102,7 +115,7 @@ export default function EditGigScreen() {
   }, []);
 
   async function handleSubmit() {
-    if (submitting) return;
+    if (busy) return;
 
     const validationErrors = validateGigForm(values);
     setErrors(validationErrors);
@@ -124,12 +137,60 @@ export default function EditGigScreen() {
       } else if (apiError?.code === 'FORBIDDEN') {
         setFormError("You don't have permission to edit this gig.");
       } else if (apiError?.code === 'NOT_FOUND') {
-        setFormError('This gig no longer exists.');
+        // The gig was deleted elsewhere between load and save — nothing left
+        // to edit, so drop into the same "no longer exists" state the
+        // initial fetch uses, rather than leaving a Notice on a dead form.
+        setLoadError('This gig no longer exists.');
       } else {
         setFormError(apiError?.message || GENERIC_SAVE_ERROR);
       }
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function handleConfirmClose() {
+    if (busy) return;
+    setClosing(true);
+    setCloseError('');
+    try {
+      const { gig } = await gigApi.closeGig(gigId);
+      setStatus(gig.status);
+      setCloseConfirmVisible(false);
+    } catch (error) {
+      const apiError = error.response?.data?.error;
+      if (apiError?.code === 'FORBIDDEN') {
+        setCloseError("You don't have permission to close this gig.");
+      } else if (apiError?.code === 'NOT_FOUND') {
+        setCloseConfirmVisible(false);
+        setLoadError('This gig no longer exists.');
+      } else {
+        setCloseError(apiError?.message || GENERIC_CLOSE_ERROR);
+      }
+    } finally {
+      setClosing(false);
+    }
+  }
+
+  async function handleConfirmDelete() {
+    if (busy) return;
+    setDeleting(true);
+    setDeleteError('');
+    try {
+      await gigApi.deleteGig(gigId);
+      navigation.goBack();
+    } catch (error) {
+      const apiError = error.response?.data?.error;
+      if (apiError?.code === 'FORBIDDEN') {
+        setDeleteError("You don't have permission to delete this gig.");
+        setDeleting(false);
+      } else if (apiError?.code === 'NOT_FOUND') {
+        // Already gone — the outcome the user wanted is already true.
+        navigation.goBack();
+      } else {
+        setDeleteError(apiError?.message || GENERIC_DELETE_ERROR);
+        setDeleting(false);
+      }
     }
   }
 
@@ -165,14 +226,66 @@ export default function EditGigScreen() {
           errors={errors}
           formError={formError}
           banner={applicantsBanner}
-          disabled={submitting}
+          disabled={busy}
           footer={
-            <Button loading={submitting} trailingArrow onPress={handleSubmit}>
-              Save changes
-            </Button>
+            <View className="gap-3">
+              <Button loading={submitting} disabled={busy && !submitting} trailingArrow onPress={handleSubmit}>
+                Save changes
+              </Button>
+
+              <View className="flex-row gap-[10px]">
+                {status === 'open' ? (
+                  <Button
+                    variant="small"
+                    fullWidth={false}
+                    className="h-11 flex-1"
+                    loading={closing}
+                    disabled={busy && !closing}
+                    onPress={() => setCloseConfirmVisible(true)}
+                  >
+                    Close gig
+                  </Button>
+                ) : null}
+
+                <Button
+                  variant="small-danger"
+                  fullWidth={false}
+                  className="h-11 flex-1"
+                  loading={deleting}
+                  disabled={busy && !deleting}
+                  onPress={() => setDeleteConfirmVisible(true)}
+                >
+                  Delete gig
+                </Button>
+              </View>
+
+              {closeError ? <Text className="text-[12.5px] text-danger-ink">{closeError}</Text> : null}
+              {deleteError ? <Text className="text-[12.5px] text-danger-ink">{deleteError}</Text> : null}
+            </View>
           }
         />
       </View>
+
+      <ConfirmDialog
+        visible={closeConfirmVisible}
+        title="Close this gig?"
+        body="This stops the gig from accepting new applications. People who already applied are unaffected and can still be processed."
+        confirmLabel={closing ? 'Closing…' : 'Close gig'}
+        cancelLabel="Keep it open"
+        onConfirm={handleConfirmClose}
+        onCancel={() => setCloseConfirmVisible(false)}
+      />
+
+      <ConfirmDialog
+        visible={deleteConfirmVisible}
+        destructive
+        title="Delete this gig?"
+        body="This is permanent and cannot be undone — the gig and its listing are removed immediately."
+        confirmLabel={deleting ? 'Deleting…' : 'Delete gig'}
+        cancelLabel="Keep it"
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setDeleteConfirmVisible(false)}
+      />
     </SafeAreaView>
   );
 }
