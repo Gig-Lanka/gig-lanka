@@ -26,3 +26,51 @@ export function validateSignUpForm({ email, password, confirmPassword }) {
 
   return errors;
 }
+
+function parseDateOnly(value) {
+  const [year, month, day] = value.split('-').map(Number);
+  return new Date(year, month - 1, day);
+}
+
+function startOfToday() {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+}
+
+// GL-107's four non-negotiable gig rules, mirrored client-side so the form
+// rejects them before a request is ever sent — not just relies on the
+// picker/keyboard to make them hard to violate. See GigForm.js.
+export function validateGigForm({
+  payAmount,
+  schedule,
+  remote,
+  city,
+  applicationsCloseDate,
+  positions,
+}) {
+  const errors = {};
+
+  const numericPayAmount = Number(payAmount);
+  if (!(numericPayAmount > 0)) {
+    errors.payAmount = 'Enter a pay amount greater than zero.';
+  }
+
+  if (!Array.isArray(schedule) || schedule.length === 0) {
+    errors.schedule = 'Select at least one schedule slot.';
+  }
+
+  if (!remote && !(city || '').trim()) {
+    errors.city = 'City is required unless this gig is remote.';
+  }
+
+  if (applicationsCloseDate && parseDateOnly(applicationsCloseDate) < startOfToday()) {
+    errors.applicationsCloseDate = 'Applications close date cannot be in the past.';
+  }
+
+  const numericPositions = Number(positions);
+  if (!Number.isInteger(numericPositions) || numericPositions < 1) {
+    errors.positions = 'Positions must be a whole number of at least 1.';
+  }
+
+  return errors;
+}

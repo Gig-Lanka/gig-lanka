@@ -19,13 +19,14 @@ import ScreenHeader from '../../components/ui/ScreenHeader';
 import SectionLabel from '../../components/ui/SectionLabel';
 import SegmentedControl from '../../components/ui/SegmentedControl';
 import TextInput from '../../components/ui/TextInput';
-import GigForm from '../../components/gig/GigForm';
+import GigForm, { createEmptyGigFormValues } from '../../components/gig/GigForm';
 import CategoryChipGroup from '../../components/review/CategoryChipGroup';
 import RatingBars from '../../components/review/RatingBars';
 import ReviewCard from '../../components/review/ReviewCard';
 import StarRating from '../../components/review/StarRating';
 import { BUSINESS_REVIEW_CATEGORIES, YOUTH_WORKER_REVIEW_CATEGORIES } from '../../constants/enums';
 import { formatDeadline, formatLocation, formatPay, formatRelativeTime } from '../../utils/format';
+import { validateGigForm } from '../../utils/validation';
 
 function Section({ title, children }) {
   return (
@@ -471,21 +472,7 @@ function RatingBarsSection() {
 }
 
 function GigFormSection() {
-  const [values, setValues] = useState({
-    title: '',
-    description: '',
-    category: undefined,
-    payAmount: '',
-    payType: undefined,
-    city: '',
-    area: '',
-    remote: false,
-    schedule: [],
-    commitment: undefined,
-    positions: '1',
-    startDate: null,
-    applicationsCloseDate: null,
-  });
+  const [values, setValues] = useState(createEmptyGigFormValues());
 
   function handleChange(field, value) {
     setValues((prev) => ({ ...prev, [field]: value }));
@@ -512,6 +499,40 @@ function GigFormSection() {
             schedule: 'Pick at least one schedule slot.',
           }}
         />
+      </View>
+    </Section>
+  );
+}
+
+function GigFormRulesSection() {
+  const [values, setValues] = useState({
+    ...createEmptyGigFormValues(),
+    payAmount: '0',
+    positions: '',
+  });
+  const [errors, setErrors] = useState(null);
+
+  function handleChange(field, value) {
+    setValues((prev) => ({ ...prev, [field]: value }));
+  }
+
+  return (
+    <Section title="GigForm — non-negotiable rules (GL-166)">
+      <Text className="text-sm text-text-secondary">
+        Pay starts at 0, positions starts blank and nothing is remote. Tap Validate to run
+        validateGigForm against the four rules, then flip the remote toggle to see the City
+        requirement change.
+      </Text>
+      <Button
+        variant="small"
+        fullWidth={false}
+        className="self-start"
+        onPress={() => setErrors(validateGigForm(values))}
+      >
+        Validate
+      </Button>
+      <View className="h-[620px] overflow-hidden rounded-lg border border-border">
+        <GigForm values={values} onChange={handleChange} errors={errors ?? {}} />
       </View>
     </Section>
   );
@@ -721,6 +742,7 @@ export default function ComponentDemoScreen() {
       <CategoryChipGroupSection />
       <RatingBarsSection />
       <GigFormSection />
+      <GigFormRulesSection />
       <SectionLabelSection />
       <ScreenHeaderSection />
       <HeroHeaderSection />
