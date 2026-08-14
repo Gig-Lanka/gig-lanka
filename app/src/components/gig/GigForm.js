@@ -38,6 +38,24 @@ function digitsOnly(text) {
   return text.replace(/[^0-9]/g, '');
 }
 
+export function createEmptyGigFormValues() {
+  return {
+    title: '',
+    description: '',
+    category: undefined,
+    payAmount: '',
+    payType: undefined,
+    city: '',
+    area: '',
+    remote: false,
+    schedule: [],
+    commitment: undefined,
+    positions: '1',
+    startDate: null,
+    applicationsCloseDate: null,
+  };
+}
+
 function FieldLabel({ children, action }) {
   return (
     <View className="mb-2 flex-row items-center justify-between">
@@ -302,7 +320,7 @@ export default function GigForm({
         />
 
         <TextInput
-          label="City"
+          label={isRemote ? 'City (optional)' : 'City'}
           placeholder="Colombo"
           value={values.city}
           onChangeText={(text) => set('city', text)}
