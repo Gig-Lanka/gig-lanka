@@ -37,10 +37,18 @@ function startOfToday() {
   return new Date(now.getFullYear(), now.getMonth(), now.getDate());
 }
 
-// GL-107's four non-negotiable gig rules, mirrored client-side so the form
-// rejects them before a request is ever sent — not just relies on the
-// picker/keyboard to make them hard to violate. See GigForm.js.
+const TITLE_MAX_LENGTH = 80;
+const DESCRIPTION_MIN_LENGTH = 20;
+const DESCRIPTION_MAX_LENGTH = 2000;
+
+// Mirrors GL-158's gig validation client-side — title/description length
+// plus GL-107's four non-negotiable rules — so the form rejects them before
+// a request is ever sent, not just relies on the picker/keyboard to make
+// them hard to violate. See GigForm.js. Shared by PostGigScreen and (GL-120)
+// EditGigScreen since both submit the same shape.
 export function validateGigForm({
+  title,
+  description,
   payAmount,
   schedule,
   remote,
@@ -49,6 +57,18 @@ export function validateGigForm({
   positions,
 }) {
   const errors = {};
+
+  const trimmedTitle = (title || '').trim();
+  if (!trimmedTitle) {
+    errors.title = 'Enter a title.';
+  } else if (trimmedTitle.length > TITLE_MAX_LENGTH) {
+    errors.title = `Title must be ${TITLE_MAX_LENGTH} characters or fewer.`;
+  }
+
+  const descriptionLength = (description || '').trim().length;
+  if (descriptionLength < DESCRIPTION_MIN_LENGTH || descriptionLength > DESCRIPTION_MAX_LENGTH) {
+    errors.description = `Description must be between ${DESCRIPTION_MIN_LENGTH} and ${DESCRIPTION_MAX_LENGTH} characters.`;
+  }
 
   const numericPayAmount = Number(payAmount);
   if (!(numericPayAmount > 0)) {
