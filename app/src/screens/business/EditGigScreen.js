@@ -116,7 +116,6 @@ export default function EditGigScreen() {
 
   async function handleSubmit() {
     if (busy) return;
-    if (submitting) return;
 
     const validationErrors = validateGigForm(values);
     setErrors(validationErrors);
@@ -142,7 +141,6 @@ export default function EditGigScreen() {
         // to edit, so drop into the same "no longer exists" state the
         // initial fetch uses, rather than leaving a Notice on a dead form.
         setLoadError('This gig no longer exists.');
-        setFormError('This gig no longer exists.');
       } else {
         setFormError(apiError?.message || GENERIC_SAVE_ERROR);
       }
@@ -288,14 +286,6 @@ export default function EditGigScreen() {
         onConfirm={handleConfirmDelete}
         onCancel={() => setDeleteConfirmVisible(false)}
       />
-          disabled={submitting}
-          footer={
-            <Button loading={submitting} trailingArrow onPress={handleSubmit}>
-              Save changes
-            </Button>
-          }
-        />
-      </View>
     </SafeAreaView>
   );
 }
