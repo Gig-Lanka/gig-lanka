@@ -5,6 +5,7 @@ import { useNavigation } from '@react-navigation/native';
 
 import { profileApi } from '../../api';
 import Avatar from '../../components/ui/Avatar';
+import Button from '../../components/ui/Button';
 import EmptyState from '../../components/ui/EmptyState';
 import HeroHeader, { HeroSheet, HeroStickyBar } from '../../components/ui/HeroHeader';
 import Loader from '../../components/ui/Loader';
@@ -12,6 +13,7 @@ import EntryCard from '../../components/profile/EntryCard';
 import ProfileEmptyRow from '../../components/profile/ProfileEmptyRow';
 import ProfileSectionHeader from '../../components/profile/ProfileSectionHeader';
 import SkillsRow from '../../components/profile/SkillsRow';
+import useAuth from '../../hooks/useAuth';
 import useHeroScroll from '../../hooks/useHeroScroll';
 import { formatDateRange } from '../../utils/format';
 
@@ -19,6 +21,7 @@ const STATUS = { LOADING: 'loading', READY: 'ready', ERROR: 'error' };
 
 export default function ProfileScreen() {
   const navigation = useNavigation();
+  const { logout } = useAuth();
   const hero = useHeroScroll();
 
   const [profile, setProfile] = useState(null);
@@ -180,6 +183,15 @@ export default function ProfileScreen() {
             as the rating summary slot above — nothing is rendered here
             rather than a guessed shape.
           */}
+
+          {/*
+            TEMP — testing only, not part of GL-146. Account Settings
+            (Sprint 2, unticketed) is where Log Out actually belongs per the
+            mockup index; remove this once that screen exists.
+          */}
+          <Button variant="small" fullWidth={false} onPress={logout} className="mt-8 self-center">
+            Log Out
+          </Button>
         </HeroSheet>
       </Animated.ScrollView>
 
