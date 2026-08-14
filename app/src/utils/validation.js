@@ -26,7 +26,6 @@ export function validateSignUpForm({ email, password, confirmPassword }) {
 
   return errors;
 }
-
 // Mirrors docs/api-contract.md §8.4's own limits, so a rejected save never
 // surprises someone who already passed client-side validation.
 export const PROFILE_NAME_MAX_LENGTH = 60;
@@ -44,6 +43,74 @@ export function validateEditProfileForm({ name, bio }) {
 
   if (bio && bio.length > PROFILE_BIO_MAX_LENGTH) {
     errors.bio = `Bio must be ${PROFILE_BIO_MAX_LENGTH} characters or fewer.`;
+  }
+
+  return errors;
+}
+
+function parseDateOnly(value) {
+  const [year, month, day] = value.split('-').map(Number);
+  return new Date(year, month - 1, day);
+}
+
+function startOfToday() {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+}
+
+const TITLE_MAX_LENGTH = 80;
+const DESCRIPTION_MIN_LENGTH = 20;
+const DESCRIPTION_MAX_LENGTH = 2000;
+
+// Mirrors GL-158's gig validation client-side — title/description length
+// plus GL-107's four non-negotiable rules — so the form rejects them before
+// a request is ever sent, not just relies on the picker/keyboard to make
+// them hard to violate. See GigForm.js. Shared by PostGigScreen and (GL-120)
+// EditGigScreen since both submit the same shape.
+export function validateGigForm({
+  title,
+  description,
+  payAmount,
+  schedule,
+  remote,
+  city,
+  applicationsCloseDate,
+  positions,
+}) {
+  const errors = {};
+
+  const trimmedTitle = (title || '').trim();
+  if (!trimmedTitle) {
+    errors.title = 'Enter a title.';
+  } else if (trimmedTitle.length > TITLE_MAX_LENGTH) {
+    errors.title = `Title must be ${TITLE_MAX_LENGTH} characters or fewer.`;
+  }
+
+  const descriptionLength = (description || '').trim().length;
+  if (descriptionLength < DESCRIPTION_MIN_LENGTH || descriptionLength > DESCRIPTION_MAX_LENGTH) {
+    errors.description = `Description must be between ${DESCRIPTION_MIN_LENGTH} and ${DESCRIPTION_MAX_LENGTH} characters.`;
+  }
+
+  const numericPayAmount = Number(payAmount);
+  if (!(numericPayAmount > 0)) {
+    errors.payAmount = 'Enter a pay amount greater than zero.';
+  }
+
+  if (!Array.isArray(schedule) || schedule.length === 0) {
+    errors.schedule = 'Select at least one schedule slot.';
+  }
+
+  if (!remote && !(city || '').trim()) {
+    errors.city = 'City is required unless this gig is remote.';
+  }
+
+  if (applicationsCloseDate && parseDateOnly(applicationsCloseDate) < startOfToday()) {
+    errors.applicationsCloseDate = 'Applications close date cannot be in the past.';
+  }
+
+  const numericPositions = Number(positions);
+  if (!Number.isInteger(numericPositions) || numericPositions < 1) {
+    errors.positions = 'Positions must be a whole number of at least 1.';
   }
 
   return errors;

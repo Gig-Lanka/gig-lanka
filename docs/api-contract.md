@@ -92,6 +92,12 @@ Every error response — regardless of cause — returns the same outer shape:
 | `FORBIDDEN` | Authenticated, but the user's role isn't allowed to do this. |
 | `NOT_FOUND` | The requested resource doesn't exist. |
 | `INTERNAL_ERROR` | Unhandled server-side failure. |
+| `FILE_MISSING` | An upload request had no file in the fixed field name. |
+| `UNSUPPORTED_FILE_TYPE` | An uploaded file's MIME type isn't PNG, JPG or PDF. |
+| `FILE_TYPE_MISMATCH` | An uploaded file's extension doesn't match its reported MIME type. |
+| `FILE_TOO_LARGE` | An uploaded file exceeds the 5MB limit. |
+| `STORAGE_UNAVAILABLE` | The storage backend (Supabase) failed or was unreachable. Always `502`. |
+| `GIG_CLOSED` | Attempted to apply to or save a gig whose status isn't `open`. Always `409`. |
 
 New codes may be added for later sprints' resources; existing codes are never repurposed for a different meaning.
 
@@ -109,6 +115,7 @@ New codes may be added for later sprints' resources; existing codes are never re
 | `404 Not Found` | The resource, or the route, doesn't exist. |
 | `409 Conflict` | The request conflicts with existing state — e.g. registering an email that's already taken. |
 | `500 Internal Server Error` | Unhandled failure on the server. Never leaks stack traces or internals to the client in production. |
+| `502 Bad Gateway` | A dependency the server calls out to (e.g. Supabase Storage) failed or was unreachable. Distinguishes "the thing you sent was fine but our infrastructure isn't" from a `400`/`500`. |
 
 ---
 
@@ -850,7 +857,338 @@ It returns `403` rather than `404` so the answer reads as "not allowed, ever" in
 
 ---
 
-## 9. Adding a new endpoint later
+## 9. Upload endpoint (Sprint 1)
+
+Backs profile photos this sprint; skill trial file submissions and resume PDFs reuse the same endpoint from Sprint 3 onward. See GL-105 for the storage design — the client never talks to Supabase directly, only to this endpoint.
+
+### 9.1 Upload a file — `POST /api/uploads`
+
+**Request:** `multipart/form-data`, not JSON.
+
+| Field | Rule |
+|---|---|
+| `file` | **Required.** The file itself. PNG, JPG or PDF only, checked against both its MIME type and its extension. Max 5MB. |
+| `folder` | **Required.** A closed list of purposes, not a free path — a caller can't write anywhere else in the bucket. Only `avatars` this sprint. |
+
+**Success — `201 Created`**
+
+```json
+{
+  "success": true,
+  "data": {
+    "url": "https://<project>.supabase.co/storage/v1/object/public/<bucket>/avatars/9b1e3f2a-....png"
+  }
+}
+```
+
+The returned name is generated server-side and unguessable — never the filename the client sent, and never derived from the caller's user id.
+
+**Failure — `400 Bad Request`** (bad `folder`, same shape as any other `VALIDATION_ERROR`):
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Request validation failed.",
+    "errors": [
+      { "field": "folder", "message": "must be one of [avatars]" }
+    ]
+  }
+}
+```
+
+**Failure — `400 Bad Request`** (no file in the `file` field):
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "FILE_MISSING",
+    "message": "No file was provided."
+  }
+}
+```
+
+**Failure — `400 Bad Request`** (wrong type, mismatched extension, or oversize) — see 9.2 for the three distinct codes.
+
+**Failure — `401 Unauthorized`** — as in 8.3. Guests cannot upload.
+
+**Failure — `502 Bad Gateway`** (Supabase is down or rejects the request):
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "STORAGE_UNAVAILABLE",
+    "message": "Could not upload the file. Please try again."
+  }
+}
+```
+
+A `502` means the file itself may have been fine — try again. A `400` means the file or request was the problem — retrying unchanged won't help.
+
+### 9.2 Error codes for this endpoint
+
+| Status | Code | When |
+|---|---|---|
+| `400` | `VALIDATION_ERROR` | `folder` missing or not in the closed list. Carries `errors`. |
+| `400` | `FILE_MISSING` | No file in the `file` field. |
+| `400` | `UNSUPPORTED_FILE_TYPE` | File's MIME type isn't PNG, JPG or PDF. |
+| `400` | `FILE_TYPE_MISMATCH` | File's extension doesn't match its reported MIME type — catches a renamed file. |
+| `400` | `FILE_TOO_LARGE` | File exceeds 5MB. |
+| `401` | `AUTH_HEADER_MISSING` | No `Authorization` header. |
+| `401` | `AUTH_HEADER_MALFORMED` | Header present but not `Bearer <token>`. |
+| `401` | `TOKEN_EXPIRED` | Access token expired. |
+| `401` | `TOKEN_INVALID` | Access token invalid, or its user no longer exists. |
+| `502` | `STORAGE_UNAVAILABLE` | Supabase failed or was unreachable. The request may have been valid — safe to retry. |
+
+---
+
+## 10. Gig endpoints (Sprint 1)
+
+`server/src/models/gig.model.js`. The gig is what a business posts and a seeker browses; applications, saves and reviews all point back at one. `GET /api/gigs` and `GET /api/gigs/:id` are the only two public endpoints in this project — no `Authorization` header required, browsing without an account is deliberate. Every other gig endpoint requires a **business** token; a seeker token gets `403`, no token gets `401`.
+
+### 10.1 Gig shape
+
+Returned under `data.gig` (single) or `data.gigs` (list), everywhere a gig appears.
+
+```json
+{
+  "id": "64f1a2b3c4d5e6f7a8b9c0d8",
+  "title": "Weekend event helper",
+  "description": "Help set up and run a community weekend event, greeting guests.",
+  "category": "event_help",
+  "payAmount": 2500,
+  "payType": "per_day",
+  "city": "Colombo",
+  "area": "Peradeniya Road",
+  "remote": false,
+  "schedule": ["weekends"],
+  "commitment": "one_off",
+  "positions": 2,
+  "startDate": "2026-09-01",
+  "applicationsCloseDate": "2026-08-25",
+  "status": "open",
+  "postedBy": "64f1a2b3c4d5e6f7a8b9c0d4",
+  "applicantCount": 0,
+  "createdAt": "2026-08-12T09:15:00.000Z",
+  "updatedAt": "2026-08-12T09:15:00.000Z"
+}
+```
+
+- `category`, `payType`, `schedule`, `commitment`, `status` — the closed vocabularies at §6.1–§6.5. Any other value is rejected with `400` naming the field.
+- `city` — required unless `remote` is `true`. `area`, `startDate`, `applicationsCloseDate` are always optional.
+- `applicationsCloseDate` (and `startDate`) are plain `YYYY-MM-DD` strings, not ISO timestamps. A closing date in the past is rejected with `400` on both create and update.
+- `status` defaults to `open` on creation and cannot be set by a client — see 10.3.
+- `postedBy` is a user id, taken from the caller's token on create and never from the request body.
+- `applicantCount` defaults to `0`. It is owned by Application & Hiring (GL-110 and later); this component only declares and defaults it, never writes it.
+- **`savedBy` is never present in any response, for anyone, including the gig's own owner** — not even once Sprint 2 starts writing saver ids to it. A business learns how many people applied (`applicantCount`), never who saved.
+- Optional fields (`area`, `startDate`, `applicationsCloseDate`) are omitted, not null, when unset — same convention as profiles (§8.1).
+
+### 10.2 Business block
+
+`GET /api/gigs/:id` additionally returns the posting business's public identity under `data.business`, so the detail screen can render it without a second call:
+
+```json
+{
+  "id": "64f1a2b3c4d5e6f7a8b9c0d4",
+  "name": "Kandy Coffee Co",
+  "photo": "https://cdn.giglanka.test/u/kandy.jpg"
+}
+```
+
+`id` matches the gig's `postedBy`. `name` and `photo` come from the business's profile (§8.1), not the `User` record. If the business has never filled in a profile, both read back as `null` rather than the request failing.
+
+### 10.3 Create a gig — `POST /api/gigs`
+
+Businesses only.
+
+**Request body**
+
+```json
+{
+  "title": "Weekend event helper",
+  "description": "Help set up and run a community weekend event, greeting guests.",
+  "category": "event_help",
+  "payAmount": 2500,
+  "payType": "per_day",
+  "city": "Colombo",
+  "schedule": ["weekends"],
+  "commitment": "one_off",
+  "positions": 2
+}
+```
+
+| Field | Rule |
+|---|---|
+| `title` | Required, max 80 characters. |
+| `description` | Required, 20–2000 characters. |
+| `category` | Required, one of §6.1. |
+| `payAmount` | Required, a number greater than zero. Strings, ranges and `"negotiable"` are rejected with `400` — there is no free-text pay path. |
+| `payType` | Required, one of §6.2. |
+| `remote` | Optional boolean, defaults to `false`. |
+| `city` | Required unless `remote` is `true`. |
+| `area` | Optional. |
+| `schedule` | Required array, at least one value from §6.3. An empty array is `400`, not an accepted default. |
+| `commitment` | Required, one of §6.4. |
+| `positions` | Optional integer, minimum 1, defaults to `1`. |
+| `startDate`, `applicationsCloseDate` | Optional, `YYYY-MM-DD`. `applicationsCloseDate` cannot be in the past. |
+
+`status`, `postedBy` and `applicantCount` are not accepted fields on this schema — if sent, they are silently stripped rather than rejected, the same as any other field the endpoint doesn't recognize. `status` always comes back `open`; `postedBy` always comes back the caller's id.
+
+**Success — `201 Created`** — `data.gig`, the shape in 10.1.
+
+**Failure — `400 Bad Request`** (validation — one entry per invalid field):
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Request validation failed.",
+    "errors": [
+      { "field": "payAmount", "message": "payAmount must be a number" },
+      { "field": "schedule", "message": "schedule must contain at least 1 items" }
+    ]
+  }
+}
+```
+
+**Failure — `401 Unauthorized`** (guest) — `AUTH_HEADER_MISSING` etc., as in §8.6.
+
+**Failure — `403 Forbidden`** (seeker token):
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "FORBIDDEN",
+    "message": "You do not have permission to perform this action."
+  }
+}
+```
+
+### 10.4 List gigs — `GET /api/gigs`
+
+Public — no `Authorization` header required. Returns only `open` gigs, newest first (`createdAt` descending), ten per page.
+
+**Request:** `?page=<n>` — optional, defaults to `1`. Malformed or missing values fall back to `1`.
+
+**Success — `200 OK`**
+
+```json
+{
+  "success": true,
+  "data": {
+    "gigs": [ /* gig shapes, 10.1, newest first */ ],
+    "total": 23,
+    "page": 1,
+    "limit": 10
+  }
+}
+```
+
+`total` is the count of every `open` gig matching the (currently unfiltered) query, not just the page returned — the client uses it to render "23 gigs" or to compute the last page. A closed or filled gig never appears here, even to the business that posted it.
+
+No failure modes — an empty result set is still `200` with `"gigs": []`.
+
+### 10.5 Read a gig — `GET /api/gigs/:id`
+
+Public — no `Authorization` header required. Returns one gig **at any status** to anyone, so a link to a since-closed gig still resolves.
+
+**Success — `200 OK`**
+
+```json
+{
+  "success": true,
+  "data": {
+    "gig": { /* 10.1 */ },
+    "business": { /* 10.2 */ }
+  }
+}
+```
+
+**Failure — `404 Not Found`** (no gig with that id, or the id isn't a valid Mongo id — both answer identically):
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "NOT_FOUND",
+    "message": "Gig not found."
+  }
+}
+```
+
+### 10.6 My gigs — `GET /api/gigs/mine`
+
+Businesses only. Returns the signed-in business's own gigs **at every status**, not just `open` — this is the one place a business sees its `closed` and `filled` postings.
+
+**Success — `200 OK`**
+
+```json
+{
+  "success": true,
+  "data": {
+    "gigs": [ /* gig shapes, 10.1, newest first, every status, includes applicantCount */ ]
+  }
+}
+```
+
+Unlike 10.4, there is no pagination or `total` here — a business's own list is expected to be small enough to return in full.
+
+**Failure — `401 Unauthorized`, `403 Forbidden`** — as in 10.3.
+
+### 10.7 Update a gig — `PUT /api/gigs/:id`
+
+Only the business that posted the gig may update it. `PUT` replaces the editable fields in full, using the same request body and validation as 10.3 create.
+
+**Success — `200 OK`** — `data.gig`, the updated shape.
+
+**Failure — `400 Bad Request`** — same validation as create.
+
+**Failure — `401 Unauthorized`** (guest), **`403 Forbidden`** (seeker token, or a business token that isn't the owner) — see 10.9 for the ownership ordering.
+
+**Failure — `404 Not Found`** — no gig with that id.
+
+### 10.8 Close a gig — `PATCH /api/gigs/:id/close`
+
+Only the owner. Sets `status` to `closed`. No request body.
+
+Closing is not deleting: the gig disappears from `GET /api/gigs` immediately, but stays visible through `GET /api/gigs/mine` and `GET /api/gigs/:id`, and everyone who already applied is untouched.
+
+**Success — `200 OK`** — `data.gig`, with `status: "closed"`.
+
+**Failure — `401`, `403`, `404`** — same as 10.7.
+
+### 10.9 Delete a gig — `DELETE /api/gigs/:id`
+
+Only the owner. Permanently deletes the gig. There is no soft delete and no undo — a deleted gig immediately 404s from every other endpoint, including `GET /api/gigs/mine`.
+
+**Success — `200 OK`**
+
+```json
+{ "success": true, "data": null }
+```
+
+**Failure — `401`, `403`, `404`** — same as 10.7.
+
+**Ownership check order (10.7–10.9):** the owner check runs **after** the existence check. A gig that doesn't exist (or has a malformed id) is `404`, before the caller's identity is even considered; a gig that exists but belongs to someone else is `403`. The two are never conflated into a single `403`-or-`404` — doing that would let a caller learn which ids exist by noticing which refusal they got instead.
+
+### 10.10 Error codes for these endpoints
+
+| Status | Code | When |
+|---|---|---|
+| `400` | `VALIDATION_ERROR` | Body failed create/update validation (§10.3). Always carries `errors`. |
+| `401` | `AUTH_HEADER_MISSING` / `AUTH_HEADER_MALFORMED` / `TOKEN_EXPIRED` / `TOKEN_INVALID` | No/malformed/expired/invalid token on a route that requires one. Never returned by `GET /api/gigs` or `GET /api/gigs/:id` — both are public. |
+| `403` | `FORBIDDEN` | Authenticated but not a business (`POST`, `GET /mine`, `PUT`, `PATCH .../close`, `DELETE`), **or** a business token that isn't the gig's owner (`PUT`, `PATCH .../close`, `DELETE`). Same code, same shape, both cases — the distinction is which endpoint and whether the gig exists (see 10.9's ordering). |
+| `404` | `NOT_FOUND` | `GET /api/gigs/:id` for a gig that doesn't exist, or `PUT` / `PATCH .../close` / `DELETE` for a gig that doesn't exist or has a malformed id — checked before ownership. |
+| `409` | `GIG_CLOSED` | **Not returned by any endpoint in this section.** None of the seven gig endpoints reject on gig status. `GIG_CLOSED` is the guard (`assertGigIsOpen` in `gig.service.js`) that GL-110's apply endpoint and Sprint 2's save endpoint call before acting on a gig — documented here because it is this component's error code, first surfaced through theirs. See §3 for the shared definition. |
+
+---
+
+## 11. Adding a new endpoint later
 
 1. Pick a plural, lowercase, hyphenated resource name.
 2. Reuse the envelopes in sections 2 and 3 exactly — don't invent a new outer shape.

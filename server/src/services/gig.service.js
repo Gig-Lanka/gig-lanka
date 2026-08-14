@@ -111,3 +111,25 @@ export const deleteGig = async (id, userId) => {
 
   await gig.deleteOne();
 };
+
+// Applying and saving both act on a gig that must still be open. GL-110
+// (apply) and Sprint 2's save endpoint call this before writing anything,
+// so the "not open" case always surfaces as GIG_CLOSED instead of a generic
+// failure the client can't explain to the user.
+export const assertGigIsOpen = async (id) => {
+  if (!mongoose.isValidObjectId(id)) {
+    throw new ApiError(404, 'NOT_FOUND', 'Gig not found.');
+  }
+
+  const gig = await Gig.findById(id);
+
+  if (!gig) {
+    throw new ApiError(404, 'NOT_FOUND', 'Gig not found.');
+  }
+
+  if (gig.status !== 'open') {
+    throw new ApiError(409, 'GIG_CLOSED', 'This gig is no longer open.');
+  }
+
+  return gig;
+};
