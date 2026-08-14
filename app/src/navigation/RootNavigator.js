@@ -6,6 +6,7 @@ import BusinessTabs from './BusinessTabs';
 import SeekerTabs from './SeekerTabs';
 import Loader from '../components/ui/Loader';
 import ComponentDemoScreen from '../screens/dev/ComponentDemoScreen';
+import EditGigScreen from '../screens/business/EditGigScreen';
 import EditProfileScreen from '../screens/shared/EditProfileScreen';
 import ExperienceFormScreen from '../screens/seeker/ExperienceFormScreen';
 import ManageExperienceScreen from '../screens/seeker/ManageExperienceScreen';
@@ -23,17 +24,21 @@ function AppStack({ role }) {
       <Stack.Screen name="Main" component={RoleTabs} />
       <Stack.Screen name="EditProfile" component={EditProfileScreen} />
       {role === 'business' ? (
-        <Stack.Screen
-          name="PostGig"
-          component={PostGigScreen}
-          options={{ presentation: 'modal' }}
-        />
+        <>
+          <Stack.Screen
+            name="PostGig"
+            component={PostGigScreen}
+            options={{ presentation: 'modal' }}
+          />
+          <Stack.Screen name="EditGig" component={EditGigScreen} />
+        </>
       ) : (
         <>
           <Stack.Screen name="ManageExperience" component={ManageExperienceScreen} />
           <Stack.Screen name="ExperienceForm" component={ExperienceFormScreen} />
         </>
       )}
+
       {__DEV__ ? (
         <Stack.Screen
           name="ComponentDemo"
