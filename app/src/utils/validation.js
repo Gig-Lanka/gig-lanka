@@ -26,3 +26,25 @@ export function validateSignUpForm({ email, password, confirmPassword }) {
 
   return errors;
 }
+
+// Mirrors docs/api-contract.md §8.4's own limits, so a rejected save never
+// surprises someone who already passed client-side validation.
+export const PROFILE_NAME_MAX_LENGTH = 60;
+export const PROFILE_BIO_MAX_LENGTH = 500;
+
+export function validateEditProfileForm({ name, bio }) {
+  const errors = {};
+  const trimmedName = (name || '').trim();
+
+  if (!trimmedName) {
+    errors.name = 'Name is required.';
+  } else if (trimmedName.length > PROFILE_NAME_MAX_LENGTH) {
+    errors.name = `Name must be ${PROFILE_NAME_MAX_LENGTH} characters or fewer.`;
+  }
+
+  if (bio && bio.length > PROFILE_BIO_MAX_LENGTH) {
+    errors.bio = `Bio must be ${PROFILE_BIO_MAX_LENGTH} characters or fewer.`;
+  }
+
+  return errors;
+}

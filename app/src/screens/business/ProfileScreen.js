@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Animated, Pressable, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 
 import { profileApi } from '../../api';
 import Avatar from '../../components/ui/Avatar';
@@ -25,29 +25,37 @@ export default function ProfileScreen() {
   const [status, setStatus] = useState(STATUS.LOADING);
   const [reloadToken, setReloadToken] = useState(0);
 
-  // Same shape as the seeker screen's fetch — state only ever changes after
-  // the `await`, so this stays clear of the set-state-in-effect lint rule.
-  useEffect(() => {
-    let cancelled = false;
+  // Refetches on every focus, not just on mount — see the same comment on
+  // the seeker screen for why (GL-148's edit screen calls goBack() rather
+  // than passing data back). State only ever changes after the `await`,
+  // so this stays clear of the set-state-in-effect lint rule.
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
 
-    async function loadProfile() {
-      try {
-        const data = await profileApi.getMyProfile();
-        if (!cancelled) {
-          setProfile(data);
-          setStatus(STATUS.READY);
+      async function loadProfile() {
+        try {
+          const data = await profileApi.getMyProfile();
+          if (!cancelled) {
+            setProfile(data);
+            setStatus(STATUS.READY);
+          }
+        } catch {
+          if (!cancelled) setStatus(STATUS.ERROR);
         }
-      } catch {
-        if (!cancelled) setStatus(STATUS.ERROR);
       }
-    }
 
-    loadProfile();
+      loadProfile();
 
-    return () => {
-      cancelled = true;
-    };
-  }, [reloadToken]);
+      return () => {
+        cancelled = true;
+      };
+      // reloadToken isn't read above; bumping it changes this callback's
+      // identity, which is what makes useFocusEffect refetch on Retry
+      // while the screen is already focused.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [reloadToken]),
+  );
 
   if (status === STATUS.LOADING) {
     return <Loader fullScreen />;
