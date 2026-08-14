@@ -6,6 +6,7 @@ import BusinessTabs from './BusinessTabs';
 import SeekerTabs from './SeekerTabs';
 import Loader from '../components/ui/Loader';
 import ComponentDemoScreen from '../screens/dev/ComponentDemoScreen';
+import EditGigScreen from '../screens/business/EditGigScreen';
 import EditProfileScreen from '../screens/shared/EditProfileScreen';
 import PostGigScreen from '../screens/business/PostGigScreen';
 import useAuth from '../hooks/useAuth';
@@ -21,11 +22,14 @@ function AppStack({ role }) {
       <Stack.Screen name="Main" component={RoleTabs} />
       <Stack.Screen name="EditProfile" component={EditProfileScreen} />
       {role === 'business' ? (
-        <Stack.Screen
-          name="PostGig"
-          component={PostGigScreen}
-          options={{ presentation: 'modal' }}
-        />
+        <>
+          <Stack.Screen
+            name="PostGig"
+            component={PostGigScreen}
+            options={{ presentation: 'modal' }}
+          />
+          <Stack.Screen name="EditGig" component={EditGigScreen} />
+        </>
       ) : null}
       {__DEV__ ? (
         <Stack.Screen
