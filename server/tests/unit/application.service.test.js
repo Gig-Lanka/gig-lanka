@@ -2,7 +2,10 @@ import mongoose from 'mongoose';
 import { Application } from '../../src/models/application.model.js';
 import { Gig } from '../../src/models/gig.model.js';
 import { User } from '../../src/models/user.model.js';
-import { transitionApplicationStatus } from '../../src/services/application.service.js';
+import {
+  transitionApplicationStatus,
+  adjustGigApplicantCount,
+} from '../../src/services/application.service.js';
 
 const buildSnapshot = () => ({
   name: 'Nimal Perera',
@@ -259,5 +262,61 @@ describe('transitionApplicationStatus', () => {
       const reloaded = await Application.findById(application._id);
       expect(reloaded.status).toBe(from);
     });
+  });
+
+  describe('adjustGigApplicantCount', () => {
+    it('increments and decrements the count and returns the new value', async () => {
+      await expect(adjustGigApplicantCount(gig._id, 1)).resolves.toBe(1);
+      await expect(adjustGigApplicantCount(gig._id, 1)).resolves.toBe(2);
+      await expect(adjustGigApplicantCount(gig._id, -1)).resolves.toBe(1);
+
+      const reloaded = await Gig.findById(gig._id);
+      expect(reloaded.applicantCount).toBe(1);
+    });
+  });
+
+  describe('applicant count on transition', () => {
+    const decrementing = [
+      ['applied', 'rejected', () => businessActor, { code: 'schedule_mismatch' }],
+      ['applied', 'withdrawn', () => applicantActor, undefined],
+      ['applied', 'closed_filled', () => null, undefined],
+      ['viewed', 'rejected', () => businessActor, { code: 'schedule_mismatch' }],
+      ['viewed', 'withdrawn', () => applicantActor, undefined],
+      ['viewed', 'closed_filled', () => null, undefined],
+      ['shortlisted', 'rejected', () => businessActor, { code: 'schedule_mismatch' }],
+      ['shortlisted', 'withdrawn', () => applicantActor, undefined],
+    ];
+
+    it.each(decrementing)(
+      'decrements applicantCount when %s -> %s leaves the live set',
+      async (from, to, actorFn, reason) => {
+        await Gig.findByIdAndUpdate(gig._id, { applicantCount: 1 });
+        const application = await seedApplication(from);
+
+        await transitionApplicationStatus(application, to, actorFn(), reason);
+
+        const reloadedGig = await Gig.findById(gig._id);
+        expect(reloadedGig.applicantCount).toBe(0);
+      },
+    );
+
+    const staysLive = [
+      ['applied', 'viewed', () => businessActor],
+      ['viewed', 'shortlisted', () => businessActor],
+      ['shortlisted', 'hired', () => businessActor],
+    ];
+
+    it.each(staysLive)(
+      'leaves applicantCount untouched when %s -> %s stays in the live set',
+      async (from, to, actorFn) => {
+        await Gig.findByIdAndUpdate(gig._id, { applicantCount: 1 });
+        const application = await seedApplication(from);
+
+        await transitionApplicationStatus(application, to, actorFn());
+
+        const reloadedGig = await Gig.findById(gig._id);
+        expect(reloadedGig.applicantCount).toBe(1);
+      },
+    );
   });
 });

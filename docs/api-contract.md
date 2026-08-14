@@ -98,6 +98,7 @@ Every error response — regardless of cause — returns the same outer shape:
 | `FILE_TOO_LARGE` | An uploaded file exceeds the 5MB limit. |
 | `STORAGE_UNAVAILABLE` | The storage backend (Supabase) failed or was unreachable. Always `502`. |
 | `GIG_CLOSED` | Attempted to apply to or save a gig whose status isn't `open`. Always `409`. |
+| `INVALID_APPLICATION_TRANSITION` | Attempted to move an application to a status not reachable from its current status (§11.3). Always `409`, and the message names both the current and the attempted status. |
 
 New codes may be added for later sprints' resources; existing codes are never repurposed for a different meaning.
 
@@ -1188,7 +1189,108 @@ Only the owner. Permanently deletes the gig. There is no soft delete and no undo
 
 ---
 
-## 11. Adding a new endpoint later
+## 11. Application model & status transitions (Sprint 1)
+
+`server/src/models/application.model.js` and `server/src/services/application.service.js`. No endpoint reads or writes this yet — apply and withdraw are GL-110 — but the shape and the transition rules are fixed here because GL-111's review gate and GL-124's tracker are both built against them.
+
+### 11.1 Application shape
+
+```json
+{
+  "id": "64f1a2b3c4d5e6f7a8b9c0d9",
+  "gig": "64f1a2b3c4d5e6f7a8b9c0d8",
+  "applicant": "64f1a2b3c4d5e6f7a8b9c0d1",
+  "profileSnapshot": {
+    "name": "Nimal Perera",
+    "headline": "Second-year student, free weekday evenings and weekends.",
+    "experience": [
+      {
+        "roleTitle": "Barista",
+        "employer": "Cafe Kandy",
+        "startDate": "2025-06-01",
+        "endDate": "2025-12-31",
+        "ongoing": false,
+        "description": "Weekend shifts making coffee and handling the till."
+      }
+    ],
+    "education": [
+      {
+        "institution": "University of Colombo",
+        "qualification": "BSc Computer Science",
+        "startDate": "2024-01-15",
+        "endDate": "2027-12-01"
+      }
+    ],
+    "rating": { "averageRating": 4.6, "reviewCount": 12, "topCategories": ["communication"] }
+  },
+  "status": "applied",
+  "appliedAt": "2026-08-04T09:15:00.000Z",
+  "viewedAt": null,
+  "decidedAt": null,
+  "createdAt": "2026-08-04T09:15:00.000Z",
+  "updatedAt": "2026-08-04T09:15:00.000Z"
+}
+```
+
+- `gig`, `applicant` — reference ids. `gig` is indexed, `applicant` is indexed, and the pair is uniquely indexed together: one application per seeker per gig, permanently. Withdrawing does not free the slot — a withdrawn application still occupies that unique pair.
+- `profileSnapshot` — an embedded copy of the applicant's profile (`name`, `headline` from the profile's `bio`, `experience` from `workExperience`, `education`, `rating` from `ratingSummary`), taken once at submission. Not a reference: a later edit to the applicant's live profile (§8) never changes an existing application. What was submitted is what gets judged.
+- `status` — one of the seven values in §11.2. Defaults to `applied` and is never accepted from a request body; see §11.3 for how it changes.
+- `appliedAt` — set once, at creation.
+- `viewedAt`, `decidedAt` — `null` until set by a transition (§11.3), never cleared or overwritten afterwards. Present as `null` rather than omitted, unlike the optional-field convention elsewhere in this document (§8.1) — these are always-present timestamps that happen to start empty, not optional data.
+- `rejectionReasonCode`, `rejectionNote` — absent until the application is rejected. `rejectionReasonCode` is one of §11.4's codes. `rejectionNote` is free text up to 300 characters, stored exactly as written, shown to the applicant verbatim.
+
+### 11.2 Status vocabulary
+
+The seven values are §6.7. Four are terminal — `hired`, `rejected`, `withdrawn`, `closed_filled` — and can never be reopened by any transition, by anyone, including the system. The other three — `applied`, `viewed`, `shortlisted` — are non-terminal.
+
+"Live" applications are `applied`, `viewed`, `shortlisted` and `hired` — the four that count toward a gig's `applicantCount` (§10.1, §11.5). `withdrawn` and `rejected` are not live.
+
+### 11.3 Status transitions
+
+`transitionApplicationStatus(application, targetStatus, actor, reason)` in `application.service.js` is the **only** code path allowed to change `status`. `actor` is `{ id, role }` for an HTTP-authenticated caller, or absent for a system-triggered call (Sprint 2/3 auto-close logic calling the function directly, never via a request). `reason` is `{ code, note }`, inspected only when rejecting.
+
+| From | To | Actor allowed |
+|---|---|---|
+| `applied` | `viewed` | The business that posted the gig |
+| `applied` | `rejected` | The business that posted the gig, with a reason code (§11.4) |
+| `applied` | `withdrawn` | The applicant |
+| `applied` | `closed_filled` | System only |
+| `viewed` | `shortlisted` | The business that posted the gig |
+| `viewed` | `rejected` | The business that posted the gig, with a reason code (§11.4) |
+| `viewed` | `withdrawn` | The applicant |
+| `viewed` | `closed_filled` | System only |
+| `shortlisted` | `hired` | The business that posted the gig |
+| `shortlisted` | `rejected` | The business that posted the gig, with a reason code (§11.4) |
+| `shortlisted` | `withdrawn` | The applicant |
+
+Every move not in this table — including any move out of a terminal status, and any move backwards (a `shortlisted` application can never return to `viewed`) — is rejected with `409 INVALID_APPLICATION_TRANSITION`, naming the current and attempted status.
+
+"The business that posted the gig" is checked by ownership, not just role: a business token belonging to a different business gets `403 FORBIDDEN`, the same as a seeker token. "The applicant" is checked the same way: a seeker token that isn't the one who submitted the application gets `403 FORBIDDEN`. "System only" means no HTTP-authenticated actor at all — a request from a business (or anyone else) attempting `closed_filled` gets `403 FORBIDDEN`; only an internal call with no `actor` succeeds.
+
+`viewedAt` is set the first time `viewed` is reached and never cleared or overwritten by any later transition. `decidedAt` is set the first time any terminal status is reached and never changes afterwards.
+
+### 11.4 Rejection reason codes
+
+§6.8 lists the eight codes: seven business-selectable, plus `positions_filled` which is system-only. Rejecting (any `-> rejected` move in §11.3) requires `reason.code`:
+
+- Missing entirely — `400 VALIDATION_ERROR`.
+- `positions_filled`, or any code outside the eight — `400 VALIDATION_ERROR`. A business can never select the system-only code through a rejection.
+- `skill_trial_not_passed` or `skill_trial_not_attempted` while the gig did not carry a skill trial — `400 VALIDATION_ERROR`. Skill Trials arrive in Sprint 3; until a gig can carry one, these two codes are always refused.
+
+`reason.note`, when supplied, is stored on `rejectionNote` exactly as given (§11.1).
+
+### 11.5 Applicant count
+
+A gig's `applicantCount` (§10.1) is maintained by this component, not by the marketplace — GL-158 declares the field and defaults it to zero, and never writes it. `adjustGigApplicantCount(gigId, delta)` in `application.service.js` is the only code that changes it:
+
+- `+1` when an application is created (`applied` is a live status) — called by GL-110's apply endpoint.
+- `-1` the moment an application leaves the live set for `rejected`, `withdrawn` or `closed_filled` — called automatically by `transitionApplicationStatus` in the same operation as the status change, never as a separate call a client can forget to make.
+
+A move that stays within the live set (`applied -> viewed`, `viewed -> shortlisted`, `shortlisted -> hired`) never touches the count.
+
+---
+
+## 12. Adding a new endpoint later
 
 1. Pick a plural, lowercase, hyphenated resource name.
 2. Reuse the envelopes in sections 2 and 3 exactly — don't invent a new outer shape.
