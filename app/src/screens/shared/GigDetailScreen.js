@@ -140,6 +140,16 @@ export default function GigDetailScreen() {
   const location = formatLocation({ isRemote: remote, area, city });
   const deadline = applicationsCloseDate ? formatDeadline(applicationsCloseDate) : null;
 
+  // GL-155's public profile screen may not be registered yet — routing into
+  // it unconditionally would throw on tap ("was not handled by any
+  // navigator"). Checking the enclosing stack's own route names is what
+  // keeps the block inert until that screen actually exists, with nothing
+  // else here needing to change once it does.
+  const canViewBusinessProfile = navigation.getState().routeNames.includes('PublicProfile');
+  const handleViewBusiness = canViewBusinessProfile
+    ? () => navigation.navigate('PublicProfile', { userId: business.id })
+    : undefined;
+
   const detailRows = [
     { label: 'Category', value: labelFor(GIG_CATEGORIES, category) },
     { label: 'Schedule', value: schedule.map((tag) => labelFor(SCHEDULE_TAGS, tag)).join(', ') },
@@ -198,6 +208,7 @@ export default function GigDetailScreen() {
           <GigBusinessBlock
             business={business}
             postedAt={createdAt}
+            onPress={handleViewBusiness}
             className={deadline ? 'mt-4' : undefined}
           />
 
