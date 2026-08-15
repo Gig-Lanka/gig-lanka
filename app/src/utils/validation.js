@@ -157,3 +157,34 @@ export function validateWorkExperienceEntry({
 
   return errors;
 }
+
+const INSTITUTION_MAX_LENGTH = 80;
+const QUALIFICATION_MAX_LENGTH = 80;
+
+// Mirrors docs/api-contract.md §8.4's education rule: institution and
+// qualification are required, dates are optional (no `ongoing` flag exists
+// for this entry type), and an end date earlier than its start date is
+// rejected — same rule as workExperience.
+export function validateEducationEntry({ institution, qualification, startDate, endDate }) {
+  const errors = {};
+  const trimmedInstitution = (institution || '').trim();
+  const trimmedQualification = (qualification || '').trim();
+
+  if (!trimmedInstitution) {
+    errors.institution = 'Enter an institution.';
+  } else if (trimmedInstitution.length > INSTITUTION_MAX_LENGTH) {
+    errors.institution = `Institution must be ${INSTITUTION_MAX_LENGTH} characters or fewer.`;
+  }
+
+  if (!trimmedQualification) {
+    errors.qualification = 'Enter a qualification.';
+  } else if (trimmedQualification.length > QUALIFICATION_MAX_LENGTH) {
+    errors.qualification = `Qualification must be ${QUALIFICATION_MAX_LENGTH} characters or fewer.`;
+  }
+
+  if (startDate && endDate && parseDateOnly(endDate) < parseDateOnly(startDate)) {
+    errors.endDate = 'End date cannot be before the start date.';
+  }
+
+  return errors;
+}

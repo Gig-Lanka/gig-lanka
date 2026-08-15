@@ -8,7 +8,9 @@ import Loader from '../components/ui/Loader';
 import ComponentDemoScreen from '../screens/dev/ComponentDemoScreen';
 import EditGigScreen from '../screens/business/EditGigScreen';
 import EditProfileScreen from '../screens/shared/EditProfileScreen';
+import EducationFormScreen from '../screens/seeker/EducationFormScreen';
 import ExperienceFormScreen from '../screens/seeker/ExperienceFormScreen';
+import ManageEducationScreen from '../screens/seeker/ManageEducationScreen';
 import ManageExperienceScreen from '../screens/seeker/ManageExperienceScreen';
 import PostGigScreen from '../screens/business/PostGigScreen';
 import useAuth from '../hooks/useAuth';
@@ -36,6 +38,8 @@ function AppStack({ role }) {
         <>
           <Stack.Screen name="ManageExperience" component={ManageExperienceScreen} />
           <Stack.Screen name="ExperienceForm" component={ExperienceFormScreen} />
+          <Stack.Screen name="ManageEducation" component={ManageEducationScreen} />
+          <Stack.Screen name="EducationForm" component={EducationFormScreen} />
         </>
       )}
 
