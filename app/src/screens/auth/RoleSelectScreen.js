@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 
 import AuthShell from '../../components/ui/AuthShell';
@@ -22,7 +22,7 @@ const ROLES = [
   },
 ];
 
-export default function RoleSelectScreen() {
+export default function RoleSelectScreen({ onContinueAsGuest }) {
   const navigation = useNavigation();
   const [selectedRole, setSelectedRole] = useState(null);
 
@@ -65,15 +65,19 @@ export default function RoleSelectScreen() {
 
       <View className="flex-1" />
 
-      <Button
-        className="mb-6"
-        trailingArrow
-        onPress={handleNext}
-        disabled={!selectedRole}
-        fullWidth
-      >
+      <Button trailingArrow onPress={handleNext} disabled={!selectedRole} fullWidth>
         Next
       </Button>
+
+      {onContinueAsGuest ? (
+        <Pressable onPress={onContinueAsGuest} className="py-6">
+          <Text className="text-center text-[14.5px] text-muted">
+            Just looking? <Text className="font-semibold text-signal">Browse gigs without an account</Text>
+          </Text>
+        </Pressable>
+      ) : (
+        <View className="mb-6" />
+      )}
     </AuthShell>
   );
 }
