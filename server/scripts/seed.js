@@ -198,7 +198,7 @@ const run = async () => {
       );
     }
   }
-  console.log('Seeded hired application: seeker <-> business');
+  console.log(`Seeded hired application: seeker <-> business (id ${hiredApplication.id})`);
 
   await mongoose.connection.close();
 };

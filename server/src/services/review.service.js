@@ -1,6 +1,8 @@
+import mongoose from 'mongoose';
 import { ApiError } from '../utils/ApiError.js';
 import { Review } from '../models/review.model.js';
 import { getApplicationWithParties } from './application.service.js';
+import { getPublicIdentity } from './profile.service.js';
 import {
   SEEKER_TO_BUSINESS_CATEGORIES,
   BUSINESS_TO_SEEKER_CATEGORIES,
@@ -10,6 +12,8 @@ const CATEGORIES_BY_DIRECTION = {
   seeker_to_business: SEEKER_TO_BUSINESS_CATEGORIES,
   business_to_seeker: BUSINESS_TO_SEEKER_CATEGORIES,
 };
+
+const PAGE_SIZE = 10;
 
 const assertCategoriesMatchDirection = (categories, direction) => {
   const allowed = CATEGORIES_BY_DIRECTION[direction];
@@ -75,4 +79,38 @@ export const createReview = async (applicationId, actor, body) => {
     }
     throw err;
   }
+};
+
+// The reviews written about a user, newest first. Deliberately doesn't check
+// that the user still exists or is active — a deactivated user's reviews are
+// unaffected by deactivation (they're read through the subject id on the
+// review, not through the user record), so there's nothing to gate on here.
+export const listUserReviews = async (userId, query) => {
+  if (!mongoose.isValidObjectId(userId)) {
+    throw new ApiError(404, 'NOT_FOUND', 'User not found.');
+  }
+
+  const page = Math.max(1, parseInt(query.page, 10) || 1);
+  const filter = { subject: userId };
+
+  const [reviews, total] = await Promise.all([
+    Review.find(filter)
+      .sort({ createdAt: -1, _id: -1 })
+      .skip((page - 1) * PAGE_SIZE)
+      .limit(PAGE_SIZE),
+    Review.countDocuments(filter),
+  ]);
+
+  // Author name and photo come from the profile at read time, not a frozen
+  // copy on the review — the opposite of an application's snapshot, and for
+  // the opposite reason: this shows who someone is now, not who they were
+  // when the review was written.
+  const reviewsWithAuthor = await Promise.all(
+    reviews.map(async (review) => {
+      const { author, ...reviewJson } = review.toJSON();
+      return { ...reviewJson, author: await getPublicIdentity(author) };
+    }),
+  );
+
+  return { reviews: reviewsWithAuthor, total, page, limit: PAGE_SIZE };
 };
