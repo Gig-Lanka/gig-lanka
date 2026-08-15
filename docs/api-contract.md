@@ -98,7 +98,8 @@ Every error response — regardless of cause — returns the same outer shape:
 | `FILE_TOO_LARGE` | An uploaded file exceeds the 5MB limit. |
 | `STORAGE_UNAVAILABLE` | The storage backend (Supabase) failed or was unreachable. Always `502`. |
 | `GIG_CLOSED` | Attempted to apply to or save a gig whose status isn't `open`. Always `409`. |
-| `INVALID_APPLICATION_TRANSITION` | Attempted to move an application to a status not reachable from its current status (§11.3). Always `409`, and the message names both the current and the attempted status. |
+| `APPLICATION_ALREADY_EXISTS` | `POST /api/gigs/:gigId/applications` for a `(gig, applicant)` pair that already has an application (§11.7). Always `409`; the duplicate-key error from the unique index (§11.1) is translated here rather than surfacing as `500` — the same trap GL-15 hit with duplicate emails. Holds whether the earlier application is live, withdrawn or rejected. |
+| `INVALID_APPLICATION_TRANSITION` | Attempted to move an application to a status not reachable from its current status (§11.3). Always `409`, and the message names both the current and the attempted status. Withdrawing a `hired` application (§11.10) surfaces through this same code — hiring has no outgoing move in the transition table, so it's refused the same way any other terminal status is, not by a withdraw-specific check. |
 | `APPLICATION_NOT_HIRED` | `POST /api/applications/:applicationId/reviews` on an application whose status isn't `hired` (§12.3). Always `409` — a review requires a completed hire. |
 | `REVIEW_ALREADY_EXISTS` | `POST /api/applications/:applicationId/reviews` for an `(application, direction)` pair that already has a review (§12.3). Always `409`; the duplicate-key error from the unique index (§7) is translated here rather than surfacing as `500`. |
 
@@ -1193,7 +1194,7 @@ Only the owner. Permanently deletes the gig. There is no soft delete and no undo
 
 ## 11. Application model & status transitions (Sprint 1)
 
-`server/src/models/application.model.js` and `server/src/services/application.service.js`. No endpoint reads or writes this yet — apply and withdraw are GL-110 — but the shape and the transition rules are fixed here because GL-111's review gate and GL-124's tracker are both built against them.
+`server/src/models/application.model.js`, `server/src/services/application.service.js`, `server/src/routes/application.routes.js`, `server/src/controllers/application.controller.js`, `server/src/validators/application.validator.js`. The four endpoints (§11.6–§11.9) are GL-110; the shape and transition rules below are also what GL-111's review gate and GL-124's tracker are built against.
 
 ### 11.1 Application shape
 
@@ -1289,6 +1290,170 @@ A gig's `applicantCount` (§10.1) is maintained by this component, not by the ma
 - `-1` the moment an application leaves the live set for `rejected`, `withdrawn` or `closed_filled` — called automatically by `transitionApplicationStatus` in the same operation as the status change, never as a separate call a client can forget to make.
 
 A move that stays within the live set (`applied -> viewed`, `viewed -> shortlisted`, `shortlisted -> hired`) never touches the count.
+
+### 11.6 Gig summary shape
+
+Returned under `data.applications[].gig` (§11.7) and `data.application.gig` (§11.8, §11.9) — never the full gig (§10.1), just enough to recognise which posting an application belongs to:
+
+```json
+{
+  "id": "64f1a2b3c4d5e6f7a8b9c0d8",
+  "title": "Weekend event helper",
+  "payAmount": 2500,
+  "payType": "per_day",
+  "city": "Colombo",
+  "status": "open"
+}
+```
+
+`null` if the gig no longer exists — `DELETE /api/gigs/:id` (§10.9) has no cascade to applications, so an orphaned application reads back with `gig: null` rather than the request failing. **Not present** on the apply response (§11.7): the caller already knows which gig they just applied to, and `application.gig` there is still the bare reference id from §11.1.
+
+### 11.7 Apply to a gig — `POST /api/gigs/:gigId/applications`
+
+Seekers only. A business token gets `403`, a guest gets `401`.
+
+**Request body:** none. `status` and `appliedAt` are never accepted from the client — sending them (or anything else) has no effect, since the validator strips every field.
+
+**Success — `201 Created`**
+
+```json
+{
+  "success": true,
+  "data": {
+    "application": { /* 11.1, gig is the bare reference id */ },
+    "profileIncomplete": true
+  }
+}
+```
+
+`profileIncomplete` is `true` when the applicant's profile has no `workExperience` and no `education` entries at the time of applying. It never blocks the application — an empty profile is valid, deciding someone isn't ready is the business's job, not the app's — the client uses this flag to warn the seeker beforehand, not after.
+
+**Failure — `401 Unauthorized`** (guest) — `AUTH_HEADER_MISSING` etc., as in §8.6.
+
+**Failure — `403 Forbidden`** (business token) — `FORBIDDEN`, as in §10.3.
+
+**Failure — `404 Not Found`** (no gig with that id, or a malformed id):
+
+```json
+{ "success": false, "error": { "code": "NOT_FOUND", "message": "Gig not found." } }
+```
+
+**Failure — `409 Conflict`** (the gig exists but isn't `open`):
+
+```json
+{ "success": false, "error": { "code": "GIG_CLOSED", "message": "This gig is no longer open." } }
+```
+
+**Failure — `409 Conflict`** (a second application to the same gig — the unique `(gig, applicant)` index from §11.1 enforces this; the duplicate-key error is translated here, never a `500`. Holds whether the earlier application is live, withdrawn or rejected):
+
+```json
+{
+  "success": false,
+  "error": { "code": "APPLICATION_ALREADY_EXISTS", "message": "You have already applied to this gig." }
+}
+```
+
+### 11.8 List my applications — `GET /api/applications/mine`
+
+Seekers only — a business doesn't submit applications, it receives them. Requires `Authorization: Bearer <accessToken>`.
+
+**Request body:** none.
+
+**Success — `200 OK`** — the signed-in seeker's own applications, newest first (`createdAt` descending), each with a gig summary (§11.6). No pagination — like `GET /api/gigs/mine` (§10.6), a seeker's own application list is expected to stay small enough to return in full.
+
+```json
+{
+  "success": true,
+  "data": {
+    "applications": [
+      { /* 11.1, gig replaced with the §11.6 summary */ }
+    ]
+  }
+}
+```
+
+An empty list is still `200` with `"applications": []`, not `404`. This endpoint never returns another seeker's application under any parameter — it is scoped to the caller's own id, with no id accepted from the request.
+
+**Failure — `401 Unauthorized`** (guest) — as in §8.6.
+
+**Failure — `403 Forbidden`** (business token) — `FORBIDDEN`, as in §10.3.
+
+### 11.9 Read an application — `GET /api/applications/:id`
+
+Returns one application to the seeker who owns it or the business that posted the gig it belongs to. Requires `Authorization: Bearer <accessToken>`; either role may call it, so there's no role restriction beyond being a party to this specific application — the same shape of check as reviews (§12.1).
+
+**Request body:** none.
+
+**Success — `200 OK`**
+
+```json
+{
+  "success": true,
+  "data": {
+    "application": { /* 11.1, gig replaced with the §11.6 summary */ }
+  }
+}
+```
+
+The full application is returned, including the decision once made — `status`, `rejectionReasonCode` and `rejectionNote` (§11.1) shown exactly as the business wrote it, no softening, no truncation, no paraphrase.
+
+**Failure — `401 Unauthorized`** (guest) — as in §8.6.
+
+**Failure — `404 Not Found`** (no application with that id, or the id isn't a valid Mongo id — both answer identically, checked **before** the party check below):
+
+```json
+{ "success": false, "error": { "code": "NOT_FOUND", "message": "Application not found." } }
+```
+
+**Failure — `403 Forbidden`** (signed in, but neither the applicant nor the business that posted the gig):
+
+```json
+{
+  "success": false,
+  "error": { "code": "FORBIDDEN", "message": "You do not have permission to perform this action." }
+}
+```
+
+No endpoint in this story reveals the identity of any other applicant to a seeker, or any application belonging to a gig the caller does not own — this endpoint only ever resolves the single id given, gated by the party check above.
+
+### 11.10 Withdraw an application — `PATCH /api/applications/:id/withdraw`
+
+Only the applicant may call it, and only while the application is `applied`, `viewed` or `shortlisted` (§11.3). Moves the application to `withdrawn` **through `transitionApplicationStatus`** (§11.3) — no route, controller or service here writes `status` directly.
+
+**Request body:** none.
+
+**Success — `200 OK`** — same shape as §11.9, with `status: "withdrawn"` and `decidedAt` now set. Withdrawing decrements the gig's live applicant count (§11.5) in the same operation as the status change. The application is never deleted or hidden: it **remains visible to the business** exactly where it was, just with the new status — so nobody is left waiting on somebody who has already left.
+
+Combined with the permanent unique index (§11.1), withdrawal is one-way: the seeker cannot re-apply to that gig afterwards — a second `POST` to §11.7 for the same gig returns `409 APPLICATION_ALREADY_EXISTS`, the same as any other duplicate.
+
+**Failure — `401 Unauthorized`** (guest) — as in §8.6.
+
+**Failure — `403 Forbidden`** (a business token, or a seeker token that isn't the applicant) — `FORBIDDEN`, as in §11.9.
+
+**Failure — `404 Not Found`** (no application with that id, or a malformed id) — as in §11.9.
+
+**Failure — `409 Conflict`** (the application is `hired`, or already terminal — `rejected`, `withdrawn` or `closed_filled`). Hiring is terminal: a `hired` application has no outgoing move in §11.3's table, so it's refused the same way any other terminal status is, not by a withdraw-specific check:
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "INVALID_APPLICATION_TRANSITION",
+    "message": "Cannot move an application from \"hired\" to \"withdrawn\"."
+  }
+}
+```
+
+### 11.11 Error codes for these endpoints
+
+| Status | Code | When |
+|---|---|---|
+| `401` | `AUTH_HEADER_MISSING` / `AUTH_HEADER_MALFORMED` / `TOKEN_EXPIRED` / `TOKEN_INVALID` | No/malformed/expired/invalid token — every endpoint in this section requires one. |
+| `403` | `FORBIDDEN` | A business token on §11.7 or §11.8; a seeker or business token that isn't a party to the application on §11.9; a business token or the wrong seeker on §11.10. |
+| `404` | `NOT_FOUND` | §11.7 for a gig that doesn't exist or has a malformed id. §11.9/§11.10 for an application that doesn't exist or has a malformed id, checked before the party/ownership check above. |
+| `409` | `GIG_CLOSED` | §11.7 for a gig that exists but isn't `open`. |
+| `409` | `APPLICATION_ALREADY_EXISTS` | §11.7 for a `(gig, applicant)` pair that already has an application, live, withdrawn or rejected. |
+| `409` | `INVALID_APPLICATION_TRANSITION` | §11.10 for an application that isn't `applied`, `viewed` or `shortlisted` — most commonly `hired` or already `withdrawn`. |
 
 ---
 

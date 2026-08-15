@@ -4,6 +4,7 @@ import {
   applyToGig as applyToGigService,
   listMyApplications as listMyApplicationsService,
   getApplicationById as getApplicationByIdService,
+  withdrawApplication as withdrawApplicationService,
 } from '../services/application.service.js';
 
 export const applyToGig = asyncHandler(async (req, res) => {
@@ -21,6 +22,13 @@ export const getMyApplications = asyncHandler(async (req, res) => {
 export const getApplication = asyncHandler(async (req, res) => {
   const actor = { id: req.user.id, role: req.user.role };
   const result = await getApplicationByIdService(req.params.id, actor);
+
+  sendSuccess(res, result, 200);
+});
+
+export const withdrawApplication = asyncHandler(async (req, res) => {
+  const actor = { id: req.user.id, role: req.user.role };
+  const result = await withdrawApplicationService(req.params.id, actor);
 
   sendSuccess(res, result, 200);
 });
