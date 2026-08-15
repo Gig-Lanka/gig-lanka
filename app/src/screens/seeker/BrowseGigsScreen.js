@@ -1,13 +1,15 @@
-import { useCallback, useRef, useState } from 'react';
-import { FlatList, Pressable, Text, View } from 'react-native';
+import { useCallback, useMemo, useRef, useState } from 'react';
+import { FlatList, Pressable, ScrollView, Text, View } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 
 import gigApi from '../../api/gigApi';
 import GigCard from '../../components/gig/GigCard';
+import Chip from '../../components/ui/Chip';
 import EmptyState from '../../components/ui/EmptyState';
 import Loader from '../../components/ui/Loader';
 import Screen from '../../components/ui/Screen';
 import ScreenHeader from '../../components/ui/ScreenHeader';
+import { SCHEDULE_TAGS } from '../../constants/enums';
 
 const LOAD_ERROR_MESSAGE = 'Could not load gigs. Check your connection and try again.';
 
@@ -21,10 +23,22 @@ export default function BrowseGigsScreen() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState(null);
   const [loadMoreError, setLoadMoreError] = useState(null);
+  const [selectedTags, setSelectedTags] = useState([]);
   const isFetchingRef = useRef(false);
   const hasLoadedRef = useRef(false);
 
   const hasMore = gigs.length < total;
+  const hasFilter = selectedTags.length > 0;
+
+  // Narrows whatever's already loaded rather than querying the server —
+  // GET /api/gigs has no filter param this sprint, and adding one is a
+  // server-side change that's explicitly out of scope. Scrolling to the
+  // bottom of a short filtered view still fetches further raw pages (see
+  // handleEndReached), since a later page may hold more matches.
+  const filteredGigs = useMemo(() => {
+    if (!hasFilter) return gigs;
+    return gigs.filter((gig) => (gig.schedule ?? []).some((tag) => selectedTags.includes(tag)));
+  }, [gigs, hasFilter, selectedTags]);
 
   // Single entry point for every fetch (initial load, pull-to-refresh, load
   // more) so there is exactly one place guarding against overlapping
@@ -90,30 +104,73 @@ export default function BrowseGigsScreen() {
     [navigation],
   );
 
-  if (loading) {
-    return <Loader fullScreen />;
-  }
+  const toggleTag = useCallback((tag) => {
+    setSelectedTags((prev) =>
+      prev.includes(tag) ? prev.filter((value) => value !== tag) : [...prev, tag],
+    );
+  }, []);
+
+  const clearTags = useCallback(() => setSelectedTags([]), []);
 
   return (
     <Screen>
       <ScreenHeader title="Find a gig" />
 
-      {error ? (
+      {/* Always visible, never behind a filter sheet — schedule is the
+          first thing this audience filters by. Room is left below for the
+          Sprint 2 search field and a "Filters" entry point beside this row. */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        className="mb-4 flex-grow-0"
+        contentContainerClassName="gap-2 pr-4"
+      >
+        {SCHEDULE_TAGS.map((tag) => (
+          <Chip
+            key={tag.value}
+            selected={selectedTags.includes(tag.value)}
+            onPress={() => toggleTag(tag.value)}
+          >
+            {tag.label}
+          </Chip>
+        ))}
+      </ScrollView>
+
+      {loading ? (
+        <Loader fullScreen />
+      ) : error ? (
         <EmptyState message={error} actionLabel="Retry" onAction={handleRetry} />
       ) : (
         <FlatList
-          data={gigs}
+          data={filteredGigs}
           keyExtractor={(gig) => gig.id}
           renderItem={({ item }) => <GigCard gig={item} onPress={() => handleCardPress(item)} />}
           ListHeaderComponent={
             gigs.length > 0 ? (
-              <Text className="mb-3 text-label text-muted">
-                {total} {total === 1 ? 'gig' : 'gigs'}
-              </Text>
+              <View className="mb-3 flex-row items-center justify-between gap-3">
+                <Text className="text-label text-muted">
+                  {hasFilter
+                    ? `${filteredGigs.length} ${filteredGigs.length === 1 ? 'gig' : 'gigs'} match your filters`
+                    : `${total} ${total === 1 ? 'gig' : 'gigs'}`}
+                </Text>
+                {hasFilter ? (
+                  <Pressable onPress={clearTags}>
+                    <Text className="text-label font-semibold text-signal">Clear all</Text>
+                  </Pressable>
+                ) : null}
+              </View>
             ) : null
           }
           ListEmptyComponent={
-            <EmptyState message="No gigs are open right now. Check back soon." />
+            gigs.length === 0 ? (
+              <EmptyState message="No gigs are open right now. Check back soon." />
+            ) : (
+              <EmptyState
+                message="No gigs match your selected schedule filters."
+                actionLabel="Clear filters"
+                onAction={clearTags}
+              />
+            )
           }
           ListFooterComponent={
             loadingMore ? (
