@@ -2,11 +2,20 @@ import { Pressable, Text, View } from 'react-native';
 
 /**
  * A single work-experience or education row — `.entry-card` in the v3 mockup.
- * `description` and `onEdit` are optional: the read-only summary on
- * `MyProfileScreen` passes neither, while the management screens (GL-149,
- * GL-150) pass both for the fuller row with an edit action.
+ * `description`, `onEdit` and `onDelete` are optional: the read-only summary
+ * on `MyProfileScreen` passes none of them, while the management screens
+ * (GL-149, GL-150, GL-151) pass all three for the fuller row with edit and
+ * delete actions.
  */
-export default function EntryCard({ title, subtitle, dateRange, description, onEdit, className }) {
+export default function EntryCard({
+  title,
+  subtitle,
+  dateRange,
+  description,
+  onEdit,
+  onDelete,
+  className,
+}) {
   return (
     <View
       className={[
@@ -31,14 +40,27 @@ export default function EntryCard({ title, subtitle, dateRange, description, onE
         ) : null}
       </View>
 
-      {onEdit ? (
-        <Pressable
-          onPress={onEdit}
-          hitSlop={8}
-          className="h-7 w-7 flex-shrink-0 items-center justify-center rounded-full border border-line bg-haze"
-        >
-          <Text className="text-[12px] text-muted">✎</Text>
-        </Pressable>
+      {onEdit || onDelete ? (
+        <View className="flex-row flex-shrink-0 gap-[6px]">
+          {onEdit ? (
+            <Pressable
+              onPress={onEdit}
+              hitSlop={8}
+              className="h-7 w-7 items-center justify-center rounded-full border border-line bg-haze"
+            >
+              <Text className="text-[12px] text-muted">✎</Text>
+            </Pressable>
+          ) : null}
+          {onDelete ? (
+            <Pressable
+              onPress={onDelete}
+              hitSlop={8}
+              className="h-7 w-7 items-center justify-center rounded-full border border-line bg-haze"
+            >
+              <Text className="text-[12px] text-muted">×</Text>
+            </Pressable>
+          ) : null}
+        </View>
       ) : null}
     </View>
   );
