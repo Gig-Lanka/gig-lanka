@@ -34,7 +34,8 @@ const LOAD_ERROR_MESSAGE = 'Could not load this rating. Check your connection an
 
 export default function RateSubjectScreen() {
   const navigation = useNavigation();
-  const { status, direction, subject, gig, rating, setRating, retry } = useRateFlow();
+  const { status, forbiddenMessage, direction, subject, gig, rating, setRating, retry } =
+    useRateFlow();
 
   const handleBack = () => navigation.goBack();
 
@@ -43,10 +44,18 @@ export default function RateSubjectScreen() {
   }
 
   if (status === RATE_FLOW_STATUS.ERROR) {
+    // A permission refusal isn't transient like a dropped connection —
+    // "Retry" would only repeat the same 403, so this offers a way out
+    // instead (§GL-206/AC14).
+    const isForbidden = Boolean(forbiddenMessage);
     return (
       <SafeAreaView className="flex-1 bg-paper" edges={['top', 'bottom']}>
         <ScreenHeader title="Rate" small onBack={handleBack} />
-        <EmptyState message={LOAD_ERROR_MESSAGE} actionLabel="Retry" onAction={retry} />
+        <EmptyState
+          message={isForbidden ? forbiddenMessage : LOAD_ERROR_MESSAGE}
+          actionLabel={isForbidden ? 'Go back' : 'Retry'}
+          onAction={isForbidden ? handleBack : retry}
+        />
       </SafeAreaView>
     );
   }

@@ -211,6 +211,18 @@ export default function ProfileScreen() {
           <Button variant="small" fullWidth={false} onPress={logout} className="mt-8 self-center">
             Log Out
           </Button>
+
+          {/* TEMPORARY — GL-206 verification only, must not merge. */}
+          {__DEV__ ? (
+            <Button
+              variant="small"
+              fullWidth={false}
+              onPress={() => navigation.navigate('RateFlowDevEntry')}
+              className="mt-2 self-center"
+            >
+              DEV: Rate flow
+            </Button>
+          ) : null}
         </HeroSheet>
       </Animated.ScrollView>
 

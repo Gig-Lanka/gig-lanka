@@ -56,6 +56,11 @@ export function RateFlowProvider({ applicationId, children }) {
   const [subject, setSubject] = useState(null);
   const [gig, setGig] = useState(null);
   const [reloadToken, setReloadToken] = useState(0);
+  // Set only for the 403 GL-206 covers: a signed-in user who isn't a party
+  // to this application. Kept distinct from the generic ERROR message
+  // below it — "check your connection" is actively misleading for a
+  // permission refusal, and retrying can never fix it.
+  const [forbiddenMessage, setForbiddenMessage] = useState('');
 
   const [rating, setRating] = useState(0);
   const [categories, setCategories] = useState([]);
@@ -66,6 +71,7 @@ export function RateFlowProvider({ applicationId, children }) {
 
     async function load() {
       setStatus(RATE_FLOW_STATUS.LOADING);
+      setForbiddenMessage('');
       try {
         const { application } = await applicationApi.getApplication(applicationId);
         const nextDirection = directionFor(application, user?.id);
@@ -113,8 +119,15 @@ export function RateFlowProvider({ applicationId, children }) {
           setGig(nextGig);
           setStatus(RATE_FLOW_STATUS.READY);
         }
-      } catch {
-        if (!cancelled) setStatus(RATE_FLOW_STATUS.ERROR);
+      } catch (error) {
+        if (cancelled) return;
+        if (error.response?.status === 403) {
+          setForbiddenMessage(
+            error.response?.data?.error?.message ||
+              'You do not have permission to rate this application.',
+          );
+        }
+        setStatus(RATE_FLOW_STATUS.ERROR);
       }
     }
 
@@ -129,6 +142,7 @@ export function RateFlowProvider({ applicationId, children }) {
     () => ({
       applicationId,
       status,
+      forbiddenMessage,
       direction,
       subject,
       gig,
@@ -141,7 +155,7 @@ export function RateFlowProvider({ applicationId, children }) {
       setText,
       retry: () => setReloadToken((token) => token + 1),
     }),
-    [applicationId, status, direction, subject, gig, rating, categories, text],
+    [applicationId, status, forbiddenMessage, direction, subject, gig, rating, categories, text],
   );
 
   return <RateFlowContext.Provider value={value}>{children}</RateFlowContext.Provider>;
