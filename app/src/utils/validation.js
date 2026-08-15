@@ -48,6 +48,23 @@ export function validateEditProfileForm({ name, bio }) {
   return errors;
 }
 
+// Mirrors docs/api-contract.md §9.1's own upload rules, so an oversize or
+// wrong-type file is caught before it costs a round trip to POST /api/uploads.
+export const MAX_IMAGE_FILE_SIZE = 5 * 1024 * 1024;
+const ALLOWED_IMAGE_MIME_TYPES = ['image/png', 'image/jpeg'];
+
+export function validateImageFile({ fileSize, mimeType }) {
+  if (mimeType && !ALLOWED_IMAGE_MIME_TYPES.includes(mimeType)) {
+    return 'Photo must be a PNG or JPG file.';
+  }
+
+  if (typeof fileSize === 'number' && fileSize > MAX_IMAGE_FILE_SIZE) {
+    return 'Photo must be 5MB or smaller.';
+  }
+
+  return null;
+}
+
 function parseDateOnly(value) {
   const [year, month, day] = value.split('-').map(Number);
   return new Date(year, month - 1, day);
