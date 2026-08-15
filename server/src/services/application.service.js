@@ -272,3 +272,67 @@ export const getApplicationWithParties = async (id) => {
     businessId: gig?.postedBy?.toString(),
   };
 };
+
+// Never the full gig (10.1) — just enough for a seeker or business to
+// recognise which posting an application belongs to in a list or detail
+// view. A deleted gig (10.9 has no cascade) reads back as null rather than
+// breaking the response.
+const toGigSummary = (gig) => {
+  if (!gig) return null;
+
+  const gigJson = gig.toJSON();
+
+  return {
+    id: gigJson.id,
+    title: gigJson.title,
+    payAmount: gigJson.payAmount,
+    payType: gigJson.payType,
+    city: gigJson.city,
+    status: gigJson.status,
+  };
+};
+
+// GL-183: the signed-in seeker's own applications, newest first, each with
+// a summary of the gig it belongs to. Scoped to `applicant: userId` only —
+// there is no parameter that reaches another seeker's applications.
+export const listMyApplications = async (userId) => {
+  const applications = await Application.find({ applicant: userId }).sort({
+    createdAt: -1,
+    _id: -1,
+  });
+
+  const gigIds = [...new Set(applications.map((application) => application.gig.toString()))];
+  const gigs = await Gig.find({ _id: { $in: gigIds } });
+  const gigById = new Map(gigs.map((gig) => [gig.id, gig]));
+
+  return {
+    applications: applications.map((application) => ({
+      ...application.toJSON(),
+      gig: toGigSummary(gigById.get(application.gig.toString())),
+    })),
+  };
+};
+
+// GL-183: one application, to the seeker who owns it or the business that
+// posted the gig — 403 to anyone else, checked after existence so a missing
+// id always 404s before a wrong party ever sees a 403 (mirrors gig.service's
+// findOwnedGig ordering). The full document is returned, including the
+// rejection reason/note once decided — shown exactly as the business wrote
+// it, no softening. No endpoint here can reach another applicant's
+// application: this only ever resolves the one id given.
+export const getApplicationById = async (id, actor) => {
+  const { application, applicantId, businessId } = await getApplicationWithParties(id);
+
+  const isApplicant = actor.role === 'seeker' && applicantId === actor.id.toString();
+  const isBusiness = actor.role === 'business' && businessId === actor.id.toString();
+
+  if (!isApplicant && !isBusiness) {
+    throw new ApiError(403, 'FORBIDDEN', 'You do not have permission to perform this action.');
+  }
+
+  const gig = await Gig.findById(application.gig);
+
+  return {
+    application: { ...application.toJSON(), gig: toGigSummary(gig) },
+  };
+};
