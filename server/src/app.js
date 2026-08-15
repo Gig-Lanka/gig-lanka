@@ -8,6 +8,7 @@ import gigRoutes from './routes/gig.routes.js';
 import profileRoutes from './routes/profile.routes.js';
 import uploadRoutes from './routes/upload.routes.js';
 import reviewRoutes from './routes/review.routes.js';
+import applicationRoutes from './routes/application.routes.js';
 import { notFound } from './middleware/notFound.js';
 import { errorHandler } from './middleware/errorHandler.js';
 
@@ -24,6 +25,7 @@ app.use('/api/gigs', gigRoutes);
 app.use('/api/profiles', profileRoutes);
 app.use('/api/uploads', uploadRoutes);
 app.use('/api', reviewRoutes);
+app.use('/api', applicationRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

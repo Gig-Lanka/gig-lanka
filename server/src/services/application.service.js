@@ -2,6 +2,8 @@ import mongoose from 'mongoose';
 import { ApiError } from '../utils/ApiError.js';
 import { Gig } from '../models/gig.model.js';
 import { Application, REJECTION_REASON_CODES } from '../models/application.model.js';
+import { assertGigIsOpen } from './gig.service.js';
+import { getMyProfile } from './profile.service.js';
 
 // Source status -> target status -> which kind of actor may trigger that
 // move. Modeled as data, not a chain of conditionals, so Sprint 2's hiring
@@ -69,6 +71,56 @@ export const adjustGigApplicantCount = async (gigId, delta) => {
   );
 
   return gig?.applicantCount;
+};
+
+// Applying is not blocked by an empty profile — deciding someone isn't ready
+// is the business's job, not the app's. `profileIncomplete` just tells the
+// client whether to warn the seeker before they submit.
+const buildProfileSnapshot = (profile) => ({
+  name: profile.name,
+  headline: profile.bio,
+  experience: profile.workExperience,
+  education: profile.education,
+  rating: profile.ratingSummary,
+});
+
+// GL-182: creates the application a seeker submits for a gig. The profile
+// snapshot is read through profile.service.js rather than profile.model.js
+// directly, so the ownership boundary with E2 holds. Status and appliedAt
+// are schema defaults here, never accepted from a caller.
+export const applyToGig = async (gigId, user) => {
+  const gig = await assertGigIsOpen(gigId);
+  const profile = await getMyProfile(user);
+
+  const profileSnapshot = buildProfileSnapshot(profile);
+  const profileIncomplete = profile.workExperience.length === 0 && profile.education.length === 0;
+
+  let application;
+  try {
+    application = await Application.create({
+      gig: gig._id,
+      applicant: user._id,
+      profileSnapshot,
+    });
+  } catch (err) {
+    // Same trap GL-15 hit with duplicate emails: the unique (gig, applicant)
+    // index is what actually enforces "one application per seeker per gig",
+    // so the duplicate-key error is translated here rather than reaching the
+    // client as a 500. Holds whether the earlier application is live,
+    // withdrawn or rejected — the index doesn't distinguish.
+    if (err.code === 11000) {
+      throw new ApiError(
+        409,
+        'APPLICATION_ALREADY_EXISTS',
+        'You have already applied to this gig.',
+      );
+    }
+    throw err;
+  }
+
+  await adjustGigApplicantCount(gig._id, 1);
+
+  return { application: application.toJSON(), profileIncomplete };
 };
 
 // Confirms `actor` — a plain `{ id, role }`, or null/undefined for a
