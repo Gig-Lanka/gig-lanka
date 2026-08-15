@@ -16,6 +16,7 @@ import ManageEducationScreen from '../screens/seeker/ManageEducationScreen';
 import ManageExperienceScreen from '../screens/seeker/ManageExperienceScreen';
 import PostGigScreen from '../screens/business/PostGigScreen';
 import GigDetailScreen from '../screens/shared/GigDetailScreen';
+import RateFlowNavigator from '../screens/shared/rate/RateFlowNavigator';
 import useAuth from '../hooks/useAuth';
 import { AUTH_STATUS } from '../store/AuthContext';
 
@@ -29,6 +30,9 @@ function AppStack({ role }) {
       <Stack.Screen name="Main" component={RoleTabs} />
       <Stack.Screen name="EditProfile" component={EditProfileScreen} />
       <Stack.Screen name="GigDetail" component={GigDetailScreen} />
+      {/* Either role can be the one rating (GL-203), so this is registered
+          once here rather than duplicated under both branches below. */}
+      <Stack.Screen name="RateFlow" component={RateFlowNavigator} />
       {role === 'business' ? (
         <>
           <Stack.Screen
