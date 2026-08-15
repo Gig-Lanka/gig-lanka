@@ -100,7 +100,9 @@ export default function RootNavigator() {
         <Stack.Screen name="Main">
           {() => <SeekerTabs guest onSignIn={() => setGuestMode(false)} />}
         </Stack.Screen>
-        <Stack.Screen name="GigDetail" component={GigDetailScreen} />
+        <Stack.Screen name="GigDetail">
+          {() => <GigDetailScreen onSignIn={() => setGuestMode(false)} />}
+        </Stack.Screen>
       </Stack.Navigator>
     );
   }

@@ -7,11 +7,13 @@ import gigApi from '../../api/gigApi';
 import GigBusinessBlock from '../../components/gig/GigBusinessBlock';
 import GigDetailList from '../../components/gig/GigDetailList';
 import Badge from '../../components/ui/Badge';
+import Button from '../../components/ui/Button';
 import EmptyState from '../../components/ui/EmptyState';
 import HeroHeader, { HeroSheet, HeroStickyBar } from '../../components/ui/HeroHeader';
 import Loader from '../../components/ui/Loader';
 import ScreenHeader from '../../components/ui/ScreenHeader';
 import SectionLabel from '../../components/ui/SectionLabel';
+import useAuth from '../../hooks/useAuth';
 import useHeroScroll from '../../hooks/useHeroScroll';
 import {
   COMMITMENT_LENGTHS,
@@ -38,11 +40,12 @@ function labelFor(list, value) {
   return list.find((entry) => entry.value === value)?.label ?? value;
 }
 
-export default function GigDetailScreen() {
+export default function GigDetailScreen({ onSignIn }) {
   const navigation = useNavigation();
   const { params } = useRoute();
   const { gigId } = params;
   const hero = useHeroScroll();
+  const { user } = useAuth();
 
   const [gig, setGig] = useState(null);
   const [business, setBusiness] = useState(null);
@@ -150,6 +153,36 @@ export default function GigDetailScreen() {
     ? () => navigation.navigate('PublicProfile', { userId: business.id })
     : undefined;
 
+  // Four states, checked in this order because each overrides the ones
+  // below it — an owner sees their edit route no matter the gig's status,
+  // and a closed gig reads the same to a guest as to a seeker:
+  //  1. The owning business — apply is never offered, editing is.
+  //  2. Any other viewer, gig not open — "Applications closed", disabled,
+  //     never hidden.
+  //  3. A guest, gig open — routes to sign-in; reading is public, applying
+  //     is not.
+  //  4. A signed-in seeker, gig open — routes to GL-123's apply screen.
+  // Display-only: the server is what actually enforces who may apply.
+  const isOwner = user?.role === 'business' && business?.id === user?.id;
+  const isSeeker = user?.role === 'seeker';
+  const isOpen = gigStatus === 'open';
+
+  let primaryAction = null;
+  if (isOwner) {
+    primaryAction = {
+      label: 'Edit this gig',
+      onPress: () => navigation.navigate('EditGig', { gigId }),
+    };
+  } else if (!isOpen) {
+    primaryAction = { label: 'Applications closed', disabled: true };
+  } else if (!user) {
+    primaryAction = { label: 'Apply for this gig', onPress: () => onSignIn?.() };
+  } else if (isSeeker) {
+    // GL-123's apply screen hasn't merged yet — present but deliberately
+    // left unwired rather than pointed at any other screen.
+    primaryAction = { label: 'Apply for this gig' };
+  }
+
   const detailRows = [
     { label: 'Category', value: labelFor(GIG_CATEGORIES, category) },
     { label: 'Schedule', value: schedule.map((tag) => labelFor(SCHEDULE_TAGS, tag)).join(', ') },
@@ -163,6 +196,7 @@ export default function GigDetailScreen() {
   return (
     <View className="flex-1 bg-ink">
       <Animated.ScrollView
+        className="flex-1"
         onScroll={hero.onScroll}
         scrollEventThrottle={hero.scrollEventThrottle}
         contentContainerClassName="grow"
@@ -223,6 +257,21 @@ export default function GigDetailScreen() {
           </View>
         </HeroSheet>
       </Animated.ScrollView>
+
+      {primaryAction ? (
+        <SafeAreaView
+          edges={['bottom']}
+          className="border-t border-line bg-paper px-[22px] pb-[10px] pt-[14px]"
+        >
+          <Button
+            disabled={primaryAction.disabled}
+            trailingArrow={!primaryAction.disabled}
+            onPress={primaryAction.onPress}
+          >
+            {primaryAction.label}
+          </Button>
+        </SafeAreaView>
+      ) : null}
 
       <Animated.View
         pointerEvents={hero.stickyPointerEvents}
