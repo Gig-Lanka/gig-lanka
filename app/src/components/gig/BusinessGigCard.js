@@ -1,4 +1,4 @@
-import { Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
 import Badge from '../ui/Badge';
 import { GIG_STATUSES } from '../../constants/enums';
@@ -15,12 +15,14 @@ function statusLabel(status) {
   return GIG_STATUSES.find((entry) => entry.value === status)?.label ?? status;
 }
 
-export default function BusinessGigCard({ gig, className, ...props }) {
+export default function BusinessGigCard({ gig, onPress, className, ...props }) {
   const { title, payAmount, payType, status, applicantCount = 0, applicationsCloseDate } = gig;
   const deadline = applicationsCloseDate ? formatDeadline(applicationsCloseDate) : null;
+  const Container = onPress ? Pressable : View;
 
   return (
-    <View
+    <Container
+      onPress={onPress}
       className={['rounded-ds-card border-[1.5px] border-line bg-paper p-4', className]
         .filter(Boolean)
         .join(' ')}
@@ -48,6 +50,6 @@ export default function BusinessGigCard({ gig, className, ...props }) {
           </Text>
         ) : null}
       </View>
-    </View>
+    </Container>
   );
 }

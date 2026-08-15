@@ -24,7 +24,7 @@ function withThousandsSeparator(amount) {
     .replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 }
 
-function formatShortDate(date) {
+export function formatShortDate(date) {
   return `${date.getDate()} ${MONTH_ABBREVIATIONS[date.getMonth()]}`;
 }
 

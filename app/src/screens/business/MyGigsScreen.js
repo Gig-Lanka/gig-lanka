@@ -105,7 +105,10 @@ export default function MyGigsScreen() {
             keyExtractor={(gig) => gig.id}
             renderItem={({ item }) => (
               <View className="gap-[10px]">
-                <BusinessGigCard gig={item} />
+                <BusinessGigCard
+                  gig={item}
+                  onPress={() => navigation.navigate('GigDetail', { gigId: item.id })}
+                />
                 <GigActionRow gig={item} onGigUpdated={handleGigUpdated} />
               </View>
             )}
