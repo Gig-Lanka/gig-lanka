@@ -3,6 +3,8 @@ import bcrypt from 'bcryptjs';
 import { env } from '../src/config/env.js';
 import { User } from '../src/models/user.model.js';
 import { Gig } from '../src/models/gig.model.js';
+import { Application } from '../src/models/application.model.js';
+import { transitionApplicationStatus } from '../src/services/application.service.js';
 
 const SEED_PASSWORD = 'Password123!';
 
@@ -122,21 +124,32 @@ const seedGigs = (businessId) => [
   },
 ].map((gig) => ({ ...gig, postedBy: businessId }));
 
-// application.model.js arrives in GL-109. Until then this is a local
-// stand-in so the review flow (GL-111, GL-125) has a Hired application to
-// test against before hiring exists in the app — see GL-194. It writes to
-// the same 'applications' collection and field names the real model will
-// use, so nothing here has to be reshaped once GL-109 lands.
-const seedApplicationSchema = new mongoose.Schema(
-  {
-    gig: { type: mongoose.Schema.Types.ObjectId, ref: 'Gig', required: true },
-    seeker: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-    business: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-    status: { type: String, required: true },
-  },
-  { timestamps: true, collection: 'applications' },
-);
-const SeedApplication = mongoose.model('SeedApplication', seedApplicationSchema);
+// Hiring doesn't exist in the app until Sprint 2, so nothing in the product
+// can currently produce a Hired application. The review flow (GL-195,
+// GL-125) is verified against this seeded one instead — a real gig and a
+// real Application document, walked through the actual business-actor
+// transitions (GL-179/180) rather than having its status field poked
+// directly, so it exercises the same rules a real hire would.
+const seedHiredGig = (businessId) => ({
+  title: 'Weekend Cafe Shift (seeded, completed)',
+  description: 'A completed gig seeded only so the review flow has a Hired application to test.',
+  category: 'hospitality',
+  payAmount: 1000,
+  payType: 'per_day',
+  city: 'Colombo',
+  schedule: ['weekends'],
+  commitment: 'one_off',
+  positions: 1,
+  postedBy: businessId,
+});
+
+const seedApplicantSnapshot = {
+  name: 'Seeded Seeker',
+  headline: 'Reliable weekend help, available evenings.',
+  experience: [],
+  education: [],
+  rating: { averageRating: 0, reviewCount: 0, topCategories: [] },
+};
 
 const run = async () => {
   await mongoose.connect(env.mongoUri);
@@ -163,15 +176,28 @@ const run = async () => {
     console.log(`Seeded gig: ${gig.title}`);
   }
 
-  // Status is set directly here — swap this line for the GL-179 transition
-  // function once it's merged, the 'status' field it writes doesn't change.
-  // 'gig' is a placeholder id: gig.model.js (GL-158) isn't merged here yet,
-  // and nothing in this sprint resolves through it.
-  await SeedApplication.findOneAndUpdate(
-    { seeker: seededUsers.seeker._id, business: seededUsers.business._id, status: 'hired' },
-    { $setOnInsert: { gig: new mongoose.Types.ObjectId() } },
+  const hiredGig = await Gig.findOneAndUpdate(
+    { title: 'Weekend Cafe Shift (seeded, completed)', postedBy: seededUsers.business._id },
+    { $setOnInsert: seedHiredGig(seededUsers.business._id) },
     { upsert: true, returnDocument: 'after' },
   );
+
+  let hiredApplication = await Application.findOneAndUpdate(
+    { gig: hiredGig._id, applicant: seededUsers.seeker._id },
+    { $setOnInsert: { profileSnapshot: seedApplicantSnapshot, status: 'applied' } },
+    { upsert: true, returnDocument: 'after' },
+  );
+
+  if (hiredApplication.status !== 'hired') {
+    const businessActor = { id: seededUsers.business._id.toString(), role: 'business' };
+    for (const targetStatus of ['viewed', 'shortlisted', 'hired']) {
+      hiredApplication = await transitionApplicationStatus(
+        hiredApplication,
+        targetStatus,
+        businessActor,
+      );
+    }
+  }
   console.log('Seeded hired application: seeker <-> business');
 
   await mongoose.connection.close();

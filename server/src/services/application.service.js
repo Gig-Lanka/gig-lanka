@@ -1,6 +1,7 @@
+import mongoose from 'mongoose';
 import { ApiError } from '../utils/ApiError.js';
 import { Gig } from '../models/gig.model.js';
-import { REJECTION_REASON_CODES } from '../models/application.model.js';
+import { Application, REJECTION_REASON_CODES } from '../models/application.model.js';
 
 // Source status -> target status -> which kind of actor may trigger that
 // move. Modeled as data, not a chain of conditionals, so Sprint 2's hiring
@@ -193,4 +194,29 @@ export const transitionApplicationStatus = async (application, targetStatus, act
   }
 
   return application;
+};
+
+// The read side of the boundary with Reviews (GL-195): a review is created
+// against an application id, not a user id, and needs to know who the two
+// parties are and what status the application is at. This is the only path
+// that boundary is allowed to take — callers outside this component must
+// never import application.model.js directly to get there.
+export const getApplicationWithParties = async (id) => {
+  if (!mongoose.isValidObjectId(id)) {
+    throw new ApiError(404, 'NOT_FOUND', 'Application not found.');
+  }
+
+  const application = await Application.findById(id);
+
+  if (!application) {
+    throw new ApiError(404, 'NOT_FOUND', 'Application not found.');
+  }
+
+  const gig = await Gig.findById(application.gig);
+
+  return {
+    application,
+    applicantId: application.applicant.toString(),
+    businessId: gig?.postedBy?.toString(),
+  };
 };
