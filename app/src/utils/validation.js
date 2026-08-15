@@ -65,6 +65,17 @@ export function validateImageFile({ fileSize, mimeType }) {
   return null;
 }
 
+// Mirrors docs/api-contract.md §12.1's review text rule — trimmed before the
+// length check, so an all-whitespace string fails the minimum the same way
+// an empty one does.
+export const REVIEW_TEXT_MIN_LENGTH = 20;
+export const REVIEW_TEXT_MAX_LENGTH = 1000;
+
+export function isValidReviewText(text) {
+  const trimmedLength = (text || '').trim().length;
+  return trimmedLength >= REVIEW_TEXT_MIN_LENGTH && trimmedLength <= REVIEW_TEXT_MAX_LENGTH;
+}
+
 function parseDateOnly(value) {
   const [year, month, day] = value.split('-').map(Number);
   return new Date(year, month - 1, day);
