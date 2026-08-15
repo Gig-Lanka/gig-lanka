@@ -10,6 +10,7 @@ import { useRoute } from '@react-navigation/native';
 import { RateFlowProvider } from './RateFlowContext';
 import RateSubjectScreen from './RateSubjectScreen';
 import RatingCategoriesScreen from './RatingCategoriesScreen';
+import RatingConfirmationScreen from './RatingConfirmationScreen';
 import WrittenReviewScreen from './WrittenReviewScreen';
 
 const Stack = createNativeStackNavigator();
@@ -24,6 +25,11 @@ export default function RateFlowNavigator() {
         <Stack.Screen name="RateSubject" component={RateSubjectScreen} />
         <Stack.Screen name="RatingCategories" component={RatingCategoriesScreen} />
         <Stack.Screen name="WrittenReview" component={WrittenReviewScreen} />
+        <Stack.Screen
+          name="RatingConfirmation"
+          component={RatingConfirmationScreen}
+          options={{ gestureEnabled: false }}
+        />
       </Stack.Navigator>
     </RateFlowProvider>
   );
