@@ -336,3 +336,24 @@ export const getApplicationById = async (id, actor) => {
     application: { ...application.toJSON(), gig: toGigSummary(gig) },
   };
 };
+
+// GL-184: moves an application to Withdrawn through transitionApplicationStatus
+// (GL-179) — never a direct status write. That function already enforces
+// "only the applicant" (403 for anyone else, including the business or a
+// different seeker) and "only from Applied, Viewed or Shortlisted" (a Hired
+// application has no outgoing move in TRANSITION_RULES, so it falls through
+// to 409 INVALID_APPLICATION_TRANSITION — the same guard every other
+// terminal status gets, not a withdraw-specific check). It also decrements
+// the applicant count in the same operation, since Withdrawn leaves the live
+// set. The application is never deleted or hidden — it stays visible to the
+// business exactly where it was, just with a new status.
+export const withdrawApplication = async (id, actor) => {
+  const { application } = await getApplicationWithParties(id);
+
+  const updated = await transitionApplicationStatus(application, 'withdrawn', actor);
+  const gig = await Gig.findById(updated.gig);
+
+  return {
+    application: { ...updated.toJSON(), gig: toGigSummary(gig) },
+  };
+};

@@ -3,6 +3,7 @@ import {
   applyToGig,
   getMyApplications,
   getApplication,
+  withdrawApplication,
 } from '../controllers/application.controller.js';
 import { validate } from '../middleware/validate.middleware.js';
 import { requireAuth, requireRole } from '../middleware/auth.middleware.js';
@@ -29,5 +30,11 @@ router.get('/applications/mine', requireAuth, requireRole('seeker'), getMyApplic
 // one application; ownership is checked in the service, after existence, so
 // a missing id 404s before a wrong party ever sees a 403.
 router.get('/applications/:id', requireAuth, getApplication);
+
+// GL-184. requireRole('seeker') fails fast on a business token; which
+// specific seeker owns the application is then checked inside
+// transitionApplicationStatus, the same layering gig.routes.js uses for
+// close/delete (role gate at the route, ownership in the service).
+router.patch('/applications/:id/withdraw', requireAuth, requireRole('seeker'), withdrawApplication);
 
 export default router;
