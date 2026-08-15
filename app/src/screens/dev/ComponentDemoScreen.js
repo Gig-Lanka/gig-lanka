@@ -22,6 +22,7 @@ import TextInput from '../../components/ui/TextInput';
 import GigForm, { createEmptyGigFormValues } from '../../components/gig/GigForm';
 import CategoryChipGroup from '../../components/review/CategoryChipGroup';
 import RatingBars from '../../components/review/RatingBars';
+import RatingSummary from '../../components/review/RatingSummary';
 import ReviewCard from '../../components/review/ReviewCard';
 import StarRating from '../../components/review/StarRating';
 import { BUSINESS_REVIEW_CATEGORIES, YOUTH_WORKER_REVIEW_CATEGORIES } from '../../constants/enums';
@@ -471,6 +472,37 @@ function RatingBarsSection() {
   );
 }
 
+function RatingSummarySection() {
+  return (
+    <Section title="RatingSummary — GL-201">
+      <Text className="text-sm text-text-secondary">No reviews</Text>
+      <RatingSummary rating={{ averageRating: 0, reviewCount: 0, topCategories: [] }} />
+
+      <Text className="mt-3 text-sm text-text-secondary">Small number of reviews</Text>
+      <RatingSummary
+        rating={{
+          averageRating: 4.3,
+          reviewCount: 3,
+          topCategories: ['communication'],
+          distribution: { 5: 2, 4: 1, 3: 0, 2: 0, 1: 0 },
+        }}
+      />
+
+      <Text className="mt-3 text-sm text-text-secondary">
+        Large number of reviews — full set of categories
+      </Text>
+      <RatingSummary
+        rating={{
+          averageRating: 4.8,
+          reviewCount: 128,
+          topCategories: YOUTH_WORKER_REVIEW_CATEGORIES.map((category) => category.value),
+          distribution: { 5: 96, 4: 22, 3: 7, 2: 2, 1: 1 },
+        }}
+      />
+    </Section>
+  );
+}
+
 function GigFormSection() {
   const [values, setValues] = useState(createEmptyGigFormValues());
 
@@ -741,6 +773,7 @@ export default function ComponentDemoScreen() {
       <ReviewCardSection />
       <CategoryChipGroupSection />
       <RatingBarsSection />
+      <RatingSummarySection />
       <GigFormSection />
       <GigFormRulesSection />
       <SectionLabelSection />

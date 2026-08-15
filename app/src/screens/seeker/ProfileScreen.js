@@ -12,6 +12,7 @@ import Loader from '../../components/ui/Loader';
 import EntryCard from '../../components/profile/EntryCard';
 import ProfileEmptyRow from '../../components/profile/ProfileEmptyRow';
 import ProfileSectionHeader from '../../components/profile/ProfileSectionHeader';
+import RatingSummary from '../../components/review/RatingSummary';
 import SkillsRow from '../../components/profile/SkillsRow';
 import useAuth from '../../hooks/useAuth';
 import useHeroScroll from '../../hooks/useHeroScroll';
@@ -81,7 +82,16 @@ export default function ProfileScreen() {
     );
   }
 
-  const { name, photo, bio, city, skills = [], workExperience = [], education = [] } = profile;
+  const {
+    name,
+    photo,
+    bio,
+    city,
+    skills = [],
+    workExperience = [],
+    education = [],
+    ratingSummary,
+  } = profile;
 
   return (
     <View className="flex-1 bg-ink">
@@ -114,7 +124,7 @@ export default function ProfileScreen() {
         </View>
 
         <HeroSheet className="px-[22px] pb-8 pt-[22px]">
-          {/* Rating summary slot — GL-116 renders here. Nothing until it lands. */}
+          <RatingSummary rating={ratingSummary} className="mb-5" />
 
           {bio ? <Text className="text-desc leading-[21px] text-muted">{bio}</Text> : null}
 
