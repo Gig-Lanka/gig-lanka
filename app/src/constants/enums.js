@@ -47,14 +47,16 @@ export const GIG_SORT_ORDERS = freezeList([
   { value: 'starting_soon', label: 'Starting soon' },
 ]);
 
+// `terminal` follows §11.2/§11.3: hired, rejected, withdrawn and
+// closed_filled have no outgoing transition and can never be reopened.
 export const APPLICATION_STATUSES = freezeList([
-  { value: 'applied', label: 'Applied' },
-  { value: 'viewed', label: 'Viewed' },
-  { value: 'shortlisted', label: 'Shortlisted' },
-  { value: 'hired', label: 'Hired' },
-  { value: 'rejected', label: 'Rejected' },
-  { value: 'withdrawn', label: 'Withdrawn' },
-  { value: 'closed_filled', label: 'Closed – position filled' },
+  { value: 'applied', label: 'Applied', terminal: false },
+  { value: 'viewed', label: 'Viewed', terminal: false },
+  { value: 'shortlisted', label: 'Shortlisted', terminal: false },
+  { value: 'hired', label: 'Hired', terminal: true },
+  { value: 'rejected', label: 'Rejected', terminal: true },
+  { value: 'withdrawn', label: 'Withdrawn', terminal: true },
+  { value: 'closed_filled', label: 'Closed – position filled', terminal: true },
 ]);
 
 export const REJECTION_REASONS = freezeList([
