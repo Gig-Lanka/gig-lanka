@@ -1,6 +1,6 @@
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { FlatList, View } from 'react-native';
+import { FlatList, Pressable } from 'react-native';
 
 import applicationApi from '../../api/applicationApi';
 import ApplicationCard from '../../components/application/ApplicationCard';
@@ -105,9 +105,12 @@ export default function MyApplicationsScreen() {
             data={filteredApplications}
             keyExtractor={(application) => application.id}
             renderItem={({ item }) => (
-              <View className="mb-[10px]">
+              <Pressable
+                className="mb-[10px]"
+                onPress={() => navigation.navigate('ApplicationDetail', { applicationId: item.id })}
+              >
                 <ApplicationCard application={item} />
-              </View>
+              </Pressable>
             )}
             contentContainerClassName="flex-grow pb-6"
             refreshing={refreshing}
