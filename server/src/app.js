@@ -23,7 +23,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/gigs', gigRoutes);
 app.use('/api/profiles', profileRoutes);
 app.use('/api/uploads', uploadRoutes);
-app.use('/api/applications', reviewRoutes);
+app.use('/api', reviewRoutes);
 
 app.use(notFound);
 app.use(errorHandler);
