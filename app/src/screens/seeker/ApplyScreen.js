@@ -3,9 +3,11 @@ import { ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 
+import applicationApi from '../../api/applicationApi';
 import gigApi from '../../api/gigApi';
 import { profileApi } from '../../api';
 import Avatar from '../../components/ui/Avatar';
+import Button from '../../components/ui/Button';
 import EmptyState from '../../components/ui/EmptyState';
 import Loader from '../../components/ui/Loader';
 import Notice from '../../components/ui/Notice';
@@ -19,6 +21,13 @@ import { formatDateRange, formatDeadline, formatPay } from '../../utils/format';
 const STATUS = { LOADING: 'loading', READY: 'ready', ERROR: 'error', NOT_FOUND: 'not_found' };
 
 const LOAD_ERROR_MESSAGE = 'Could not load this screen. Check your connection and try again.';
+
+// A generic fallback only — §11.7's four failure paths (gig closed,
+// duplicate, wrong role, guest) each get their own readable message from
+// GL-187, which branches this catch block further. This is what shows for
+// anything else, and whenever the server's own message is missing.
+const GENERIC_SUBMIT_ERROR =
+  'Could not submit your application. Check your connection and try again.';
 
 // Same signal the server recomputes at submission time (§11.7's
 // `profileIncomplete`) — a profile with neither is thin, and the seeker is
@@ -37,6 +46,8 @@ export default function ApplyScreen() {
   const [profile, setProfile] = useState(null);
   const [status, setStatus] = useState(STATUS.LOADING);
   const [reloadToken, setReloadToken] = useState(0);
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState('');
 
   // Same refetch-on-focus pattern as GigDetailScreen/ProfileScreen — bumping
   // reloadToken changes this callback's identity, which is what makes
@@ -74,6 +85,23 @@ export default function ApplyScreen() {
   );
 
   const handleBack = () => navigation.goBack();
+
+  async function handleSubmit() {
+    // Belt-and-braces alongside Button's own `loading` → disabled onPress:
+    // the guard that actually has to hold is here, not in the JSX.
+    if (submitting) return;
+
+    setFormError('');
+    setSubmitting(true);
+    try {
+      const { application } = await applicationApi.apply(gigId);
+      navigation.replace('ApplicationDetail', { applicationId: application.id });
+    } catch (error) {
+      setFormError(error.response?.data?.error?.message || GENERIC_SUBMIT_ERROR);
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   if (status === STATUS.LOADING) {
     return <Loader fullScreen />;
@@ -197,6 +225,17 @@ export default function ApplyScreen() {
           ) : null}
         </View>
       </ScrollView>
+
+      <View className="border-t border-line px-[22px] pb-3 pt-3">
+        {formError ? (
+          <Notice variant="error" className="mb-3">
+            {formError}
+          </Notice>
+        ) : null}
+        <Button onPress={handleSubmit} loading={submitting}>
+          Submit application
+        </Button>
+      </View>
     </SafeAreaView>
   );
 }
