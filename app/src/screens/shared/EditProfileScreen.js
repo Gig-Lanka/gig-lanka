@@ -10,6 +10,7 @@ import Loader from '../../components/ui/Loader';
 import Notice from '../../components/ui/Notice';
 import ScreenHeader from '../../components/ui/ScreenHeader';
 import TextInput from '../../components/ui/TextInput';
+import AvatarPicker from '../../components/profile/AvatarPicker';
 import SkillsEditor from '../../components/profile/SkillsEditor';
 import useAuth from '../../hooks/useAuth';
 import { PROFILE_BIO_MAX_LENGTH, validateEditProfileForm } from '../../utils/validation';
@@ -38,6 +39,10 @@ export default function EditProfileScreen() {
   const [status, setStatus] = useState(STATUS.LOADING);
   const [reloadToken, setReloadToken] = useState(0);
   const [passthrough, setPassthrough] = useState({});
+  // Local preview of a freshly picked photo — GL-152 only picks and
+  // validates the file. Actually uploading it and persisting the URL onto
+  // the profile (so it survives navigating away) is GL-153.
+  const [pickedPhotoUri, setPickedPhotoUri] = useState(null);
 
   const [name, setName] = useState('');
   const [bio, setBio] = useState('');
@@ -72,6 +77,7 @@ export default function EditProfileScreen() {
           setCity(data.city ?? '');
           setSkills(data.skills ?? []);
           setCategory(data.category ?? '');
+          setPickedPhotoUri(null);
           setErrors({});
           setFormError('');
           setStatus(STATUS.READY);
@@ -165,6 +171,14 @@ export default function EditProfileScreen() {
         contentContainerClassName="px-[22px] pb-6"
         keyboardShouldPersistTaps="handled"
       >
+        <AvatarPicker
+          uri={pickedPhotoUri || passthrough.photo}
+          name={name}
+          square={isBusiness}
+          disabled={submitting}
+          onImageSelected={(asset) => setPickedPhotoUri(asset.uri)}
+        />
+
         <TextInput
           label={isBusiness ? 'Business name' : 'Display name'}
           placeholder={isBusiness ? 'Your business name' : 'Your name'}
