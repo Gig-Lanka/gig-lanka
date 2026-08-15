@@ -67,11 +67,17 @@ export default function RootNavigator() {
   // false → true, guarded so it can't loop.
   const [prevStatus, setPrevStatus] = useState(status);
   const [wasAuthenticated, setWasAuthenticated] = useState(status === AUTH_STATUS.AUTHENTICATED);
+  // Browsing without an account (GL-172) is a third leaf under
+  // UNAUTHENTICATED, not a fourth AUTH_STATUS — signing in for real still
+  // goes through the same bootstrap/login/logout status transitions either
+  // way, so it stays local UI state here instead of touching AuthContext.
+  const [guestMode, setGuestMode] = useState(false);
 
   if (status !== prevStatus) {
     setPrevStatus(status);
     if (status === AUTH_STATUS.AUTHENTICATED) {
       setWasAuthenticated(true);
+      setGuestMode(false);
     }
   }
 
@@ -83,5 +89,14 @@ export default function RootNavigator() {
     return <AppStack role={user?.role} />;
   }
 
-  return <AuthStack initialRouteName={wasAuthenticated ? 'Login' : 'RoleSelect'} />;
+  if (guestMode) {
+    return <SeekerTabs guest onSignIn={() => setGuestMode(false)} />;
+  }
+
+  return (
+    <AuthStack
+      initialRouteName={wasAuthenticated ? 'Login' : 'RoleSelect'}
+      onContinueAsGuest={() => setGuestMode(true)}
+    />
+  );
 }
