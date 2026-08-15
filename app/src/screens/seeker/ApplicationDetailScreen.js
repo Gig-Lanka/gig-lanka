@@ -5,6 +5,7 @@ import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/nativ
 
 import applicationApi from '../../api/applicationApi';
 import ApplicationTracker from '../../components/application/ApplicationTracker';
+import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import EmptyState from '../../components/ui/EmptyState';
 import HeroHeader, { HeroSheet, HeroStickyBar } from '../../components/ui/HeroHeader';
 import Loader from '../../components/ui/Loader';
@@ -17,6 +18,10 @@ import { formatPay } from '../../utils/format';
 const STATUS = { LOADING: 'loading', READY: 'ready', ERROR: 'error' };
 
 const LOAD_ERROR_MESSAGE = 'Could not load this application. Check your connection and try again.';
+
+// §11.3: withdraw is only reachable from these three — hired, rejected,
+// withdrawn and closed_filled are all terminal and have no outgoing move.
+const WITHDRAWABLE_STATUSES = new Set(['applied', 'viewed', 'shortlisted']);
 
 function statusLabel(value) {
   return APPLICATION_STATUSES.find((entry) => entry.value === value)?.label ?? value;
@@ -35,6 +40,9 @@ export default function ApplicationDetailScreen() {
   const [application, setApplication] = useState(null);
   const [status, setStatus] = useState(STATUS.LOADING);
   const [reloadToken, setReloadToken] = useState(0);
+  const [withdrawVisible, setWithdrawVisible] = useState(false);
+  const [withdrawing, setWithdrawing] = useState(false);
+  const [withdrawError, setWithdrawError] = useState(null);
 
   // Refetches on every focus, not just mount — same pattern as GigDetailScreen
   // (GL-172), and doubles as the retry mechanism via reloadToken.
@@ -64,6 +72,27 @@ export default function ApplicationDetailScreen() {
   );
 
   const handleBack = () => navigation.goBack();
+
+  async function handleConfirmWithdraw() {
+    setWithdrawing(true);
+    setWithdrawError(null);
+    try {
+      const { application: updated } = await applicationApi.withdrawApplication(application.id);
+      // Updates in place — no refetch — so this matches the row on the list
+      // screen, which silently refetches on its own next focus (GL-188).
+      setApplication(updated);
+      setWithdrawVisible(false);
+    } catch (error) {
+      const isConflict = error.response?.status === 409;
+      setWithdrawError(
+        isConflict
+          ? "This application's status has already changed, so it can no longer be withdrawn."
+          : 'Could not withdraw this application. Try again.',
+      );
+    } finally {
+      setWithdrawing(false);
+    }
+  }
 
   if (status === STATUS.LOADING) {
     return <Loader fullScreen />;
@@ -151,6 +180,22 @@ export default function ApplicationDetailScreen() {
               <Text className="mt-2 text-desc text-muted">This gig is no longer available.</Text>
             )}
           </View>
+
+          {WITHDRAWABLE_STATUSES.has(applicationStatus) ? (
+            <View className="mt-5">
+              <Pressable
+                onPress={() => setWithdrawVisible(true)}
+                className="h-[52px] items-center justify-center rounded-ds-lg border-[1.5px] border-danger bg-paper"
+              >
+                <Text className="text-body font-semibold text-danger-ink">
+                  Withdraw application
+                </Text>
+              </Pressable>
+              {withdrawError ? (
+                <Text className="mt-2 text-[12.5px] text-danger-ink">{withdrawError}</Text>
+              ) : null}
+            </View>
+          ) : null}
         </HeroSheet>
       </Animated.ScrollView>
 
@@ -163,6 +208,17 @@ export default function ApplicationDetailScreen() {
           <HeroStickyBar title={gig?.title ?? 'Application'} onBack={handleBack} visible />
         </SafeAreaView>
       </Animated.View>
+
+      <ConfirmDialog
+        visible={withdrawVisible}
+        destructive
+        title="Withdraw this application?"
+        body="This can't be undone, and you won't be able to apply to this gig again."
+        confirmLabel={withdrawing ? 'Withdrawing…' : 'Withdraw'}
+        cancelLabel="Keep my application"
+        onConfirm={handleConfirmWithdraw}
+        onCancel={() => setWithdrawVisible(false)}
+      />
     </View>
   );
 }
