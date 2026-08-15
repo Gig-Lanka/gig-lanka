@@ -6,6 +6,7 @@ import BusinessTabs from './BusinessTabs';
 import SeekerTabs from './SeekerTabs';
 import Loader from '../components/ui/Loader';
 import ComponentDemoScreen from '../screens/dev/ComponentDemoScreen';
+import ApplicationDetailScreen from '../screens/seeker/ApplicationDetailScreen';
 import EditGigScreen from '../screens/business/EditGigScreen';
 import EditProfileScreen from '../screens/shared/EditProfileScreen';
 import EducationFormScreen from '../screens/seeker/EducationFormScreen';
@@ -42,6 +43,7 @@ function AppStack({ role }) {
           <Stack.Screen name="ExperienceForm" component={ExperienceFormScreen} />
           <Stack.Screen name="ManageEducation" component={ManageEducationScreen} />
           <Stack.Screen name="EducationForm" component={EducationFormScreen} />
+          <Stack.Screen name="ApplicationDetail" component={ApplicationDetailScreen} />
         </>
       )}
 
