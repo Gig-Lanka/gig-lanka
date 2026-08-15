@@ -16,6 +16,7 @@ import ManageEducationScreen from '../screens/seeker/ManageEducationScreen';
 import ManageExperienceScreen from '../screens/seeker/ManageExperienceScreen';
 import PostGigScreen from '../screens/business/PostGigScreen';
 import GigDetailScreen from '../screens/shared/GigDetailScreen';
+import PublicProfileScreen from '../screens/shared/PublicProfileScreen';
 import useAuth from '../hooks/useAuth';
 import { AUTH_STATUS } from '../store/AuthContext';
 
@@ -29,6 +30,7 @@ function AppStack({ role }) {
       <Stack.Screen name="Main" component={RoleTabs} />
       <Stack.Screen name="EditProfile" component={EditProfileScreen} />
       <Stack.Screen name="GigDetail" component={GigDetailScreen} />
+      <Stack.Screen name="PublicProfile" component={PublicProfileScreen} />
       {role === 'business' ? (
         <>
           <Stack.Screen
