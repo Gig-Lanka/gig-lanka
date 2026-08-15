@@ -13,6 +13,7 @@ import ExperienceFormScreen from '../screens/seeker/ExperienceFormScreen';
 import ManageEducationScreen from '../screens/seeker/ManageEducationScreen';
 import ManageExperienceScreen from '../screens/seeker/ManageExperienceScreen';
 import PostGigScreen from '../screens/business/PostGigScreen';
+import GigDetailScreen from '../screens/shared/GigDetailScreen';
 import useAuth from '../hooks/useAuth';
 import { AUTH_STATUS } from '../store/AuthContext';
 
@@ -25,6 +26,7 @@ function AppStack({ role }) {
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="Main" component={RoleTabs} />
       <Stack.Screen name="EditProfile" component={EditProfileScreen} />
+      <Stack.Screen name="GigDetail" component={GigDetailScreen} />
       {role === 'business' ? (
         <>
           <Stack.Screen
@@ -89,8 +91,18 @@ export default function RootNavigator() {
     return <AppStack role={user?.role} />;
   }
 
+  // Wrapped in its own Stack.Navigator (rather than rendering SeekerTabs
+  // bare, as before GL-122) so a guest can still reach GigDetail from
+  // Browse — a screen outside the tab navigator itself.
   if (guestMode) {
-    return <SeekerTabs guest onSignIn={() => setGuestMode(false)} />;
+    return (
+      <Stack.Navigator screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="Main">
+          {() => <SeekerTabs guest onSignIn={() => setGuestMode(false)} />}
+        </Stack.Screen>
+        <Stack.Screen name="GigDetail" component={GigDetailScreen} />
+      </Stack.Navigator>
+    );
   }
 
   return (
