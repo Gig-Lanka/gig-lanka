@@ -17,7 +17,6 @@ import ManageExperienceScreen from '../screens/seeker/ManageExperienceScreen';
 import PostGigScreen from '../screens/business/PostGigScreen';
 import GigDetailScreen from '../screens/shared/GigDetailScreen';
 import RateFlowNavigator from '../screens/shared/rate/RateFlowNavigator';
-import RateFlowDevEntryScreen from '../screens/dev/RateFlowDevEntryScreen';
 import useAuth from '../hooks/useAuth';
 import { AUTH_STATUS } from '../store/AuthContext';
 
@@ -55,15 +54,11 @@ function AppStack({ role }) {
       )}
 
       {__DEV__ ? (
-        <>
-          <Stack.Screen
-            name="ComponentDemo"
-            component={ComponentDemoScreen}
-            options={{ headerShown: true, title: 'UI Kit' }}
-          />
-          {/* TEMPORARY — GL-206 verification only, must not merge. */}
-          <Stack.Screen name="RateFlowDevEntry" component={RateFlowDevEntryScreen} />
-        </>
+        <Stack.Screen
+          name="ComponentDemo"
+          component={ComponentDemoScreen}
+          options={{ headerShown: true, title: 'UI Kit' }}
+        />
       ) : null}
     </Stack.Navigator>
   );
