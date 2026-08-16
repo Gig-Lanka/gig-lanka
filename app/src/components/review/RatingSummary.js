@@ -8,7 +8,7 @@ import RatingBars from './RatingBars';
 import StarRating from './StarRating';
 
 // Combined so a topCategories value resolves to a label without checking
-// which role's vocabulary it came from — the two lists don't collide.
+// which role's vocabulary it came from - the two lists don't collide.
 const CATEGORY_LABELS = [...BUSINESS_REVIEW_CATEGORIES, ...YOUTH_WORKER_REVIEW_CATEGORIES].reduce(
   (labels, category) => ({ ...labels, [category.value]: category.label }),
   {},
@@ -72,7 +72,7 @@ export default function RatingSummary({ rating, className, ...props }) {
         </View>
       ) : null}
 
-      {/* No reviews list screen until Sprint 2 — stays disabled, no onPress. */}
+      {/* No reviews list screen until Sprint 2 - stays disabled, no onPress. */}
       <Button variant="small" disabled>
         {`See all ${reviewCount} ${reviewLabel}`}
       </Button>

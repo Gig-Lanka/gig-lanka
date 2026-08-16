@@ -1,4 +1,4 @@
-// Real auth client — GL-74. Same five function signatures as
+// Real auth client - GL-74. Same five function signatures as
 // ./mock/authApi.js so index.js can swap between them with no other code
 // change. Errors propagate as-is: axios rejections already carry
 // `error.response.data.error` in the same shape the mock fakes.

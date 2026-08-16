@@ -97,7 +97,7 @@ export default function PublicProfileScreen() {
     );
   }
 
-  // The public shape has no role field (docs/api-contract.md §8.2) — a
+  // The public shape has no role field (docs/api-contract.md §8.2) - a
   // seeker subject always carries `skills` as an array, a business subject
   // never does, so that presence is the only signal available for which
   // avatar shape and sections to render here.
@@ -147,7 +147,7 @@ export default function PublicProfileScreen() {
           {bio ? <Text className="text-desc leading-[21px] text-muted">{bio}</Text> : null}
 
           {/*
-            Skill Trial badges — read-only, no route into anything. Same
+            Skill Trial badges - read-only, no route into anything. Same
             discipline as the own-profile screens: the per-entry shape isn't
             published by Application & Hiring yet and skillTrialResults is
             empty until Sprint 3, so nothing is rendered here rather than a

@@ -325,7 +325,7 @@ export default function GigForm({
           value={values.city}
           onChangeText={(text) => set('city', text)}
           error={errors.city}
-          hint={isRemote ? 'Not required — this gig is remote.' : undefined}
+          hint={isRemote ? 'Not required - this gig is remote.' : undefined}
           disabled={disabled}
         />
 

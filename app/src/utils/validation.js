@@ -65,7 +65,7 @@ export function validateImageFile({ fileSize, mimeType }) {
   return null;
 }
 
-// Mirrors docs/api-contract.md §12.1's review text rule — trimmed before the
+// Mirrors docs/api-contract.md §12.1's review text rule - trimmed before the
 // length check, so an all-whitespace string fails the minimum the same way
 // an empty one does.
 export const REVIEW_TEXT_MIN_LENGTH = 20;
@@ -90,8 +90,8 @@ const TITLE_MAX_LENGTH = 80;
 const DESCRIPTION_MIN_LENGTH = 20;
 const DESCRIPTION_MAX_LENGTH = 2000;
 
-// Mirrors GL-158's gig validation client-side — title/description length
-// plus GL-107's four non-negotiable rules — so the form rejects them before
+// Mirrors GL-158's gig validation client-side - title/description length
+// plus GL-107's four non-negotiable rules - so the form rejects them before
 // a request is ever sent, not just relies on the picker/keyboard to make
 // them hard to violate. See GigForm.js. Shared by PostGigScreen and (GL-120)
 // EditGigScreen since both submit the same shape.
@@ -192,7 +192,7 @@ const QUALIFICATION_MAX_LENGTH = 80;
 // Mirrors docs/api-contract.md §8.4's education rule: institution and
 // qualification are required, dates are optional (no `ongoing` flag exists
 // for this entry type), and an end date earlier than its start date is
-// rejected — same rule as workExperience.
+// rejected - same rule as workExperience.
 export function validateEducationEntry({ institution, qualification, startDate, endDate }) {
   const errors = {};
   const trimmedInstitution = (institution || '').trim();

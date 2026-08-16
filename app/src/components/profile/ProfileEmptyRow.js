@@ -4,7 +4,7 @@ import Button from '../ui/Button';
 
 /**
  * Inline prompt for an empty repeatable section (skills, work experience,
- * education) — invites the first entry instead of just showing nothing.
+ * education) - invites the first entry instead of just showing nothing.
  * Not `EmptyState` from `components/ui`: that one is a full-screen block,
  * this sits inside a section of an otherwise-populated screen.
  */

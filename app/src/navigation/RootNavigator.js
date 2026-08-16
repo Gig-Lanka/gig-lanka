@@ -66,21 +66,21 @@ function AppStack({ role }) {
   );
 }
 
-// Auth and app stacks are alternatives, not destinations you navigate to —
+// Auth and app stacks are alternatives, not destinations you navigate to -
 // only one is ever mounted, so there's no back/swipe path from one into the other.
 export default function RootNavigator() {
   const { status, user } = useAuth();
 
   // A brand-new install should land on RoleSelect (choose seeker/business,
-  // sign up) — but anyone who signs out after having been authenticated
+  // sign up) - but anyone who signs out after having been authenticated
   // already has an account, so they belong on Login instead. Adjusted
   // during render rather than in an effect, per React's own pattern for
-  // deriving state from a prior render's value — it only ever flips
+  // deriving state from a prior render's value - it only ever flips
   // false → true, guarded so it can't loop.
   const [prevStatus, setPrevStatus] = useState(status);
   const [wasAuthenticated, setWasAuthenticated] = useState(status === AUTH_STATUS.AUTHENTICATED);
   // Browsing without an account (GL-172) is a third leaf under
-  // UNAUTHENTICATED, not a fourth AUTH_STATUS — signing in for real still
+  // UNAUTHENTICATED, not a fourth AUTH_STATUS - signing in for real still
   // goes through the same bootstrap/login/logout status transitions either
   // way, so it stays local UI state here instead of touching AuthContext.
   const [guestMode, setGuestMode] = useState(false);
@@ -103,7 +103,7 @@ export default function RootNavigator() {
 
   // Wrapped in its own Stack.Navigator (rather than rendering SeekerTabs
   // bare, as before GL-122) so a guest can still reach GigDetail from
-  // Browse — a screen outside the tab navigator itself.
+  // Browse - a screen outside the tab navigator itself.
   if (guestMode) {
     return (
       <Stack.Navigator screenOptions={{ headerShown: false }}>

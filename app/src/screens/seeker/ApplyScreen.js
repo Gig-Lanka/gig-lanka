@@ -25,14 +25,14 @@ const LOAD_ERROR_MESSAGE = 'Could not load this screen. Check your connection an
 
 const BUSINESS_REFUSAL_MESSAGE = 'Only job seekers can apply for gigs.';
 
-// The fallback for anything §11.7 doesn't name a specific message for —
+// The fallback for anything §11.7 doesn't name a specific message for -
 // GIG_CLOSED, APPLICATION_ALREADY_EXISTS and FORBIDDEN are all branched
 // explicitly in handleSubmit's catch block below.
 const GENERIC_SUBMIT_ERROR =
   'Could not submit your application. Check your connection and try again.';
 
 // Same signal the server recomputes at submission time (§11.7's
-// `profileIncomplete`) — a profile with neither is thin, and the seeker is
+// `profileIncomplete`) - a profile with neither is thin, and the seeker is
 // warned before sending, not after. This never blocks the apply action.
 function isThinProfile(profile) {
   return (profile.workExperience?.length ?? 0) === 0 && (profile.education?.length ?? 0) === 0;
@@ -43,7 +43,7 @@ export default function ApplyScreen() {
   const { params } = useRoute();
   const { gigId } = params;
   const { user } = useAuth();
-  // A guest can never actually mount this screen — it's only registered in
+  // A guest can never actually mount this screen - it's only registered in
   // the authenticated seeker stack (RootNavigator.js), and GigDetailScreen
   // routes a guest's tap on Apply to sign-in instead of navigating here. The
   // seeker check below is what's actually reachable: a business account
@@ -58,7 +58,7 @@ export default function ApplyScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState(null);
 
-  // Same refetch-on-focus pattern as GigDetailScreen/ProfileScreen — bumping
+  // Same refetch-on-focus pattern as GigDetailScreen/ProfileScreen - bumping
   // reloadToken changes this callback's identity, which is what makes
   // useFocusEffect run it again for the Retry button. Skipped entirely for
   // a non-seeker: there's nothing to preview and no point spending the
@@ -114,7 +114,7 @@ export default function ApplyScreen() {
       if (apiError?.code === 'GIG_CLOSED') {
         setFormError({
           message:
-            "This gig closed while you were applying — it's no longer accepting applications.",
+            "This gig closed while you were applying - it's no longer accepting applications.",
         });
       } else if (apiError?.code === 'APPLICATION_ALREADY_EXISTS') {
         setFormError({
@@ -260,7 +260,7 @@ export default function ApplyScreen() {
           {thinProfile ? (
             <ProfileEmptyRow
               className="mt-3"
-              message="Your profile has no work experience or education yet. Adding some gives the business more to go on — you can still apply without it."
+              message="Your profile has no work experience or education yet. Adding some gives the business more to go on - you can still apply without it."
               actionLabel="Update your profile"
               onAction={() => navigation.navigate('Main', { screen: 'Profile' })}
             />

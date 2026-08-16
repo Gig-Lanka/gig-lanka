@@ -1,4 +1,4 @@
-// Gig client — GL-107. The only place E3 screens talk to the network for
+// Gig client - GL-107. The only place E3 screens talk to the network for
 // gigs; screens never import axios or touch a token, `client` handles auth
 // headers the same way it does for auth (see ./client.js).
 // Covers all seven gig endpoints E3 needs this sprint (docs/api-contract.md

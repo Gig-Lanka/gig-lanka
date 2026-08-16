@@ -52,7 +52,7 @@ export default function GigDetailScreen({ onSignIn }) {
   const [status, setStatus] = useState(STATUS.LOADING);
   const [reloadToken, setReloadToken] = useState(0);
 
-  // Refetches on every focus, not just on mount — same rationale as the
+  // Refetches on every focus, not just on mount - same rationale as the
   // profile screens (GL-145's edit screen calls goBack() rather than
   // passing data back), and it doubles as the retry mechanism: bumping
   // reloadToken changes this callback's identity, which is what makes
@@ -143,7 +143,7 @@ export default function GigDetailScreen({ onSignIn }) {
   const location = formatLocation({ isRemote: remote, area, city });
   const deadline = applicationsCloseDate ? formatDeadline(applicationsCloseDate) : null;
 
-  // GL-155's public profile screen may not be registered yet — routing into
+  // GL-155's public profile screen may not be registered yet - routing into
   // it unconditionally would throw on tap ("was not handled by any
   // navigator"). Checking the enclosing stack's own route names is what
   // keeps the block inert until that screen actually exists, with nothing
@@ -154,14 +154,14 @@ export default function GigDetailScreen({ onSignIn }) {
     : undefined;
 
   // Four states, checked in this order because each overrides the ones
-  // below it — an owner sees their edit route no matter the gig's status,
+  // below it - an owner sees their edit route no matter the gig's status,
   // and a closed gig reads the same to a guest as to a seeker:
-  //  1. The owning business — apply is never offered, editing is.
-  //  2. Any other viewer, gig not open — "Applications closed", disabled,
+  //  1. The owning business - apply is never offered, editing is.
+  //  2. Any other viewer, gig not open - "Applications closed", disabled,
   //     never hidden.
-  //  3. A guest, gig open — routes to sign-in; reading is public, applying
+  //  3. A guest, gig open - routes to sign-in; reading is public, applying
   //     is not.
-  //  4. A signed-in seeker, gig open — routes to GL-123's apply screen.
+  //  4. A signed-in seeker, gig open - routes to GL-123's apply screen.
   // Display-only: the server is what actually enforces who may apply.
   const isOwner = user?.role === 'business' && business?.id === user?.id;
   const isSeeker = user?.role === 'seeker';
@@ -178,7 +178,7 @@ export default function GigDetailScreen({ onSignIn }) {
   } else if (!user) {
     primaryAction = { label: 'Apply for this gig', onPress: () => onSignIn?.() };
   } else if (isSeeker) {
-    // GL-123's apply screen hasn't merged yet — present but deliberately
+    // GL-123's apply screen hasn't merged yet - present but deliberately
     // left unwired rather than pointed at any other screen.
     primaryAction = { label: 'Apply for this gig' };
   }

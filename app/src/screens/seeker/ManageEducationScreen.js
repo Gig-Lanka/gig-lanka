@@ -14,13 +14,13 @@ import { formatDateRange } from '../../utils/format';
 
 const STATUS = { LOADING: 'loading', READY: 'ready', ERROR: 'error' };
 
-// Fields other than education that PUT /api/profiles/me still needs — left
+// Fields other than education that PUT /api/profiles/me still needs - left
 // out of the body, a PUT clears them rather than preserving them
 // (docs/api-contract.md §8.4). Fetched alongside the list so a delete from
 // this screen can PUT the full profile without a second round trip.
 const PASSTHROUGH_FIELDS = ['name', 'photo', 'bio', 'city', 'skills', 'workExperience'];
 
-// Newest-first by start date — same convention as ManageExperienceScreen.
+// Newest-first by start date - same convention as ManageExperienceScreen.
 function sortNewestFirst(entries) {
   return [...entries].sort((a, b) => {
     if (!a.startDate) return 1;
@@ -41,7 +41,7 @@ export default function ManageEducationScreen() {
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
 
-  // Refetches on every focus — this is what makes an entry added or edited
+  // Refetches on every focus - this is what makes an entry added or edited
   // on EducationFormScreen show up here on return, matching the pattern
   // ManageExperienceScreen already uses.
   useFocusEffect(
@@ -79,7 +79,7 @@ export default function ManageEducationScreen() {
     setDeleteError('');
 
     // Built from `education` as it stands right now, not a copy from when
-    // the screen mounted — so deleting a second entry right after this one
+    // the screen mounted - so deleting a second entry right after this one
     // can't resurrect the one just removed.
     const nextEducation = education.filter((entry) => entry._id !== pendingDelete._id);
 

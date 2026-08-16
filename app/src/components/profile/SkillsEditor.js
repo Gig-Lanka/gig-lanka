@@ -5,7 +5,7 @@ import Chip from '../ui/Chip';
 import TextInput from '../ui/TextInput';
 
 /**
- * Inline skills editor for the edit-profile form (GL-148) — there is no
+ * Inline skills editor for the edit-profile form (GL-148) - there is no
  * separate skills screen. Existing skills are chips you tap to remove; the
  * field below adds one at a time.
  */

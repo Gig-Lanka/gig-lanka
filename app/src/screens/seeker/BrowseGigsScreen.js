@@ -30,7 +30,7 @@ export default function BrowseGigsScreen() {
   const hasMore = gigs.length < total;
   const hasFilter = selectedTags.length > 0;
 
-  // Narrows whatever's already loaded rather than querying the server —
+  // Narrows whatever's already loaded rather than querying the server -
   // GET /api/gigs has no filter param this sprint, and adding one is a
   // server-side change that's explicitly out of scope. Scrolling to the
   // bottom of a short filtered view still fetches further raw pages (see
@@ -42,7 +42,7 @@ export default function BrowseGigsScreen() {
 
   // Single entry point for every fetch (initial load, pull-to-refresh, load
   // more) so there is exactly one place guarding against overlapping
-  // requests — onEndReached can fire several times before state updates
+  // requests - onEndReached can fire several times before state updates
   // land, and isFetchingRef blocks every one of those beyond the first.
   const load = useCallback((targetPage, mode) => {
     if (isFetchingRef.current) return;
@@ -82,7 +82,7 @@ export default function BrowseGigsScreen() {
   }, []);
 
   // useFocusEffect rather than a plain mount effect only to keep the fetch
-  // inside an async callback rather than a synchronous setState-on-mount —
+  // inside an async callback rather than a synchronous setState-on-mount -
   // hasLoadedRef still limits it to firing once, same as a mount effect would.
   useFocusEffect(
     useCallback(() => {
@@ -116,7 +116,7 @@ export default function BrowseGigsScreen() {
     <Screen>
       <ScreenHeader title="Find a gig" />
 
-      {/* Always visible, never behind a filter sheet — schedule is the
+      {/* Always visible, never behind a filter sheet - schedule is the
           first thing this audience filters by. Room is left below for the
           Sprint 2 search field and a "Filters" entry point beside this row. */}
       <ScrollView

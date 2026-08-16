@@ -42,7 +42,7 @@ function OngoingToggleField({ value, onChange, disabled }) {
 }
 
 /**
- * One form for both adding and editing a work experience entry — the caller
+ * One form for both adding and editing a work experience entry - the caller
  * (`ExperienceFormScreen`) decides which by pre-filling `values` or not.
  * `components/ui` primitives only; the ongoing toggle and field labels are
  * specific to work experience, so it stays here rather than in `ui/`.

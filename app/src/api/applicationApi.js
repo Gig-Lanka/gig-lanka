@@ -1,4 +1,4 @@
-// Application client — E4. The only place seeker screens talk to the
+// Application client - E4. The only place seeker screens talk to the
 // network for applications; screens never import axios or touch a token,
 // `client` handles auth headers the same way it does for gigs (see
 // ./client.js). GL-188 added the list endpoint, GL-190 the single-read
@@ -14,9 +14,9 @@ async function getMyApplications() {
 }
 
 /**
- * `POST /api/gigs/:gigId/applications` — apply to a gig (§11.7). No request
+ * `POST /api/gigs/:gigId/applications` - apply to a gig (§11.7). No request
  * body: the endpoint strips every field the client might send. Resolves to
- * `{ application, profileIncomplete }` — `profileIncomplete` mirrors the
+ * `{ application, profileIncomplete }` - `profileIncomplete` mirrors the
  * same no-experience-and-no-education check the apply screen runs
  * beforehand, computed again server-side at the moment of submission.
  */

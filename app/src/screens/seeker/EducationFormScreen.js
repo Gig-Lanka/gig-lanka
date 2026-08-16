@@ -14,7 +14,7 @@ import { validateEducationEntry } from '../../utils/validation';
 
 const STATUS = { LOADING: 'loading', READY: 'ready', ERROR: 'error' };
 
-// Fields other than education that PUT /api/profiles/me still needs — left
+// Fields other than education that PUT /api/profiles/me still needs - left
 // out of the body, a PUT clears them rather than preserving them
 // (docs/api-contract.md §8.4).
 const PASSTHROUGH_FIELDS = ['name', 'photo', 'bio', 'city', 'skills', 'workExperience'];
@@ -36,7 +36,7 @@ export default function EducationFormScreen() {
   const [submitting, setSubmitting] = useState(false);
 
   // Loaded fresh every time this screen gains focus, matching
-  // ExperienceFormScreen's own pattern — the current array of entries lives
+  // ExperienceFormScreen's own pattern - the current array of entries lives
   // only on the profile document, so there's no per-entry endpoint to fetch.
   useFocusEffect(
     useCallback(() => {
