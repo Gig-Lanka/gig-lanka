@@ -9,6 +9,10 @@ import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import applicationApi from '../../../api/applicationApi';
 import gigApi from '../../../api/gigApi';
 import profileApi from '../../../api/profileApi';
+import {
+  BUSINESS_REVIEW_CATEGORIES,
+  YOUTH_WORKER_REVIEW_CATEGORIES,
+} from '../../../constants/enums';
 import useAuth from '../../../hooks/useAuth';
 import { formatLocation } from '../../../utils/format';
 
@@ -16,6 +20,13 @@ export const RATE_FLOW_STATUS = {
   LOADING: 'loading',
   READY: 'ready',
   ERROR: 'error',
+};
+
+// §6.9/§12.1 — which list applies is decided by direction alone, never by
+// anything a step lets the user flip.
+const CATEGORY_LISTS_BY_DIRECTION = {
+  seeker_to_business: BUSINESS_REVIEW_CATEGORIES,
+  business_to_seeker: YOUTH_WORKER_REVIEW_CATEGORIES,
 };
 
 const RateFlowContext = createContext(undefined);
@@ -125,6 +136,7 @@ export function RateFlowProvider({ applicationId, children }) {
       setRating,
       categories,
       setCategories,
+      categoryList: CATEGORY_LISTS_BY_DIRECTION[direction] ?? [],
       text,
       setText,
       retry: () => setReloadToken((token) => token + 1),

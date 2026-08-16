@@ -8,8 +8,9 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useRoute } from '@react-navigation/native';
 
 import { RateFlowProvider } from './RateFlowContext';
-import RateNextStepPlaceholder from './RateNextStepPlaceholder';
 import RateSubjectScreen from './RateSubjectScreen';
+import RatingCategoriesScreen from './RatingCategoriesScreen';
+import WrittenReviewScreen from './WrittenReviewScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -21,7 +22,8 @@ export default function RateFlowNavigator() {
     <RateFlowProvider applicationId={applicationId}>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         <Stack.Screen name="RateSubject" component={RateSubjectScreen} />
-        <Stack.Screen name="RateNextStepPlaceholder" component={RateNextStepPlaceholder} />
+        <Stack.Screen name="RatingCategories" component={RatingCategoriesScreen} />
+        <Stack.Screen name="WrittenReview" component={WrittenReviewScreen} />
       </Stack.Navigator>
     </RateFlowProvider>
   );

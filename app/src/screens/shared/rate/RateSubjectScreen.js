@@ -109,7 +109,7 @@ export default function RateSubjectScreen() {
           <Button
             trailingArrow
             disabled={rating === 0}
-            onPress={() => navigation.navigate('RateNextStepPlaceholder')}
+            onPress={() => navigation.navigate('RatingCategories')}
           >
             Continue
           </Button>
