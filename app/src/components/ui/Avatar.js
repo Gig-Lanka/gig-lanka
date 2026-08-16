@@ -15,16 +15,21 @@ function getInitials(name) {
   return (first + last).toUpperCase();
 }
 
-export default function Avatar({ uri, name, size = 'md', className, ...props }) {
+// A business's own avatar is square rather than round — the v3 mockup uses
+// this as the only visual marker distinguishing a business from a seeker
+// wherever an avatar appears alone, so it needs to survive independent of
+// whatever name/label sits next to it.
+export default function Avatar({ uri, name, size = 'md', square = false, className, ...props }) {
   const [failed, setFailed] = useState(false);
   const sizeStyles = SIZE_STYLES[size] ?? SIZE_STYLES.md;
+  const shape = square ? 'rounded-[24px]' : 'rounded-full';
 
   if (uri && !failed) {
     return (
       <Image
         source={{ uri }}
         onError={() => setFailed(true)}
-        className={['rounded-full', sizeStyles.box, className].filter(Boolean).join(' ')}
+        className={[shape, sizeStyles.box, className].filter(Boolean).join(' ')}
         {...props}
       />
     );
@@ -33,7 +38,8 @@ export default function Avatar({ uri, name, size = 'md', className, ...props }) 
   return (
     <View
       className={[
-        'items-center justify-center rounded-full border-[1.5px] border-line bg-haze',
+        'items-center justify-center border-[1.5px] border-line bg-haze',
+        shape,
         sizeStyles.box,
         className,
       ]

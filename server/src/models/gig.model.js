@@ -128,6 +128,17 @@ const gigSchema = new mongoose.Schema(
       default: 0,
       min: 0,
     },
+    // Sprint 2 (saving a gig) writes user ids here. Declared now, guarded now:
+    // `select: false` keeps it out of every default query, and the toJSON
+    // transform deletes it as a second line of defense, so it structurally
+    // cannot leak into a response — not even to the gig's owner — once
+    // saving actually starts writing to it.
+    savedBy: {
+      type: [mongoose.Schema.Types.ObjectId],
+      ref: 'User',
+      default: [],
+      select: false,
+    },
   },
   {
     timestamps: true,
@@ -136,6 +147,7 @@ const gigSchema = new mongoose.Schema(
         ret.id = ret._id;
         delete ret._id;
         delete ret.__v;
+        delete ret.savedBy;
         return ret;
       },
     },

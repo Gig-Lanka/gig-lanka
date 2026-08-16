@@ -6,10 +6,12 @@ import LoginScreen from '../screens/auth/LoginScreen';
 
 const Stack = createNativeStackNavigator();
 
-export default function AuthStack() {
+export default function AuthStack({ initialRouteName = 'RoleSelect', onContinueAsGuest }) {
   return (
-    <Stack.Navigator initialRouteName="RoleSelect" screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="RoleSelect" component={RoleSelectScreen} />
+    <Stack.Navigator initialRouteName={initialRouteName} screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="RoleSelect">
+        {(props) => <RoleSelectScreen {...props} onContinueAsGuest={onContinueAsGuest} />}
+      </Stack.Screen>
       <Stack.Screen name="SignUp" component={SignUpScreen} />
       <Stack.Screen name="Login" component={LoginScreen} />
     </Stack.Navigator>

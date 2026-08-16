@@ -103,10 +103,25 @@ export function HeroStickyBar({ title, onBack, visible = false, className }) {
   );
 }
 
-/** White section directly below the hero, top corners rounded at the `sheet` radius. */
+/**
+ * White section directly below the hero, top corners rounded at the `sheet`
+ * radius. Defaults to `flex-1` so it always reaches the bottom of the
+ * viewport even when its content is short (an empty profile, for example) —
+ * the screen must give the ScrollView's content container `flexGrow: 1`
+ * (NativeWind: `contentContainerClassName="grow"`) for that to take effect.
+ *
+ * That matters for the curve itself, not just layout: the mockup gets its
+ * visible curve because the whole screen frame sits on an ink-colored
+ * canvas, so the corners this rounds away reveal ink, not more white. In
+ * React Native there's no such canvas by default, so the screen must also
+ * give whatever wraps the hero + this sheet an ink background — otherwise
+ * the rounded corner reveals white-on-white and looks flat. Keeping this
+ * sheet full-height is what keeps that ink confined to the tiny corner
+ * notches instead of leaking out below short content.
+ */
 export function HeroSheet({ children, className }) {
   return (
-    <View className={['rounded-t-ds-sheet bg-paper', className].filter(Boolean).join(' ')}>
+    <View className={['flex-1 rounded-t-ds-sheet bg-paper', className].filter(Boolean).join(' ')}>
       {children}
     </View>
   );

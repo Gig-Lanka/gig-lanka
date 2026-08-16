@@ -24,7 +24,7 @@ function withThousandsSeparator(amount) {
     .replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 }
 
-function formatShortDate(date) {
+export function formatShortDate(date) {
   return `${date.getDate()} ${MONTH_ABBREVIATIONS[date.getMonth()]}`;
 }
 
@@ -87,4 +87,25 @@ export function formatLocation({ isRemote, area, city }) {
     return 'Remote';
   }
   return area ? `${area}, ${city}` : city;
+}
+
+function formatMonthYear(dateString) {
+  if (!dateString) return null;
+  const date = new Date(dateString);
+  return `${MONTH_ABBREVIATIONS[date.getMonth()]} ${date.getFullYear()}`;
+}
+
+// Work experience and education entries (docs/api-contract.md §8.1) share this
+// shape loosely: a start date, and either an end date or an ongoing flag.
+// Education has no `ongoing` field, so an entry with no end date just reads
+// as its start month rather than assuming "Present" — the contract doesn't
+// say an absent end date means current, only that the field is optional.
+export function formatDateRange({ startDate, endDate, ongoing = false }) {
+  const start = formatMonthYear(startDate);
+  const end = ongoing ? 'Present' : formatMonthYear(endDate);
+
+  if (start && end) {
+    return start === end ? start : `${start} — ${end}`;
+  }
+  return start || end || null;
 }

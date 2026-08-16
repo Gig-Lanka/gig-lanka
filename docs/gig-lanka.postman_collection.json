@@ -2,18 +2,126 @@
   "info": {
     "_postman_id": "b1a2c3d4-5e6f-4a7b-8c9d-0e1f2a3b4c5d",
     "name": "Gig Lanka API",
-    "description": "Covers the Sprint 0 auth endpoints (§5) and the Sprint 1 profile endpoints (§8) defined in docs/api-contract.md. Set baseUrl to point at a running server; accessToken/refreshToken are populated automatically by the Register/Login/Refresh requests.\n\nProfiles folder — run in order. 'Register seeker' and 'Register business' each store their own token (seekerToken/businessToken) and user id (seekerUserId/businessUserId), so the refusal requests can act as one role against the other without re-logging in.",
+    "description": "Covers the Sprint 0 auth endpoints (\u00a75), the Sprint 1 profile endpoints (\u00a78), the Sprint 1 gig endpoints (\u00a710) and the Sprint 1 application endpoints (\u00a711.7\u2013\u00a711.10) defined in docs/api-contract.md. Set baseUrl to point at a running server; accessToken/refreshToken are populated automatically by the Register/Login/Refresh requests.\n\nProfiles folder \u2014 run in order. 'Register seeker' and 'Register business' each store their own token (seekerToken/businessToken) and user id (seekerUserId/businessUserId), so the refusal requests can act as one role against the other without re-logging in.\n\nGigs folder \u2014 run in order. Setup requests register an owning business, an intruding business and a seeker, then Create requests store gigId (kept open throughout) and gigCloseId (closed partway through) so the ownership, ownership-vs-existence and closed-visibility requests below all act on real ids.\n\nReviews folder \u2014 run in order, after running `npm run seed` against the target database and pasting the printed hired-application id into the `hiredApplicationId` variable. Setup requests log in as the seeded seeker/business and register a stranger, so the party, non-party, category and duplicate checks below all act on the real seeded hire.\n\nApplications folder \u2014 run in order. Setup requests register an owning business and a seeker, then create an open gig (appGigId) and a second gig closed partway through (appGigCloseId). The apply/list/read requests below build and consume appId. The withdraw-after-hire check reuses the seeded hire from the Reviews folder (`npm run seed` + hiredApplicationId), with its own login step so this folder can run independently of Reviews.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
-    { "key": "baseUrl", "value": "http://localhost:5000/api" },
-    { "key": "accessToken", "value": "" },
-    { "key": "refreshToken", "value": "" },
-    { "key": "seekerToken", "value": "" },
-    { "key": "seekerUserId", "value": "" },
-    { "key": "businessToken", "value": "" },
-    { "key": "businessUserId", "value": "" },
-    { "key": "adminToken", "value": "" }
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5000/api"
+    },
+    {
+      "key": "accessToken",
+      "value": ""
+    },
+    {
+      "key": "refreshToken",
+      "value": ""
+    },
+    {
+      "key": "seekerToken",
+      "value": ""
+    },
+    {
+      "key": "seekerUserId",
+      "value": ""
+    },
+    {
+      "key": "businessToken",
+      "value": ""
+    },
+    {
+      "key": "businessUserId",
+      "value": ""
+    },
+    {
+      "key": "adminToken",
+      "value": ""
+    },
+    {
+      "key": "gigBusinessToken",
+      "value": ""
+    },
+    {
+      "key": "gigBusinessUserId",
+      "value": ""
+    },
+    {
+      "key": "gigOtherBusinessToken",
+      "value": ""
+    },
+    {
+      "key": "gigSeekerToken",
+      "value": ""
+    },
+    {
+      "key": "gigId",
+      "value": ""
+    },
+    {
+      "key": "gigCloseId",
+      "value": ""
+    },
+    {
+      "key": "hiredApplicationId",
+      "value": ""
+    },
+    {
+      "key": "reviewSeekerToken",
+      "value": ""
+    },
+    {
+      "key": "reviewSeekerUserId",
+      "value": ""
+    },
+    {
+      "key": "reviewBusinessToken",
+      "value": ""
+    },
+    {
+      "key": "reviewBusinessUserId",
+      "value": ""
+    },
+    {
+      "key": "reviewStrangerToken",
+      "value": ""
+    },
+    {
+      "key": "appBusinessToken",
+      "value": ""
+    },
+    {
+      "key": "appBusinessUserId",
+      "value": ""
+    },
+    {
+      "key": "appSeekerToken",
+      "value": ""
+    },
+    {
+      "key": "appSeekerUserId",
+      "value": ""
+    },
+    {
+      "key": "appOtherSeekerToken",
+      "value": ""
+    },
+    {
+      "key": "appGigId",
+      "value": ""
+    },
+    {
+      "key": "appGigCloseId",
+      "value": ""
+    },
+    {
+      "key": "appId",
+      "value": ""
+    },
+    {
+      "key": "appHiredSeekerToken",
+      "value": ""
+    }
   ],
   "item": [
     {
@@ -36,7 +144,10 @@
       "request": {
         "method": "POST",
         "header": [
-          { "key": "Content-Type", "value": "application/json" }
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
         ],
         "body": {
           "mode": "raw",
@@ -65,7 +176,10 @@
       "request": {
         "method": "POST",
         "header": [
-          { "key": "Content-Type", "value": "application/json" }
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
         ],
         "body": {
           "mode": "raw",
@@ -94,7 +208,10 @@
       "request": {
         "method": "POST",
         "header": [
-          { "key": "Content-Type", "value": "application/json" }
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
         ],
         "body": {
           "mode": "raw",
@@ -108,8 +225,14 @@
       "request": {
         "method": "POST",
         "header": [
-          { "key": "Content-Type", "value": "application/json" },
-          { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}"
+          }
         ],
         "body": {
           "mode": "raw",
@@ -123,14 +246,17 @@
       "request": {
         "method": "GET",
         "header": [
-          { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}"
+          }
         ],
         "url": "{{baseUrl}}/auth/me"
       }
     },
     {
       "name": "Profiles",
-      "description": "Sprint 1 profile endpoints — see §8 of docs/api-contract.md. Run top to bottom: the two Register requests seed the tokens and user ids everything below uses.",
+      "description": "Sprint 1 profile endpoints \u2014 see \u00a78 of docs/api-contract.md. Run top to bottom: the two Register requests seed the tokens and user ids everything below uses.",
       "item": [
         {
           "name": "Setup - Register seeker",
@@ -154,7 +280,12 @@
           ],
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"email\": \"profile.seeker@giglanka.test\",\n  \"password\": \"Password123!\",\n  \"role\": \"seeker\"\n}"
@@ -184,7 +315,12 @@
           ],
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"email\": \"profile.business@giglanka.test\",\n  \"password\": \"Password123!\",\n  \"role\": \"business\"\n}"
@@ -224,7 +360,12 @@
           ],
           "request": {
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{seekerToken}}" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{seekerToken}}"
+              }
+            ],
             "url": "{{baseUrl}}/profiles/me"
           }
         },
@@ -256,8 +397,14 @@
           "request": {
             "method": "PUT",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{seekerToken}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{seekerToken}}"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -285,8 +432,14 @@
           "request": {
             "method": "PUT",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{businessToken}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{businessToken}}"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -323,7 +476,12 @@
           ],
           "request": {
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{businessToken}}" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{businessToken}}"
+              }
+            ],
             "url": "{{baseUrl}}/profiles/{{seekerUserId}}"
           }
         },
@@ -349,7 +507,12 @@
           ],
           "request": {
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{seekerToken}}" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{seekerToken}}"
+              }
+            ],
             "url": "{{baseUrl}}/profiles/{{businessUserId}}"
           }
         },
@@ -369,7 +532,11 @@
               }
             }
           ],
-          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/profiles/me" }
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/profiles/me"
+          }
         },
         {
           "name": "Refusal - 403 admin token",
@@ -392,7 +559,12 @@
           ],
           "request": {
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
             "url": "{{baseUrl}}/profiles/me"
           }
         },
@@ -418,8 +590,14 @@
           "request": {
             "method": "PUT",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{seekerToken}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{seekerToken}}"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -449,8 +627,14 @@
           "request": {
             "method": "PUT",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{seekerToken}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{seekerToken}}"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -480,8 +664,14 @@
           "request": {
             "method": "PUT",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{businessToken}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{businessToken}}"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -511,7 +701,12 @@
           ],
           "request": {
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{seekerToken}}" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{seekerToken}}"
+              }
+            ],
             "url": "{{baseUrl}}/profiles/64f1a2b3c4d5e6f7a8b9c0d1"
           }
         },
@@ -534,14 +729,2503 @@
           "request": {
             "method": "PUT",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{seekerToken}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{seekerToken}}"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"name\": \"Hacked\"\n}"
             },
             "url": "{{baseUrl}}/profiles/{{businessUserId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Gigs",
+      "description": "Sprint 1 gig endpoints \u2014 see \u00a710 of docs/api-contract.md. Run top to bottom: Setup registers an owning business, an intruding business and a seeker; Create stores gigId (stays open for the read/update/delete chain) and gigCloseId (closed partway through, for the visibility checks).",
+      "item": [
+        {
+          "name": "Setup - Register owning business",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"registered or already exists\", function () {",
+                  "  pm.expect([201, 409]).to.include(pm.response.code);",
+                  "});",
+                  "if (pm.response.code === 201) {",
+                  "  const body = pm.response.json();",
+                  "  pm.collectionVariables.set(\"gigBusinessToken\", body.data.accessToken);",
+                  "  pm.collectionVariables.set(\"gigBusinessUserId\", body.data.user.id);",
+                  "} else {",
+                  "  pm.sendRequest({",
+                  "    url: pm.variables.get(\"baseUrl\") + \"/auth/login\",",
+                  "    method: \"POST\",",
+                  "    header: { \"Content-Type\": \"application/json\" },",
+                  "    body: { mode: \"raw\", raw: JSON.stringify({ email: \"gig.business@giglanka.test\", password: \"Password123!\" }) },",
+                  "  }, function (err, res) {",
+                  "    const body = res.json();",
+                  "    pm.collectionVariables.set(\"gigBusinessToken\", body.data.accessToken);",
+                  "    pm.collectionVariables.set(\"gigBusinessUserId\", body.data.user.id);",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"gig.business@giglanka.test\",\n  \"password\": \"Password123!\",\n  \"role\": \"business\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/register"
+          }
+        },
+        {
+          "name": "Setup - Register intruding business",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"registered or already exists\", function () {",
+                  "  pm.expect([201, 409]).to.include(pm.response.code);",
+                  "});",
+                  "if (pm.response.code === 201) {",
+                  "  const body = pm.response.json();",
+                  "  pm.collectionVariables.set(\"gigOtherBusinessToken\", body.data.accessToken);",
+                  "} else {",
+                  "  pm.sendRequest({",
+                  "    url: pm.variables.get(\"baseUrl\") + \"/auth/login\",",
+                  "    method: \"POST\",",
+                  "    header: { \"Content-Type\": \"application/json\" },",
+                  "    body: { mode: \"raw\", raw: JSON.stringify({ email: \"gig.intruder@giglanka.test\", password: \"Password123!\" }) },",
+                  "  }, function (err, res) {",
+                  "    pm.collectionVariables.set(\"gigOtherBusinessToken\", res.json().data.accessToken);",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"gig.intruder@giglanka.test\",\n  \"password\": \"Password123!\",\n  \"role\": \"business\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/register"
+          }
+        },
+        {
+          "name": "Setup - Register seeker",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"registered or already exists\", function () {",
+                  "  pm.expect([201, 409]).to.include(pm.response.code);",
+                  "});",
+                  "if (pm.response.code === 201) {",
+                  "  const body = pm.response.json();",
+                  "  pm.collectionVariables.set(\"gigSeekerToken\", body.data.accessToken);",
+                  "} else {",
+                  "  pm.sendRequest({",
+                  "    url: pm.variables.get(\"baseUrl\") + \"/auth/login\",",
+                  "    method: \"POST\",",
+                  "    header: { \"Content-Type\": \"application/json\" },",
+                  "    body: { mode: \"raw\", raw: JSON.stringify({ email: \"gig.seeker@giglanka.test\", password: \"Password123!\" }) },",
+                  "  }, function (err, res) {",
+                  "    pm.collectionVariables.set(\"gigSeekerToken\", res.json().data.accessToken);",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"gig.seeker@giglanka.test\",\n  \"password\": \"Password123!\",\n  \"role\": \"seeker\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/register"
+          }
+        },
+        {
+          "name": "Create gig (guest) - 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"401 AUTH_HEADER_MISSING\", function () {",
+                  "  pm.response.to.have.status(401);",
+                  "  pm.expect(pm.response.json().error.code).to.eql(\"AUTH_HEADER_MISSING\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Weekend event helper\",\n  \"description\": \"Help set up and run a community weekend event, greeting guests.\",\n  \"category\": \"event_help\",\n  \"payAmount\": 2500,\n  \"payType\": \"per_day\",\n  \"city\": \"Colombo\",\n  \"schedule\": [\"weekends\"],\n  \"commitment\": \"one_off\",\n  \"positions\": 2\n}"
+            },
+            "url": "{{baseUrl}}/gigs"
+          }
+        },
+        {
+          "name": "Create gig (seeker) - 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"403 FORBIDDEN\", function () {",
+                  "  pm.response.to.have.status(403);",
+                  "  pm.expect(pm.response.json().error.code).to.eql(\"FORBIDDEN\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{gigSeekerToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Weekend event helper\",\n  \"description\": \"Help set up and run a community weekend event, greeting guests.\",\n  \"category\": \"event_help\",\n  \"payAmount\": 2500,\n  \"payType\": \"per_day\",\n  \"city\": \"Colombo\",\n  \"schedule\": [\"weekends\"],\n  \"commitment\": \"one_off\",\n  \"positions\": 2\n}"
+            },
+            "url": "{{baseUrl}}/gigs"
+          }
+        },
+        {
+          "name": "Create gig (business) - missing fields - 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"400 naming every missing field\", function () {",
+                  "  pm.response.to.have.status(400);",
+                  "  const err = pm.response.json().error;",
+                  "  pm.expect(err.code).to.eql(\"VALIDATION_ERROR\");",
+                  "  const fields = err.errors.map(function (e) { return e.field; });",
+                  "  pm.expect(fields).to.include.members([\"description\", \"category\", \"payAmount\", \"payType\", \"city\", \"schedule\", \"commitment\"]);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{gigBusinessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Missing everything else\"\n}"
+            },
+            "url": "{{baseUrl}}/gigs"
+          }
+        },
+        {
+          "name": "Create gig (business) - negotiable pay - 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"400, no free-text pay path\", function () {",
+                  "  pm.response.to.have.status(400);",
+                  "  const err = pm.response.json().error;",
+                  "  pm.expect(err.code).to.eql(\"VALIDATION_ERROR\");",
+                  "  pm.expect(err.errors.map(function (e) { return e.field; })).to.include(\"payAmount\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{gigBusinessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Weekend event helper\",\n  \"description\": \"Help set up and run a community weekend event, greeting guests.\",\n  \"category\": \"event_help\",\n  \"payAmount\": \"negotiable\",\n  \"payType\": \"per_day\",\n  \"city\": \"Colombo\",\n  \"schedule\": [\"weekends\"],\n  \"commitment\": \"one_off\",\n  \"positions\": 2\n}"
+            },
+            "url": "{{baseUrl}}/gigs"
+          }
+        },
+        {
+          "name": "Create gig (business) - empty schedule - 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"400, empty schedule is not an accepted default\", function () {",
+                  "  pm.response.to.have.status(400);",
+                  "  const err = pm.response.json().error;",
+                  "  pm.expect(err.code).to.eql(\"VALIDATION_ERROR\");",
+                  "  pm.expect(err.errors.map(function (e) { return e.field; })).to.include(\"schedule\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{gigBusinessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Weekend event helper\",\n  \"description\": \"Help set up and run a community weekend event, greeting guests.\",\n  \"category\": \"event_help\",\n  \"payAmount\": 2500,\n  \"payType\": \"per_day\",\n  \"city\": \"Colombo\",\n  \"schedule\": [],\n  \"commitment\": \"one_off\",\n  \"positions\": 2\n}"
+            },
+            "url": "{{baseUrl}}/gigs"
+          }
+        },
+        {
+          "name": "Create gig (business) - past closing date - 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"400, a countdown that has already expired is rejected\", function () {",
+                  "  pm.response.to.have.status(400);",
+                  "  const err = pm.response.json().error;",
+                  "  pm.expect(err.code).to.eql(\"VALIDATION_ERROR\");",
+                  "  pm.expect(err.errors.map(function (e) { return e.field; })).to.include(\"applicationsCloseDate\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{gigBusinessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Weekend event helper\",\n  \"description\": \"Help set up and run a community weekend event, greeting guests.\",\n  \"category\": \"event_help\",\n  \"payAmount\": 2500,\n  \"payType\": \"per_day\",\n  \"city\": \"Colombo\",\n  \"schedule\": [\"weekends\"],\n  \"commitment\": \"one_off\",\n  \"positions\": 2,\n  \"applicationsCloseDate\": \"2020-01-01\"\n}"
+            },
+            "url": "{{baseUrl}}/gigs"
+          }
+        },
+        {
+          "name": "Create gig (business) - success - 201",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  pm.collectionVariables.set(\"gigId\", pm.response.json().data.gig.id);",
+                  "}",
+                  "pm.test(\"201 and gig shape\", function () {",
+                  "  pm.response.to.have.status(201);",
+                  "  const g = pm.response.json().data.gig;",
+                  "  pm.expect(g.status).to.eql(\"open\");",
+                  "  pm.expect(g.applicantCount).to.eql(0);",
+                  "  pm.expect(g.postedBy).to.eql(pm.collectionVariables.get(\"gigBusinessUserId\"));",
+                  "});",
+                  "pm.test(\"savedBy is never present\", function () {",
+                  "  pm.expect(pm.response.text()).to.not.match(/savedBy/i);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{gigBusinessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Weekend event helper\",\n  \"description\": \"Help set up and run a community weekend event, greeting guests.\",\n  \"category\": \"event_help\",\n  \"payAmount\": 2500,\n  \"payType\": \"per_day\",\n  \"city\": \"Colombo\",\n  \"schedule\": [\"weekends\"],\n  \"commitment\": \"one_off\",\n  \"positions\": 2\n}"
+            },
+            "url": "{{baseUrl}}/gigs"
+          }
+        },
+        {
+          "name": "Create second gig, to be closed later - 201",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  pm.collectionVariables.set(\"gigCloseId\", pm.response.json().data.gig.id);",
+                  "}",
+                  "pm.test(\"201\", function () {",
+                  "  pm.response.to.have.status(201);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{gigBusinessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Barista shift\",\n  \"description\": \"Cover a weekend barista shift at our coffee shop counter.\",\n  \"category\": \"hospitality\",\n  \"payAmount\": 1800,\n  \"payType\": \"per_day\",\n  \"city\": \"Kandy\",\n  \"schedule\": [\"weekends\"],\n  \"commitment\": \"one_off\",\n  \"positions\": 1\n}"
+            },
+            "url": "{{baseUrl}}/gigs"
+          }
+        },
+        {
+          "name": "List gigs (public) - pagination and total",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200, open gigs newest first, with total/page/limit\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const d = pm.response.json().data;",
+                  "  pm.expect(d).to.have.all.keys(\"gigs\", \"total\", \"page\", \"limit\");",
+                  "  pm.expect(d.limit).to.eql(10);",
+                  "  pm.expect(d.page).to.eql(1);",
+                  "  pm.expect(d.total).to.be.at.least(d.gigs.length);",
+                  "  const ids = d.gigs.map(function (g) { return g.id; });",
+                  "  pm.expect(ids).to.include(pm.collectionVariables.get(\"gigId\"));",
+                  "  d.gigs.forEach(function (g) { pm.expect(g.status).to.eql(\"open\"); });",
+                  "});",
+                  "pm.test(\"savedBy is never present\", function () {",
+                  "  pm.expect(pm.response.text()).to.not.match(/savedBy/i);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/gigs?page=1"
+          }
+        },
+        {
+          "name": "Read a gig (public) - business block",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 with gig and business block\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const d = pm.response.json().data;",
+                  "  pm.expect(d.gig.id).to.eql(pm.collectionVariables.get(\"gigId\"));",
+                  "  pm.expect(d.business).to.have.property(\"id\", pm.collectionVariables.get(\"gigBusinessUserId\"));",
+                  "  pm.expect(d.business).to.have.property(\"name\");",
+                  "  pm.expect(d.business).to.have.property(\"photo\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/gigs/{{gigId}}"
+          }
+        },
+        {
+          "name": "Read a gig - 404 unknown id",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"404 NOT_FOUND\", function () {",
+                  "  pm.response.to.have.status(404);",
+                  "  pm.expect(pm.response.json().error.code).to.eql(\"NOT_FOUND\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/gigs/64f1a2b3c4d5e6f7a8b9c0d1"
+          }
+        },
+        {
+          "name": "My gigs (guest) - 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"401 AUTH_HEADER_MISSING\", function () {",
+                  "  pm.response.to.have.status(401);",
+                  "  pm.expect(pm.response.json().error.code).to.eql(\"AUTH_HEADER_MISSING\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/gigs/mine"
+          }
+        },
+        {
+          "name": "My gigs (seeker) - 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"403 FORBIDDEN\", function () {",
+                  "  pm.response.to.have.status(403);",
+                  "  pm.expect(pm.response.json().error.code).to.eql(\"FORBIDDEN\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{gigSeekerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/gigs/mine"
+          }
+        },
+        {
+          "name": "My gigs (business) - every status, no pagination",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200, includes both own gigs with applicantCount, no total/page\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const d = pm.response.json().data;",
+                  "  pm.expect(d).to.have.keys(\"gigs\");",
+                  "  const ids = d.gigs.map(function (g) { return g.id; });",
+                  "  pm.expect(ids).to.include.members([",
+                  "    pm.collectionVariables.get(\"gigId\"),",
+                  "    pm.collectionVariables.get(\"gigCloseId\"),",
+                  "  ]);",
+                  "  d.gigs.forEach(function (g) { pm.expect(g).to.have.property(\"applicantCount\"); });",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{gigBusinessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/gigs/mine"
+          }
+        },
+        {
+          "name": "Update gig (guest) - 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"401 AUTH_HEADER_MISSING\", function () {",
+                  "  pm.response.to.have.status(401);",
+                  "  pm.expect(pm.response.json().error.code).to.eql(\"AUTH_HEADER_MISSING\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": "{{baseUrl}}/gigs/{{gigId}}"
+          }
+        },
+        {
+          "name": "Update gig (seeker) - 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"403 FORBIDDEN\", function () {",
+                  "  pm.response.to.have.status(403);",
+                  "  pm.expect(pm.response.json().error.code).to.eql(\"FORBIDDEN\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{gigSeekerToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": "{{baseUrl}}/gigs/{{gigId}}"
+          }
+        },
+        {
+          "name": "Update gig - 404 unknown id",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"404 NOT_FOUND, checked before ownership\", function () {",
+                  "  pm.response.to.have.status(404);",
+                  "  pm.expect(pm.response.json().error.code).to.eql(\"NOT_FOUND\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{gigBusinessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Weekend event helper\",\n  \"description\": \"Help set up and run a community weekend event, greeting guests.\",\n  \"category\": \"event_help\",\n  \"payAmount\": 2500,\n  \"payType\": \"per_day\",\n  \"city\": \"Colombo\",\n  \"schedule\": [\"weekends\"],\n  \"commitment\": \"one_off\",\n  \"positions\": 2\n}"
+            },
+            "url": "{{baseUrl}}/gigs/64f1a2b3c4d5e6f7a8b9c0d1"
+          }
+        },
+        {
+          "name": "Update gig (other business, not owner) - 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"403, not 404 - the gig exists, the caller just isn't the owner\", function () {",
+                  "  pm.response.to.have.status(403);",
+                  "  pm.expect(pm.response.json().error.code).to.eql(\"FORBIDDEN\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{gigOtherBusinessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Hijacked title\",\n  \"description\": \"Help set up and run a community weekend event, greeting guests.\",\n  \"category\": \"event_help\",\n  \"payAmount\": 2500,\n  \"payType\": \"per_day\",\n  \"city\": \"Colombo\",\n  \"schedule\": [\"weekends\"],\n  \"commitment\": \"one_off\",\n  \"positions\": 2\n}"
+            },
+            "url": "{{baseUrl}}/gigs/{{gigId}}"
+          }
+        },
+        {
+          "name": "Update gig (owner) - success, status not settable",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200, fields persisted, status ignored\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const g = pm.response.json().data.gig;",
+                  "  pm.expect(g.title).to.eql(\"Weekend event helper (updated)\");",
+                  "  pm.expect(g.payAmount).to.eql(3200);",
+                  "  pm.expect(g.status).to.eql(\"open\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{gigBusinessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Weekend event helper (updated)\",\n  \"description\": \"Help set up and run a community weekend event, greeting guests.\",\n  \"category\": \"event_help\",\n  \"payAmount\": 3200,\n  \"payType\": \"per_day\",\n  \"city\": \"Colombo\",\n  \"schedule\": [\"weekends\"],\n  \"commitment\": \"one_off\",\n  \"positions\": 2,\n  \"status\": \"filled\"\n}"
+            },
+            "url": "{{baseUrl}}/gigs/{{gigId}}"
+          }
+        },
+        {
+          "name": "Close gig (guest) - 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"401 AUTH_HEADER_MISSING\", function () {",
+                  "  pm.response.to.have.status(401);",
+                  "  pm.expect(pm.response.json().error.code).to.eql(\"AUTH_HEADER_MISSING\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": "{{baseUrl}}/gigs/{{gigCloseId}}/close"
+          }
+        },
+        {
+          "name": "Close gig (seeker) - 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"403 FORBIDDEN\", function () {",
+                  "  pm.response.to.have.status(403);",
+                  "  pm.expect(pm.response.json().error.code).to.eql(\"FORBIDDEN\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{gigSeekerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/gigs/{{gigCloseId}}/close"
+          }
+        },
+        {
+          "name": "Close gig - 404 unknown id",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"404 NOT_FOUND, checked before ownership\", function () {",
+                  "  pm.response.to.have.status(404);",
+                  "  pm.expect(pm.response.json().error.code).to.eql(\"NOT_FOUND\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{gigBusinessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/gigs/64f1a2b3c4d5e6f7a8b9c0d1/close"
+          }
+        },
+        {
+          "name": "Close gig (other business, not owner) - 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"403, not 404\", function () {",
+                  "  pm.response.to.have.status(403);",
+                  "  pm.expect(pm.response.json().error.code).to.eql(\"FORBIDDEN\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{gigOtherBusinessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/gigs/{{gigCloseId}}/close"
+          }
+        },
+        {
+          "name": "Close gig (owner) - success",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200, status closed\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json().data.gig.status).to.eql(\"closed\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{gigBusinessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/gigs/{{gigCloseId}}/close"
+          }
+        },
+        {
+          "name": "List gigs - closed gig no longer appears",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"closed gig hidden from public list immediately\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const ids = pm.response.json().data.gigs.map(function (g) { return g.id; });",
+                  "  pm.expect(ids).to.not.include(pm.collectionVariables.get(\"gigCloseId\"));",
+                  "  pm.expect(ids).to.include(pm.collectionVariables.get(\"gigId\"));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/gigs"
+          }
+        },
+        {
+          "name": "Read closed gig - still visible on detail",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200, closing is not deleting\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json().data.gig.status).to.eql(\"closed\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/gigs/{{gigCloseId}}"
+          }
+        },
+        {
+          "name": "My gigs - closed gig still visible to owner",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200, still present in /mine\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const ids = pm.response.json().data.gigs.map(function (g) { return g.id; });",
+                  "  pm.expect(ids).to.include(pm.collectionVariables.get(\"gigCloseId\"));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{gigBusinessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/gigs/mine"
+          }
+        },
+        {
+          "name": "Delete gig (guest) - 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"401 AUTH_HEADER_MISSING\", function () {",
+                  "  pm.response.to.have.status(401);",
+                  "  pm.expect(pm.response.json().error.code).to.eql(\"AUTH_HEADER_MISSING\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/gigs/{{gigId}}"
+          }
+        },
+        {
+          "name": "Delete gig (seeker) - 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"403 FORBIDDEN\", function () {",
+                  "  pm.response.to.have.status(403);",
+                  "  pm.expect(pm.response.json().error.code).to.eql(\"FORBIDDEN\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{gigSeekerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/gigs/{{gigId}}"
+          }
+        },
+        {
+          "name": "Delete gig - 404 unknown id",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"404 NOT_FOUND, checked before ownership\", function () {",
+                  "  pm.response.to.have.status(404);",
+                  "  pm.expect(pm.response.json().error.code).to.eql(\"NOT_FOUND\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{gigBusinessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/gigs/64f1a2b3c4d5e6f7a8b9c0d1"
+          }
+        },
+        {
+          "name": "Delete gig (other business, not owner) - 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"403, not 404\", function () {",
+                  "  pm.response.to.have.status(403);",
+                  "  pm.expect(pm.response.json().error.code).to.eql(\"FORBIDDEN\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{gigOtherBusinessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/gigs/{{gigId}}"
+          }
+        },
+        {
+          "name": "Delete gig (owner) - success, permanent",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200, empty data\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json().data).to.eql(null);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{gigBusinessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/gigs/{{gigId}}"
+          }
+        },
+        {
+          "name": "Read deleted gig - 404, no soft delete",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"404 NOT_FOUND\", function () {",
+                  "  pm.response.to.have.status(404);",
+                  "  pm.expect(pm.response.json().error.code).to.eql(\"NOT_FOUND\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/gigs/{{gigId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Reviews",
+      "description": "GL-195/196/197 review endpoints \u2014 see \u00a712 of docs/api-contract.md. Hiring doesn't exist in the product until Sprint 2, so these run against the hire seeded by `npm run seed` (server/scripts/seed.js prints the seeded application's id on each run).\n\nBefore running this folder: run `npm run seed` against the target server's database, then paste the printed application id into the `hiredApplicationId` collection variable. Run top to bottom \u2014 the two Setup requests log in as the seeded seeker/business and a fresh stranger, storing the tokens and ids everything below uses. Safe to re-run: the create requests accept 201 or 409 (already reviewed).\n\nNot covered here: the not-hired 409 path (APPLICATION_NOT_HIRED). Nothing in the product can currently produce a non-Hired application to call this endpoint against, so that path is verified by the automated suite instead (server/tests/integration/review.create.test.js), not by a request in this collection.",
+      "item": [
+        {
+          "name": "Setup - Login seeded seeker",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const body = pm.response.json();",
+                  "  pm.collectionVariables.set(\"reviewSeekerToken\", body.data.accessToken);",
+                  "  pm.collectionVariables.set(\"reviewSeekerUserId\", body.data.user.id);",
+                  "}",
+                  "pm.test(\"200 - seeded seeker logs in (run npm run seed first)\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"seeker@giglanka.test\",\n  \"password\": \"Password123!\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Setup - Login seeded business",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const body = pm.response.json();",
+                  "  pm.collectionVariables.set(\"reviewBusinessToken\", body.data.accessToken);",
+                  "  pm.collectionVariables.set(\"reviewBusinessUserId\", body.data.user.id);",
+                  "}",
+                  "pm.test(\"200 - seeded business logs in (run npm run seed first)\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"business@giglanka.test\",\n  \"password\": \"Password123!\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Setup - Register stranger",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"registered or already exists\", function () {",
+                  "  pm.expect([201, 409]).to.include(pm.response.code);",
+                  "});",
+                  "if (pm.response.code === 201) {",
+                  "  const body = pm.response.json();",
+                  "  pm.collectionVariables.set(\"reviewStrangerToken\", body.data.accessToken);",
+                  "} else {",
+                  "  pm.sendRequest({",
+                  "    url: pm.variables.get(\"baseUrl\") + \"/auth/login\",",
+                  "    method: \"POST\",",
+                  "    header: { \"Content-Type\": \"application/json\" },",
+                  "    body: { mode: \"raw\", raw: JSON.stringify({ email: \"review.stranger@giglanka.test\", password: \"Password123!\" }) },",
+                  "  }, function (err, res) {",
+                  "    const body = res.json();",
+                  "    pm.collectionVariables.set(\"reviewStrangerToken\", body.data.accessToken);",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/register",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"review.stranger@giglanka.test\",\n  \"password\": \"Password123!\",\n  \"role\": \"seeker\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Create review (guest) - 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"401 AUTH_HEADER_MISSING\", function () {",
+                  "  pm.response.to.have.status(401);",
+                  "  pm.expect(pm.response.json().error.code).to.eql(\"AUTH_HEADER_MISSING\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/applications/{{hiredApplicationId}}/reviews",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rating\": 5,\n  \"text\": \"Paid on time and communicated clearly throughout the gig.\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Create review - 404 unknown application",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"404 NOT_FOUND\", function () {",
+                  "  pm.response.to.have.status(404);",
+                  "  pm.expect(pm.response.json().error.code).to.eql(\"NOT_FOUND\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{reviewSeekerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/applications/64f1a2b3c4d5e6f7a8b9c0d1/reviews",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rating\": 5,\n  \"text\": \"Paid on time and communicated clearly throughout the gig.\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Create review (stranger, not a party) - 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"403 FORBIDDEN\", function () {",
+                  "  pm.response.to.have.status(403);",
+                  "  pm.expect(pm.response.json().error.code).to.eql(\"FORBIDDEN\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{reviewStrangerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/applications/{{hiredApplicationId}}/reviews",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rating\": 5,\n  \"text\": \"Paid on time and communicated clearly throughout the gig.\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Create review (seeker) - 400 category from the wrong direction",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"400 VALIDATION_ERROR naming categories\", function () {",
+                  "  pm.response.to.have.status(400);",
+                  "  const err = pm.response.json().error;",
+                  "  pm.expect(err.code).to.eql(\"VALIDATION_ERROR\");",
+                  "  pm.expect(err.errors[0].field).to.eql(\"categories\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{reviewSeekerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/applications/{{hiredApplicationId}}/reviews",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rating\": 5,\n  \"text\": \"Paid on time and communicated clearly throughout the gig.\",\n  \"categories\": [\n    \"work_quality\"\n  ]\n}"
+            }
+          }
+        },
+        {
+          "name": "Create review (seeker of business) - success, direction/author/subject ignored from body",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"201 on first run, 409 REVIEW_ALREADY_EXISTS on a re-run\", function () {",
+                  "  pm.expect([201, 409]).to.include(pm.response.code);",
+                  "});",
+                  "if (pm.response.code === 201) {",
+                  "  pm.test(\"direction/author/subject are derived, not the spoofed body values\", function () {",
+                  "    const review = pm.response.json().data.review;",
+                  "    pm.expect(review.direction).to.eql(\"seeker_to_business\");",
+                  "    pm.expect(review.author).to.eql(pm.collectionVariables.get(\"reviewSeekerUserId\"));",
+                  "    pm.expect(review.subject).to.eql(pm.collectionVariables.get(\"reviewBusinessUserId\"));",
+                  "  });",
+                  "} else {",
+                  "  pm.test(\"409 REVIEW_ALREADY_EXISTS\", function () {",
+                  "    pm.expect(pm.response.json().error.code).to.eql(\"REVIEW_ALREADY_EXISTS\");",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{reviewSeekerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/applications/{{hiredApplicationId}}/reviews",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rating\": 5,\n  \"text\": \"Paid on time, clear instructions, and treated me with respect throughout.\",\n  \"categories\": [\n    \"fair_payment\",\n    \"communication\"\n  ],\n  \"direction\": \"business_to_seeker\",\n  \"author\": \"{{reviewBusinessUserId}}\",\n  \"subject\": \"64f1a2b3c4d5e6f7a8b9c0d9\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Create review (business of seeker) - success",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"201 on first run, 409 REVIEW_ALREADY_EXISTS on a re-run\", function () {",
+                  "  pm.expect([201, 409]).to.include(pm.response.code);",
+                  "});",
+                  "if (pm.response.code === 201) {",
+                  "  pm.test(\"direction/author/subject derived for the business side too\", function () {",
+                  "    const review = pm.response.json().data.review;",
+                  "    pm.expect(review.direction).to.eql(\"business_to_seeker\");",
+                  "    pm.expect(review.author).to.eql(pm.collectionVariables.get(\"reviewBusinessUserId\"));",
+                  "    pm.expect(review.subject).to.eql(pm.collectionVariables.get(\"reviewSeekerUserId\"));",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{reviewBusinessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/applications/{{hiredApplicationId}}/reviews",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rating\": 4,\n  \"text\": \"Reliable, on time every shift, and great with customers all round.\",\n  \"categories\": [\n    \"work_quality\",\n    \"punctuality\"\n  ]\n}"
+            }
+          }
+        },
+        {
+          "name": "Create review (seeker) - 409 duplicate, same direction same application",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"409 REVIEW_ALREADY_EXISTS, not a second document\", function () {",
+                  "  pm.response.to.have.status(409);",
+                  "  pm.expect(pm.response.json().error.code).to.eql(\"REVIEW_ALREADY_EXISTS\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{reviewSeekerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/applications/{{hiredApplicationId}}/reviews",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rating\": 3,\n  \"text\": \"A second, different review attempt in the same direction as before.\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Read reviews about the seeker (guest) - 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"401 AUTH_HEADER_MISSING\", function () {",
+                  "  pm.response.to.have.status(401);",
+                  "  pm.expect(pm.response.json().error.code).to.eql(\"AUTH_HEADER_MISSING\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/users/{{reviewSeekerUserId}}/reviews"
+          }
+        },
+        {
+          "name": "Read reviews about the seeker - newest first, live author",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200, paginated envelope, contains the business's review with a live author\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const d = pm.response.json().data;",
+                  "  pm.expect(d).to.have.all.keys(\"reviews\", \"total\", \"page\", \"limit\");",
+                  "  pm.expect(d.limit).to.eql(10);",
+                  "  pm.expect(d.total).to.be.at.least(1);",
+                  "  const businessReview = d.reviews.find(function (r) { return r.direction === \"business_to_seeker\"; });",
+                  "  pm.expect(businessReview).to.not.be.undefined;",
+                  "  pm.expect(businessReview.author.id).to.eql(pm.collectionVariables.get(\"reviewBusinessUserId\"));",
+                  "  pm.expect(businessReview.author).to.have.keys(\"id\", \"name\", \"photo\");",
+                  "  pm.expect(businessReview).to.have.keys(\"id\", \"application\", \"author\", \"subject\", \"direction\", \"rating\", \"categories\", \"text\", \"createdAt\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{reviewStrangerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/users/{{reviewSeekerUserId}}/reviews"
+          }
+        },
+        {
+          "name": "Read reviews about the business",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200, contains the seeker's review of the business\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const d = pm.response.json().data;",
+                  "  pm.expect(d.total).to.be.at.least(1);",
+                  "  const seekerReview = d.reviews.find(function (r) { return r.direction === \"seeker_to_business\"; });",
+                  "  pm.expect(seekerReview).to.not.be.undefined;",
+                  "  pm.expect(seekerReview.author.id).to.eql(pm.collectionVariables.get(\"reviewSeekerUserId\"));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{reviewStrangerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/users/{{reviewBusinessUserId}}/reviews"
+          }
+        },
+        {
+          "name": "Read reviews - 404 malformed user id",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"404 NOT_FOUND\", function () {",
+                  "  pm.response.to.have.status(404);",
+                  "  pm.expect(pm.response.json().error.code).to.eql(\"NOT_FOUND\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{reviewStrangerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/users/not-a-valid-id/reviews"
+          }
+        },
+        {
+          "name": "Read reviews - 200 empty page for a user nobody has reviewed",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200, empty page, total 0 (not 404)\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const d = pm.response.json().data;",
+                  "  pm.expect(d.reviews).to.eql([]);",
+                  "  pm.expect(d.total).to.eql(0);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{reviewStrangerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/users/64f1a2b3c4d5e6f7a8b9c0d1/reviews"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Applications",
+      "description": "GL-182/183/184 application endpoints — see §11.7–§11.10 of docs/api-contract.md. Run top to bottom: Setup registers an owning business, the applicant seeker and a second seeker (for the wrong-party checks), then creates an open gig (appGigId, stays open for most of the folder) and a second gig (appGigCloseId, closed partway through for the GIG_CLOSED check).\n\nThe withdraw-after-hire check at the end needs `npm run seed` run against the target database first, with the printed hired application id pasted into `hiredApplicationId` (same precondition as the Reviews folder) — it logs in as the seeded seeker itself, so it doesn't depend on the Reviews folder having run.",
+      "item": [
+        {
+          "name": "Setup - Register applications business",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"registered or already exists\", function () {",
+                  "  pm.expect([201, 409]).to.include(pm.response.code);",
+                  "});",
+                  "if (pm.response.code === 201) {",
+                  "  const body = pm.response.json();",
+                  "  pm.collectionVariables.set(\"appBusinessToken\", body.data.accessToken);",
+                  "  pm.collectionVariables.set(\"appBusinessUserId\", body.data.user.id);",
+                  "} else {",
+                  "  pm.sendRequest({",
+                  "    url: pm.variables.get(\"baseUrl\") + \"/auth/login\",",
+                  "    method: \"POST\",",
+                  "    header: { \"Content-Type\": \"application/json\" },",
+                  "    body: { mode: \"raw\", raw: JSON.stringify({ email: \"app.business@giglanka.test\", password: \"Password123!\" }) },",
+                  "  }, function (err, res) {",
+                  "    const body = res.json();",
+                  "    pm.collectionVariables.set(\"appBusinessToken\", body.data.accessToken);",
+                  "    pm.collectionVariables.set(\"appBusinessUserId\", body.data.user.id);",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"app.business@giglanka.test\",\n  \"password\": \"Password123!\",\n  \"role\": \"business\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/register"
+          }
+        },
+        {
+          "name": "Setup - Register applicant seeker",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"registered or already exists\", function () {",
+                  "  pm.expect([201, 409]).to.include(pm.response.code);",
+                  "});",
+                  "if (pm.response.code === 201) {",
+                  "  const body = pm.response.json();",
+                  "  pm.collectionVariables.set(\"appSeekerToken\", body.data.accessToken);",
+                  "  pm.collectionVariables.set(\"appSeekerUserId\", body.data.user.id);",
+                  "} else {",
+                  "  pm.sendRequest({",
+                  "    url: pm.variables.get(\"baseUrl\") + \"/auth/login\",",
+                  "    method: \"POST\",",
+                  "    header: { \"Content-Type\": \"application/json\" },",
+                  "    body: { mode: \"raw\", raw: JSON.stringify({ email: \"app.seeker@giglanka.test\", password: \"Password123!\" }) },",
+                  "  }, function (err, res) {",
+                  "    const body = res.json();",
+                  "    pm.collectionVariables.set(\"appSeekerToken\", body.data.accessToken);",
+                  "    pm.collectionVariables.set(\"appSeekerUserId\", body.data.user.id);",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"app.seeker@giglanka.test\",\n  \"password\": \"Password123!\",\n  \"role\": \"seeker\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/register"
+          }
+        },
+        {
+          "name": "Setup - Register a second seeker (not the applicant)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"registered or already exists\", function () {",
+                  "  pm.expect([201, 409]).to.include(pm.response.code);",
+                  "});",
+                  "if (pm.response.code === 201) {",
+                  "  pm.collectionVariables.set(\"appOtherSeekerToken\", pm.response.json().data.accessToken);",
+                  "} else {",
+                  "  pm.sendRequest({",
+                  "    url: pm.variables.get(\"baseUrl\") + \"/auth/login\",",
+                  "    method: \"POST\",",
+                  "    header: { \"Content-Type\": \"application/json\" },",
+                  "    body: { mode: \"raw\", raw: JSON.stringify({ email: \"app.other.seeker@giglanka.test\", password: \"Password123!\" }) },",
+                  "  }, function (err, res) {",
+                  "    pm.collectionVariables.set(\"appOtherSeekerToken\", res.json().data.accessToken);",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"app.other.seeker@giglanka.test\",\n  \"password\": \"Password123!\",\n  \"role\": \"seeker\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/register"
+          }
+        },
+        {
+          "name": "Setup - Create gig to apply to",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  pm.collectionVariables.set(\"appGigId\", pm.response.json().data.gig.id);",
+                  "}",
+                  "pm.test(\"201\", function () {",
+                  "  pm.response.to.have.status(201);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{appBusinessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Weekend cafe shift\",\n  \"description\": \"Help run the counter and serve customers during weekend shifts.\",\n  \"category\": \"hospitality\",\n  \"payAmount\": 1000,\n  \"payType\": \"per_day\",\n  \"city\": \"Colombo\",\n  \"schedule\": [\"weekends\"],\n  \"commitment\": \"one_off\",\n  \"positions\": 1\n}"
+            },
+            "url": "{{baseUrl}}/gigs"
+          }
+        },
+        {
+          "name": "Setup - Create second gig, to be closed",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  pm.collectionVariables.set(\"appGigCloseId\", pm.response.json().data.gig.id);",
+                  "}",
+                  "pm.test(\"201\", function () {",
+                  "  pm.response.to.have.status(201);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{appBusinessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Barista shift\",\n  \"description\": \"Cover a weekend barista shift at our coffee shop counter.\",\n  \"category\": \"hospitality\",\n  \"payAmount\": 1800,\n  \"payType\": \"per_day\",\n  \"city\": \"Kandy\",\n  \"schedule\": [\"weekends\"],\n  \"commitment\": \"one_off\",\n  \"positions\": 1\n}"
+            },
+            "url": "{{baseUrl}}/gigs"
+          }
+        },
+        {
+          "name": "Apply (guest) - 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"401 AUTH_HEADER_MISSING\", function () {",
+                  "  pm.response.to.have.status(401);",
+                  "  pm.expect(pm.response.json().error.code).to.eql(\"AUTH_HEADER_MISSING\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/gigs/{{appGigId}}/applications"
+          }
+        },
+        {
+          "name": "Apply (business) - 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"403 FORBIDDEN\", function () {",
+                  "  pm.response.to.have.status(403);",
+                  "  pm.expect(pm.response.json().error.code).to.eql(\"FORBIDDEN\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{appBusinessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/gigs/{{appGigId}}/applications"
+          }
+        },
+        {
+          "name": "Close second gig (setup for the GIG_CLOSED check)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200, status closed\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json().data.gig.status).to.eql(\"closed\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{appBusinessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/gigs/{{appGigCloseId}}/close"
+          }
+        },
+        {
+          "name": "Apply to a closed gig - 409 GIG_CLOSED",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"409 GIG_CLOSED, not a generic failure\", function () {",
+                  "  pm.response.to.have.status(409);",
+                  "  pm.expect(pm.response.json().error.code).to.eql(\"GIG_CLOSED\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{appSeekerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/gigs/{{appGigCloseId}}/applications"
+          }
+        },
+        {
+          "name": "Apply (seeker) - success - 201",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  pm.collectionVariables.set(\"appId\", pm.response.json().data.application.id);",
+                  "}",
+                  "pm.test(\"201, status applied, appliedAt set, profile snapshot embedded\", function () {",
+                  "  pm.response.to.have.status(201);",
+                  "  const d = pm.response.json().data;",
+                  "  pm.expect(d.application.status).to.eql(\"applied\");",
+                  "  pm.expect(d.application.appliedAt).to.be.a(\"string\");",
+                  "  pm.expect(d.application.gig).to.eql(pm.collectionVariables.get(\"appGigId\"));",
+                  "  pm.expect(d.application.applicant).to.eql(pm.collectionVariables.get(\"appSeekerUserId\"));",
+                  "  pm.expect(d.application).to.have.property(\"profileSnapshot\");",
+                  "});",
+                  "pm.test(\"profileIncomplete flags an empty profile without blocking the application\", function () {",
+                  "  pm.expect(pm.response.json().data.profileIncomplete).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{appSeekerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/gigs/{{appGigId}}/applications"
+          }
+        },
+        {
+          "name": "Apply again to the same gig - 409 APPLICATION_ALREADY_EXISTS",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"409, not 500\", function () {",
+                  "  pm.response.to.have.status(409);",
+                  "  pm.expect(pm.response.json().error.code).to.eql(\"APPLICATION_ALREADY_EXISTS\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{appSeekerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/gigs/{{appGigId}}/applications"
+          }
+        },
+        {
+          "name": "My applications (guest) - 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"401 AUTH_HEADER_MISSING\", function () {",
+                  "  pm.response.to.have.status(401);",
+                  "  pm.expect(pm.response.json().error.code).to.eql(\"AUTH_HEADER_MISSING\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/applications/mine"
+          }
+        },
+        {
+          "name": "My applications (business) - 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"403 FORBIDDEN\", function () {",
+                  "  pm.response.to.have.status(403);",
+                  "  pm.expect(pm.response.json().error.code).to.eql(\"FORBIDDEN\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{appBusinessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/applications/mine"
+          }
+        },
+        {
+          "name": "My applications (seeker) - success, with gig summary",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200, includes the application with a gig summary\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const apps = pm.response.json().data.applications;",
+                  "  const mine = apps.find(function (a) { return a.id === pm.collectionVariables.get(\"appId\"); });",
+                  "  pm.expect(mine).to.not.be.undefined;",
+                  "  pm.expect(mine.gig).to.have.property(\"id\", pm.collectionVariables.get(\"appGigId\"));",
+                  "  pm.expect(mine.gig).to.have.property(\"title\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{appSeekerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/applications/mine"
+          }
+        },
+        {
+          "name": "Read application (guest) - 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"401 AUTH_HEADER_MISSING\", function () {",
+                  "  pm.response.to.have.status(401);",
+                  "  pm.expect(pm.response.json().error.code).to.eql(\"AUTH_HEADER_MISSING\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/applications/{{appId}}"
+          }
+        },
+        {
+          "name": "Read application - 404 unknown id",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"404 NOT_FOUND\", function () {",
+                  "  pm.response.to.have.status(404);",
+                  "  pm.expect(pm.response.json().error.code).to.eql(\"NOT_FOUND\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{appSeekerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/applications/64f1a2b3c4d5e6f7a8b9c0d1"
+          }
+        },
+        {
+          "name": "Read application (a different seeker, not the applicant) - 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"403 FORBIDDEN\", function () {",
+                  "  pm.response.to.have.status(403);",
+                  "  pm.expect(pm.response.json().error.code).to.eql(\"FORBIDDEN\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{appOtherSeekerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/applications/{{appId}}"
+          }
+        },
+        {
+          "name": "Read application (owning business) - 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200, the business that posted the gig can read it\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json().data.application.id).to.eql(pm.collectionVariables.get(\"appId\"));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{appBusinessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/applications/{{appId}}"
+          }
+        },
+        {
+          "name": "Withdraw (guest) - 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"401 AUTH_HEADER_MISSING\", function () {",
+                  "  pm.response.to.have.status(401);",
+                  "  pm.expect(pm.response.json().error.code).to.eql(\"AUTH_HEADER_MISSING\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": "{{baseUrl}}/applications/{{appId}}/withdraw"
+          }
+        },
+        {
+          "name": "Withdraw (business) - 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"403 FORBIDDEN\", function () {",
+                  "  pm.response.to.have.status(403);",
+                  "  pm.expect(pm.response.json().error.code).to.eql(\"FORBIDDEN\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{appBusinessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/applications/{{appId}}/withdraw"
+          }
+        },
+        {
+          "name": "Withdraw (a different seeker, not the applicant) - 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"403 FORBIDDEN\", function () {",
+                  "  pm.response.to.have.status(403);",
+                  "  pm.expect(pm.response.json().error.code).to.eql(\"FORBIDDEN\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{appOtherSeekerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/applications/{{appId}}/withdraw"
+          }
+        },
+        {
+          "name": "Withdraw (owner) - success - 200, count decrements",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200, status withdrawn\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json().data.application.status).to.eql(\"withdrawn\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{appSeekerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/applications/{{appId}}/withdraw"
+          }
+        },
+        {
+          "name": "Read gig - applicantCount decremented after withdrawal",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"applicantCount back to 0\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json().data.gig.applicantCount).to.eql(0);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/gigs/{{appGigId}}"
+          }
+        },
+        {
+          "name": "Read application (business) - withdrawn application still visible",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200, business still sees it, now withdrawn\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json().data.application.status).to.eql(\"withdrawn\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{appBusinessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/applications/{{appId}}"
+          }
+        },
+        {
+          "name": "Withdraw again - 409 INVALID_APPLICATION_TRANSITION",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"409, already terminal\", function () {",
+                  "  pm.response.to.have.status(409);",
+                  "  pm.expect(pm.response.json().error.code).to.eql(\"INVALID_APPLICATION_TRANSITION\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{appSeekerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/applications/{{appId}}/withdraw"
+          }
+        },
+        {
+          "name": "Re-apply to the same gig after withdrawing - 409, one-way",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"409 APPLICATION_ALREADY_EXISTS, withdrawal does not free the slot\", function () {",
+                  "  pm.response.to.have.status(409);",
+                  "  pm.expect(pm.response.json().error.code).to.eql(\"APPLICATION_ALREADY_EXISTS\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{appSeekerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/gigs/{{appGigId}}/applications"
+          }
+        },
+        {
+          "name": "Setup - Login seeded seeker (for the withdraw-after-hire check)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  pm.collectionVariables.set(\"appHiredSeekerToken\", pm.response.json().data.accessToken);",
+                  "}",
+                  "pm.test(\"200 - seeded seeker logs in (run npm run seed first)\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"seeker@giglanka.test\",\n  \"password\": \"Password123!\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Withdraw hired application - 409 INVALID_APPLICATION_TRANSITION",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"409, hiring is terminal\", function () {",
+                  "  pm.response.to.have.status(409);",
+                  "  pm.expect(pm.response.json().error.code).to.eql(\"INVALID_APPLICATION_TRANSITION\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{appHiredSeekerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/applications/{{hiredApplicationId}}/withdraw"
           }
         }
       ]
