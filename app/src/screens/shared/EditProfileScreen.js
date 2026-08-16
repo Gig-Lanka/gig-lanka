@@ -151,11 +151,26 @@ export default function EditProfileScreen() {
     }
   };
 
+  // GL-154: a storage failure (502 STORAGE_UNAVAILABLE, from either the
+  // upload or the profile save that deletes the old object) reads as "try
+  // again later" — the file itself may have been fine. Every other rejection
+  // reads as the server's own reason (oversize, wrong type, etc.), so the two
+  // are never confused for one another.
+  function describePhotoError(error, fallbackMessage) {
+    const apiError = error.response?.data?.error;
+    if (apiError?.code === 'STORAGE_UNAVAILABLE') {
+      return 'Storage is temporarily unavailable. Please try again in a moment.';
+    }
+    return apiError?.message || fallbackMessage;
+  }
+
   // GL-153: uploads straight to the API and persists the returned URL right
   // away, independent of the Save button — the mockup and acceptance
   // criteria call for the new photo to appear immediately, not on the next
   // explicit save. `passthrough.photo` is updated on success so a later Save
-  // doesn't overwrite it with the stale value it was loaded with.
+  // doesn't overwrite it with the stale value it was loaded with. Replacing
+  // an existing photo this way also deletes the old storage object — see
+  // `updateMyProfile` in `profile.service.js` (GL-154).
   const handleImageSelected = async (asset) => {
     setPhotoError('');
     setUploadingPhoto(true);
@@ -164,8 +179,22 @@ export default function EditProfileScreen() {
       const updated = await profileApi.updateMyProfile(buildProfilePayload({ photo: url }));
       setPassthrough((prev) => ({ ...prev, photo: updated.photo }));
     } catch (error) {
-      const apiError = error.response?.data?.error;
-      setPhotoError(apiError?.message || 'Could not update your photo. Please try again.');
+      setPhotoError(describePhotoError(error, 'Could not update your photo. Please try again.'));
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
+
+  // GL-154: clears the photo — the profile falls back to the initials
+  // avatar and the stored object is deleted server-side, same as a replace.
+  const handleRemovePhoto = async () => {
+    setPhotoError('');
+    setUploadingPhoto(true);
+    try {
+      const updated = await profileApi.updateMyProfile(buildProfilePayload({ photo: '' }));
+      setPassthrough((prev) => ({ ...prev, photo: updated.photo }));
+    } catch (error) {
+      setPhotoError(describePhotoError(error, 'Could not remove your photo. Please try again.'));
     } finally {
       setUploadingPhoto(false);
     }
@@ -207,6 +236,7 @@ export default function EditProfileScreen() {
           uploading={uploadingPhoto}
           error={photoError}
           onImageSelected={handleImageSelected}
+          onRemove={handleRemovePhoto}
         />
 
         <TextInput
