@@ -26,7 +26,7 @@ export default function ProfileScreen() {
   const [status, setStatus] = useState(STATUS.LOADING);
   const [reloadToken, setReloadToken] = useState(0);
 
-  // Refetches on every focus, not just on mount — see the same comment on
+  // Refetches on every focus, not just on mount - see the same comment on
   // the seeker screen for why (GL-148's edit screen calls goBack() rather
   // than passing data back). State only ever changes after the `await`,
   // so this stays clear of the set-state-in-effect lint rule.
@@ -123,7 +123,7 @@ export default function ProfileScreen() {
           ) : null}
 
           {/*
-            TEMP — testing only, not part of GL-147. Account Settings
+            TEMP - testing only, not part of GL-147. Account Settings
             (Sprint 2, unticketed) is where Log Out actually belongs per the
             mockup index; remove this once that screen exists.
           */}

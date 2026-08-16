@@ -18,7 +18,7 @@ const GENERIC_SAVE_ERROR = 'Could not save these changes. Check your connection 
 const GENERIC_CLOSE_ERROR = 'Could not close this gig. Try again.';
 const GENERIC_DELETE_ERROR = 'Could not delete this gig. Try again.';
 
-// Same shape PostGigScreen sends to POST — PUT uses the same validation
+// Same shape PostGigScreen sends to POST - PUT uses the same validation
 // (§10.7 reuses §10.3), and since PUT replaces the gig in full, every field
 // the form holds is sent, never only the ones that changed. status is never
 // included: closing is PATCH /gigs/:id/close, not this form.
@@ -101,7 +101,7 @@ export default function EditGigScreen() {
     }
   }, [gigId]);
 
-  // Fetches once — on first focus only, via hasLoadedRef — so re-focusing
+  // Fetches once - on first focus only, via hasLoadedRef - so re-focusing
   // this screen (e.g. after a picker) never overwrites values the user has
   // already started editing.
   useFocusEffect(
@@ -137,7 +137,7 @@ export default function EditGigScreen() {
       } else if (apiError?.code === 'FORBIDDEN') {
         setFormError("You don't have permission to edit this gig.");
       } else if (apiError?.code === 'NOT_FOUND') {
-        // The gig was deleted elsewhere between load and save — nothing left
+        // The gig was deleted elsewhere between load and save - nothing left
         // to edit, so drop into the same "no longer exists" state the
         // initial fetch uses, rather than leaving a Notice on a dead form.
         setLoadError('This gig no longer exists.');
@@ -185,7 +185,7 @@ export default function EditGigScreen() {
         setDeleteError("You don't have permission to delete this gig.");
         setDeleting(false);
       } else if (apiError?.code === 'NOT_FOUND') {
-        // Already gone — the outcome the user wanted is already true.
+        // Already gone - the outcome the user wanted is already true.
         navigation.goBack();
       } else {
         setDeleteError(apiError?.message || GENERIC_DELETE_ERROR);
@@ -210,7 +210,7 @@ export default function EditGigScreen() {
   const applicantsBanner =
     applicantCount > 0 ? (
       <Notice>
-        {applicantCount} {applicantCount === 1 ? 'person has' : 'people have'} already applied —
+        {applicantCount} {applicantCount === 1 ? 'person has' : 'people have'} already applied -
         changes to the hours or pay affect them.
       </Notice>
     ) : null;
@@ -280,7 +280,7 @@ export default function EditGigScreen() {
         visible={deleteConfirmVisible}
         destructive
         title="Delete this gig?"
-        body="This is permanent and cannot be undone — the gig and its listing are removed immediately."
+        body="This is permanent and cannot be undone - the gig and its listing are removed immediately."
         confirmLabel={deleting ? 'Deleting…' : 'Delete gig'}
         cancelLabel="Keep it"
         onConfirm={handleConfirmDelete}

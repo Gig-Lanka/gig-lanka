@@ -15,7 +15,7 @@ function getInitials(name) {
   return (first + last).toUpperCase();
 }
 
-// A business's own avatar is square rather than round — the v3 mockup uses
+// A business's own avatar is square rather than round - the v3 mockup uses
 // this as the only visual marker distinguishing a business from a seeker
 // wherever an avatar appears alone, so it needs to survive independent of
 // whatever name/label sits next to it.

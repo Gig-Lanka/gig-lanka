@@ -1,7 +1,7 @@
 import { Pressable, Text, View } from 'react-native';
 
 /**
- * A single work-experience or education row — `.entry-card` in the v3 mockup.
+ * A single work-experience or education row - `.entry-card` in the v3 mockup.
  * `description`, `onEdit` and `onDelete` are optional: the read-only summary
  * on `MyProfileScreen` passes none of them, while the management screens
  * (GL-149, GL-150, GL-151) pass all three for the fuller row with edit and

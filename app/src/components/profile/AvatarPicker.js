@@ -7,7 +7,7 @@ import Notice from '../ui/Notice';
 import { validateImageFile } from '../../utils/validation';
 
 /**
- * Photo control for the edit-profile screen (GL-152/GL-153/GL-154) — shows
+ * Photo control for the edit-profile screen (GL-152/GL-153/GL-154) - shows
  * the current photo, or the `Avatar` initials fallback when there is none,
  * with "Change" and (when a photo exists) "Remove" controls (docs mockup
  * `#edit-profile-seeker`). Camera capture is not required.
@@ -15,7 +15,7 @@ import { validateImageFile } from '../../utils/validation';
  * A picked asset is checked against the server's own upload rules
  * (docs/api-contract.md §9.1) before `onImageSelected` fires, so an oversize
  * or wrong-type file is caught here rather than costing a round trip.
- * Uploading, persisting and removing are the caller's job (GL-153/GL-154) —
+ * Uploading, persisting and removing are the caller's job (GL-153/GL-154) -
  * this component only picks, validates and hands the outcome up via
  * `onImageSelected`/`onRemove`. `uploading` and `error` reflect that
  * caller-owned request back onto the control: a spinner over the avatar and

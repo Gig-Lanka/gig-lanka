@@ -22,7 +22,7 @@ function EmberGlow() {
 
 /**
  * The dark ink block, meant to sit as the first child inside a screen's own
- * ScrollView. It scrolls away with the rest of the content — this component
+ * ScrollView. It scrolls away with the rest of the content - this component
  * has no opinion on scroll position. Pair it with `HeroStickyBar` and
  * `HeroSheet`, which the screen renders and controls itself.
  */
@@ -70,7 +70,7 @@ export default function HeroHeader({
 /**
  * White bar carrying the back button and entity name once the hero has
  * scrolled off-screen. The screen owns the scroll offset and passes
- * `visible` accordingly — this component holds no state of its own.
+ * `visible` accordingly - this component holds no state of its own.
  */
 export function HeroStickyBar({ title, onBack, visible = false, className }) {
   if (!visible) return null;
@@ -106,7 +106,7 @@ export function HeroStickyBar({ title, onBack, visible = false, className }) {
 /**
  * White section directly below the hero, top corners rounded at the `sheet`
  * radius. Defaults to `flex-1` so it always reaches the bottom of the
- * viewport even when its content is short (an empty profile, for example) —
+ * viewport even when its content is short (an empty profile, for example) -
  * the screen must give the ScrollView's content container `flexGrow: 1`
  * (NativeWind: `contentContainerClassName="grow"`) for that to take effect.
  *
@@ -114,7 +114,7 @@ export function HeroStickyBar({ title, onBack, visible = false, className }) {
  * visible curve because the whole screen frame sits on an ink-colored
  * canvas, so the corners this rounds away reveal ink, not more white. In
  * React Native there's no such canvas by default, so the screen must also
- * give whatever wraps the hero + this sheet an ink background — otherwise
+ * give whatever wraps the hero + this sheet an ink background - otherwise
  * the rounded corner reveals white-on-white and looks flat. Keeping this
  * sheet full-height is what keeps that ink confined to the tiny corner
  * notches instead of leaking out below short content.

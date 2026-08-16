@@ -1,4 +1,4 @@
-// GL-203 — RateBusinessScreen.js / RateWorkerScreen.js from the v3 mockup.
+// GL-203 - RateBusinessScreen.js / RateWorkerScreen.js from the v3 mockup.
 // One component for both directions: only the copy differs, driven by
 // `direction` from RateFlowContext rather than a prop from whichever screen
 // launched the flow.
@@ -23,11 +23,11 @@ const TITLE_BY_DIRECTION = {
 };
 
 const RATING_CAPTIONS = {
-  1: 'Poor — tap to change',
-  2: 'Fair — tap to change',
-  3: 'Good — tap to change',
-  4: 'Great — tap to change',
-  5: 'Excellent — tap to change',
+  1: 'Poor - tap to change',
+  2: 'Fair - tap to change',
+  3: 'Good - tap to change',
+  4: 'Great - tap to change',
+  5: 'Excellent - tap to change',
 };
 
 const LOAD_ERROR_MESSAGE = 'Could not load this rating. Check your connection and try again.';
@@ -44,7 +44,7 @@ export default function RateSubjectScreen() {
   }
 
   if (status === RATE_FLOW_STATUS.ERROR) {
-    // A permission refusal isn't transient like a dropped connection —
+    // A permission refusal isn't transient like a dropped connection -
     // "Retry" would only repeat the same 403, so this offers a way out
     // instead (§GL-206/AC14).
     const isForbidden = Boolean(forbiddenMessage);

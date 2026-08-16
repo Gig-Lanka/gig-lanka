@@ -2,7 +2,7 @@ import { Pressable, Text, View } from 'react-native';
 
 import SectionLabel from '../ui/SectionLabel';
 
-/** Section label with an optional trailing text link — `.section-head-row` in the v3 mockup. */
+/** Section label with an optional trailing text link - `.section-head-row` in the v3 mockup. */
 export default function ProfileSectionHeader({ title, actionLabel, onAction, className }) {
   return (
     <View

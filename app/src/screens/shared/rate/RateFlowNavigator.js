@@ -1,7 +1,7 @@
-// GL-203 — the entry point registered in the app stack as "RateFlow". Takes
+// GL-203 - the entry point registered in the app stack as "RateFlow". Takes
 // only an applicationId route param; everything else (direction, subject,
 // category list) is derived inside RateFlowProvider so two different
-// callers — the seeker side and the business side — can never disagree
+// callers - the seeker side and the business side - can never disagree
 // about what this flow shows.
 
 import { createNativeStackNavigator } from '@react-navigation/native-stack';

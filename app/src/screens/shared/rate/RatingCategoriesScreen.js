@@ -1,6 +1,6 @@
-// GL-204 — RatingCategoriesScreen.js from the v3 mockup. The list itself
+// GL-204 - RatingCategoriesScreen.js from the v3 mockup. The list itself
 // (business vs. youth worker) comes from RateFlowContext's categoryList,
-// already resolved from the application's direction — this screen never
+// already resolved from the application's direction - this screen never
 // decides which set applies. Selection is optional throughout: Skip and
 // Continue do the same thing, since nothing here blocks submission.
 
@@ -61,7 +61,7 @@ export default function RatingCategoriesScreen() {
           </View>
 
           <Text className="mt-5 text-[12px] leading-[17.4px] text-muted">
-            Select all that apply. Three or four is plenty — this stays quick, not a survey.
+            Select all that apply. Three or four is plenty - this stays quick, not a survey.
           </Text>
 
           <CategoryChipGroup

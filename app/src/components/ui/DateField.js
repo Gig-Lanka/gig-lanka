@@ -15,7 +15,7 @@ function parseDateString(value) {
   return new Date(year, month - 1, day);
 }
 
-/** A tappable field that opens the native date picker — Android inline, iOS a bottom sheet. */
+/** A tappable field that opens the native date picker - Android inline, iOS a bottom sheet. */
 export default function DateField({
   label,
   value,

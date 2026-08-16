@@ -14,7 +14,7 @@ export function createEmptyEducationFormValues() {
 }
 
 /**
- * One form for both adding and editing an education entry — the caller
+ * One form for both adding and editing an education entry - the caller
  * (`EducationFormScreen`) decides which by pre-filling `values` or not.
  * Education has no `ongoing` flag or `description` field
  * (docs/api-contract.md §8.4), so this stays its own component rather than

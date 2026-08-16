@@ -29,7 +29,7 @@ export default function MyApplicationsScreen() {
 
   // Refetches on every focus, not just mount, so returning to this tab after
   // a status changes elsewhere shows the update without a manual refresh.
-  // Only the first-ever load blocks the screen with a loader — later focuses
+  // Only the first-ever load blocks the screen with a loader - later focuses
   // refetch silently so re-entering the tab doesn't flash it.
   useFocusEffect(
     useCallback(() => {

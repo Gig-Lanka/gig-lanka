@@ -19,7 +19,7 @@ const STATUS = { LOADING: 'loading', READY: 'ready', ERROR: 'error' };
 
 const LOAD_ERROR_MESSAGE = 'Could not load this application. Check your connection and try again.';
 
-// §11.3: withdraw is only reachable from these three — hired, rejected,
+// §11.3: withdraw is only reachable from these three - hired, rejected,
 // withdrawn and closed_filled are all terminal and have no outgoing move.
 const WITHDRAWABLE_STATUSES = new Set(['applied', 'viewed', 'shortlisted']);
 
@@ -44,7 +44,7 @@ export default function ApplicationDetailScreen() {
   const [withdrawing, setWithdrawing] = useState(false);
   const [withdrawError, setWithdrawError] = useState(null);
 
-  // Refetches on every focus, not just mount — same pattern as GigDetailScreen
+  // Refetches on every focus, not just mount - same pattern as GigDetailScreen
   // (GL-172), and doubles as the retry mechanism via reloadToken.
   useFocusEffect(
     useCallback(() => {
@@ -78,7 +78,7 @@ export default function ApplicationDetailScreen() {
     setWithdrawError(null);
     try {
       const { application: updated } = await applicationApi.withdrawApplication(application.id);
-      // Updates in place — no refetch — so this matches the row on the list
+      // Updates in place - no refetch - so this matches the row on the list
       // screen, which silently refetches on its own next focus (GL-188).
       setApplication(updated);
       setWithdrawVisible(false);
@@ -130,7 +130,7 @@ export default function ApplicationDetailScreen() {
               {gig?.title ?? 'Gig no longer available'}
             </Text>
             <View className="mt-3 flex-row items-center gap-[9px]">
-              {/* Neutral on the hero regardless of status — a rejection is
+              {/* Neutral on the hero regardless of status - a rejection is
                   not an error, so it never turns this pill red. */}
               <View className="rounded-full border border-white/[0.14] bg-white/10 px-2.5 py-1">
                 <Text className="text-[11px] font-semibold text-paper">

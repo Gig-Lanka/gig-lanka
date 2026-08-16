@@ -1,6 +1,6 @@
 import { Text, View } from 'react-native';
 
-// `{ label, value }` rows — a `null`/`''` value drops the row rather than
+// `{ label, value }` rows - a `null`/`''` value drops the row rather than
 // rendering an empty one, since several gig fields (schedule, startDate)
 // are optional.
 export default function GigDetailList({ rows, className }) {

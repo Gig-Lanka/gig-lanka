@@ -15,7 +15,7 @@ const ICONS = {
   Profile: 'person',
 };
 
-// Browse is the one public surface — the other two tabs assume a signed-in
+// Browse is the one public surface - the other two tabs assume a signed-in
 // user, so guest mode swaps them for a sign-in prompt instead of rendering
 // screens that have nothing to show without an account.
 function SignInGate({ message, onSignIn }) {

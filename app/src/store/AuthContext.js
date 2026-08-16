@@ -19,7 +19,7 @@ export function AuthProvider({ children }) {
   // Launch bootstrap: a stored access token doesn't mean it's still valid,
   // so this round-trips through /auth/me. If it's expired, client.js's own
   // response interceptor transparently refreshes and retries before this
-  // ever sees a failure — this only fails for real if refresh also fails.
+  // ever sees a failure - this only fails for real if refresh also fails.
   useEffect(() => {
     let cancelled = false;
 

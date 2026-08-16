@@ -1,4 +1,4 @@
-// GL-203 — the shared state behind the rating flow. One provider per flow
+// GL-203 - the shared state behind the rating flow. One provider per flow
 // instance, holding what every step needs: the derived direction and
 // subject (so no step ever asks the application for them twice) and the
 // in-progress rating/categories/text, lifted here rather than kept local to
@@ -22,7 +22,7 @@ export const RATE_FLOW_STATUS = {
   ERROR: 'error',
 };
 
-// §6.9/§12.1 — which list applies is decided by direction alone, never by
+// §6.9/§12.1 - which list applies is decided by direction alone, never by
 // anything a step lets the user flip.
 const CATEGORY_LISTS_BY_DIRECTION = {
   seeker_to_business: BUSINESS_REVIEW_CATEGORIES,
@@ -39,7 +39,7 @@ export function useRateFlow() {
   return context;
 }
 
-// The one place direction gets decided — from the application and the
+// The one place direction gets decided - from the application and the
 // signed-in user, never from anything a caller screen passed in. A seeker
 // only ever reaches this as the applicant; a business only ever reaches it
 // as the gig's poster, so comparing ids is sufficient (§12.1 mirrors this
@@ -58,7 +58,7 @@ export function RateFlowProvider({ applicationId, children }) {
   const [reloadToken, setReloadToken] = useState(0);
   // Set only for the 403 GL-206 covers: a signed-in user who isn't a party
   // to this application. Kept distinct from the generic ERROR message
-  // below it — "check your connection" is actively misleading for a
+  // below it - "check your connection" is actively misleading for a
   // permission refusal, and retrying can never fix it.
   const [forbiddenMessage, setForbiddenMessage] = useState('');
 
@@ -80,7 +80,7 @@ export function RateFlowProvider({ applicationId, children }) {
         let nextGig;
 
         if (nextDirection === 'seeker_to_business') {
-          // Rating the business — its identity only comes back on the full
+          // Rating the business - its identity only comes back on the full
           // gig read (§10.2), never on the application's bare gig summary.
           if (!application.gig) {
             throw new Error('GIG_UNAVAILABLE');
@@ -98,7 +98,7 @@ export function RateFlowProvider({ applicationId, children }) {
             }),
           };
         } else {
-          // Rating the seeker — their current public profile carries the
+          // Rating the seeker - their current public profile carries the
           // avatar; the frozen profileSnapshot is only a name fallback for
           // the rare case a profile read fails to resolve one.
           const profile = await profileApi.getPublicProfile(application.applicant);

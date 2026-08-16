@@ -15,13 +15,13 @@ import { formatDateRange } from '../../utils/format';
 
 const STATUS = { LOADING: 'loading', READY: 'ready', ERROR: 'error' };
 
-// Fields other than workExperience that PUT /api/profiles/me still needs —
+// Fields other than workExperience that PUT /api/profiles/me still needs -
 // left out of the body, a PUT clears them rather than preserving them
 // (docs/api-contract.md §8.4). Fetched alongside the list so a delete from
 // this screen can PUT the full profile without a second round trip.
 const PASSTHROUGH_FIELDS = ['name', 'photo', 'bio', 'city', 'skills', 'education'];
 
-// Newest-first by start date — entries with no start date (rare, since the
+// Newest-first by start date - entries with no start date (rare, since the
 // field is only optional to match the server) sort to the end rather than
 // jumping to the top.
 function sortNewestFirst(entries) {
@@ -44,7 +44,7 @@ export default function ManageExperienceScreen() {
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
 
-  // Refetches on every focus — this is what makes an entry added or edited
+  // Refetches on every focus - this is what makes an entry added or edited
   // on ExperienceFormScreen show up here on return, matching the pattern
   // ProfileScreen and EditProfileScreen already use.
   useFocusEffect(
@@ -82,7 +82,7 @@ export default function ManageExperienceScreen() {
     setDeleteError('');
 
     // Built from `workExperience` as it stands right now, not a copy from
-    // when the screen mounted — so deleting a second entry right after this
+    // when the screen mounted - so deleting a second entry right after this
     // one can't resurrect the one just removed.
     const nextWorkExperience = workExperience.filter((entry) => entry._id !== pendingDelete._id);
 

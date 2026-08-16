@@ -41,20 +41,20 @@ function Section({ title, children }) {
 function ButtonSection() {
   return (
     <>
-      <Section title="Button — primary">
+      <Section title="Button - primary">
         <Button trailingArrow>Continue</Button>
         <Button fullWidth={false} trailingArrow className="self-start">
           Inline action
         </Button>
       </Section>
 
-      <Section title="Button — small">
+      <Section title="Button - small">
         <Button variant="small" fullWidth={false} className="self-start">
           Change
         </Button>
       </Section>
 
-      <Section title="Button — states">
+      <Section title="Button - states">
         <Button trailingArrow loading>
           Continue
         </Button>
@@ -110,7 +110,7 @@ function TextInputSection() {
 function CardSection() {
   return (
     <>
-      <Section title="Card — base">
+      <Section title="Card - base">
         <Card>
           <Text className="font-display text-title text-ink">Card title</Text>
           <Text className="mt-[5px] text-desc text-muted">
@@ -119,7 +119,7 @@ function CardSection() {
         </Card>
       </Section>
 
-      <Section title="Card — selectable">
+      <Section title="Card - selectable">
         <Card
           title="I'm looking for work"
           description="Browse gigs, apply, and get hired by businesses near you."
@@ -161,10 +161,10 @@ function LoaderSection() {
 
 function DesignTokensSection() {
   return (
-    <Section title="Design tokens — GL-82">
+    <Section title="Design tokens - GL-82">
       <Text className="font-display text-h1 text-ink">Aa</Text>
       <Text className="mt-2 text-sm text-text-secondary">
-        font-display text-h1 text-ink — verifies the GL-82 token set (Schibsted Grotesk, size, and
+        font-display text-h1 text-ink - verifies the GL-82 token set (Schibsted Grotesk, size, and
         color) renders correctly on device.
       </Text>
     </Section>
@@ -211,7 +211,7 @@ function TokenSwatch({ name, prefix, swatchClassName }) {
 
 function TokenSwatchSection() {
   return (
-    <Section title="Design tokens — v3 swatches (GL-101)">
+    <Section title="Design tokens - v3 swatches (GL-101)">
       <Text className="text-sm text-text-secondary">
         Every v3 colour token and radius from GL-127, rendered from its Tailwind class name so the
         set can be checked on a device instead of read out of tailwind.config.js.
@@ -228,7 +228,7 @@ function TokenSwatchSection() {
         ))}
       </View>
 
-      <Text className="mb-1 mt-6 text-sm font-medium text-text-primary">Radius — ds-*</Text>
+      <Text className="mb-1 mt-6 text-sm font-medium text-text-primary">Radius - ds-*</Text>
       <View className="flex-row flex-wrap gap-4">
         {RADIUS_TOKEN_SWATCHES.map((token) => (
           <TokenSwatch
@@ -264,7 +264,7 @@ function ScreenSection() {
   return (
     <Section title="Screen">
       <Text className="text-sm text-text-secondary">
-        This demo screen is itself wrapped in {'<Screen scroll>'} — safe area insets, horizontal
+        This demo screen is itself wrapped in {'<Screen scroll>'} - safe area insets, horizontal
         padding, and scrolling come from it, so nothing below re-implements that layout.
       </Text>
     </Section>
@@ -273,7 +273,7 @@ function ScreenSection() {
 
 function BadgeSection() {
   return (
-    <Section title="Badge — GL-129">
+    <Section title="Badge - GL-129">
       <View className="flex-row flex-wrap gap-2">
         <Badge variant="neutral">Neutral</Badge>
         <Badge variant="positive">Positive</Badge>
@@ -291,7 +291,7 @@ function ChipSection() {
   const [skillSelected, setSkillSelected] = useState(true);
 
   return (
-    <Section title="Chip — GL-129">
+    <Section title="Chip - GL-129">
       <Text className="text-sm text-text-secondary">Default size, selectable</Text>
       <View className="flex-row flex-wrap gap-2">
         <Chip selected={scheduleValue === 'weekday'} onPress={() => setScheduleValue('weekday')}>
@@ -324,7 +324,7 @@ function AvatarSection() {
   const imageUri = 'https://i.pravatar.cc/150?img=12';
 
   return (
-    <Section title="Avatar — GL-130">
+    <Section title="Avatar - GL-130">
       <Text className="text-sm text-text-secondary">With image</Text>
       <View className="flex-row items-center gap-4">
         <Avatar uri={imageUri} name="Ashan Perera" size="sm" />
@@ -332,7 +332,7 @@ function AvatarSection() {
         <Avatar uri={imageUri} name="Ashan Perera" size="lg" />
       </View>
 
-      <Text className="mt-3 text-sm text-text-secondary">No image — initials fallback</Text>
+      <Text className="mt-3 text-sm text-text-secondary">No image - initials fallback</Text>
       <View className="flex-row items-center gap-4">
         <Avatar name="Ashan Perera" size="sm" />
         <Avatar name="Ashan Perera" size="md" />
@@ -348,23 +348,23 @@ function StarRatingSection() {
   const [interactiveZero, setInteractiveZero] = useState(0);
 
   return (
-    <Section title="StarRating — GL-198">
-      <Text className="text-sm text-text-secondary">Read-only — large</Text>
+    <Section title="StarRating - GL-198">
+      <Text className="text-sm text-text-secondary">Read-only - large</Text>
       <StarRating value={4} size="lg" />
 
-      <Text className="mt-3 text-sm text-text-secondary">Read-only — small</Text>
+      <Text className="mt-3 text-sm text-text-secondary">Read-only - small</Text>
       <StarRating value={4} size="sm" />
 
-      <Text className="mt-3 text-sm text-text-secondary">Read-only — zero (nothing selected)</Text>
+      <Text className="mt-3 text-sm text-text-secondary">Read-only - zero (nothing selected)</Text>
       <StarRating value={0} size="lg" />
 
-      <Text className="mt-3 text-sm text-text-secondary">Interactive — large</Text>
+      <Text className="mt-3 text-sm text-text-secondary">Interactive - large</Text>
       <StarRating value={interactiveLg} size="lg" onChange={setInteractiveLg} />
 
-      <Text className="mt-3 text-sm text-text-secondary">Interactive — small</Text>
+      <Text className="mt-3 text-sm text-text-secondary">Interactive - small</Text>
       <StarRating value={interactiveSm} size="sm" onChange={setInteractiveSm} />
 
-      <Text className="mt-3 text-sm text-text-secondary">Interactive — zero (tap to set)</Text>
+      <Text className="mt-3 text-sm text-text-secondary">Interactive - zero (tap to set)</Text>
       <StarRating value={interactiveZero} size="lg" onChange={setInteractiveZero} />
     </Section>
   );
@@ -414,7 +414,7 @@ function ReviewCardSection() {
   };
 
   return (
-    <Section title="ReviewCard — GL-199">
+    <Section title="ReviewCard - GL-199">
       <Text className="text-sm text-text-secondary">No categories</Text>
       <ReviewCard
         review={noCategoriesReview}
@@ -439,8 +439,8 @@ function CategoryChipGroupSection() {
   const [selected, setSelected] = useState(['work_quality', 'punctuality']);
 
   return (
-    <Section title="CategoryChipGroup — GL-199">
-      <Text className="text-sm text-text-secondary">Interactive — multi-select</Text>
+    <Section title="CategoryChipGroup - GL-199">
+      <Text className="text-sm text-text-secondary">Interactive - multi-select</Text>
       <CategoryChipGroup
         categories={YOUTH_WORKER_REVIEW_CATEGORIES}
         value={selected}
@@ -462,7 +462,7 @@ function CategoryChipGroupSection() {
 
 function RatingBarsSection() {
   return (
-    <Section title="RatingBars — GL-200">
+    <Section title="RatingBars - GL-200">
       <Text className="text-sm text-text-secondary">Normal distribution</Text>
       <RatingBars distribution={{ 5: 9, 4: 2, 3: 1, 2: 0, 1: 0 }} />
 
@@ -474,7 +474,7 @@ function RatingBarsSection() {
 
 function RatingSummarySection() {
   return (
-    <Section title="RatingSummary — GL-201">
+    <Section title="RatingSummary - GL-201">
       <Text className="text-sm text-text-secondary">No reviews</Text>
       <RatingSummary rating={{ averageRating: 0, reviewCount: 0, topCategories: [] }} />
 
@@ -489,7 +489,7 @@ function RatingSummarySection() {
       />
 
       <Text className="mt-3 text-sm text-text-secondary">
-        Large number of reviews — full set of categories
+        Large number of reviews - full set of categories
       </Text>
       <RatingSummary
         rating={{
@@ -511,9 +511,9 @@ function GigFormSection() {
   }
 
   return (
-    <Section title="GigForm — GL-119">
+    <Section title="GigForm - GL-119">
       <Text className="text-sm text-text-secondary">
-        Controlled — values and onChange only, no network call. Scroll and open the keyboard inside
+        Controlled - values and onChange only, no network call. Scroll and open the keyboard inside
         the box below to check keyboard avoidance.
       </Text>
       <View className="h-[560px] overflow-hidden rounded-lg border border-border">
@@ -549,7 +549,7 @@ function GigFormRulesSection() {
   }
 
   return (
-    <Section title="GigForm — non-negotiable rules (GL-166)">
+    <Section title="GigForm - non-negotiable rules (GL-166)">
       <Text className="text-sm text-text-secondary">
         Title/description are blank, pay starts at 0, positions starts blank and nothing is remote.
         Tap Validate to run validateGigForm, then flip the remote toggle to see the City requirement
@@ -572,7 +572,7 @@ function GigFormRulesSection() {
 
 function SectionLabelSection() {
   return (
-    <Section title="SectionLabel — GL-130">
+    <Section title="SectionLabel - GL-130">
       <SectionLabel>Skills</SectionLabel>
     </Section>
   );
@@ -580,7 +580,7 @@ function SectionLabelSection() {
 
 function ScreenHeaderSection() {
   return (
-    <Section title="ScreenHeader — GL-131">
+    <Section title="ScreenHeader - GL-131">
       <Text className="text-sm text-text-secondary">Default title, avatar right slot</Text>
       <View className="overflow-hidden rounded-lg border border-border bg-paper">
         <ScreenHeader title="Find a gig" rightSlot={<Avatar name="Ashan Perera" size="sm" />} />
@@ -610,7 +610,7 @@ function HeroHeaderSection() {
   const [stickyVisible, setStickyVisible] = useState(false);
 
   return (
-    <Section title="HeroHeader — GL-131">
+    <Section title="HeroHeader - GL-131">
       <Text className="text-sm text-text-secondary">
         Scroll inside the box below: the ink hero scrolls away with the content and the white sticky
         bar takes over, exactly as a screen composing HeroHeader/HeroStickyBar/HeroSheet would wire
@@ -648,7 +648,7 @@ function SegmentedControlSection() {
   const [status, setStatus] = useState('all');
 
   return (
-    <Section title="SegmentedControl — GL-132">
+    <Section title="SegmentedControl - GL-132">
       <SegmentedControl
         options={[
           { value: 'all', label: 'All 7' },
@@ -666,12 +666,12 @@ function ConfirmDialogSection() {
   const [openDialog, setOpenDialog] = useState(null);
 
   return (
-    <Section title="ConfirmDialog — GL-132">
+    <Section title="ConfirmDialog - GL-132">
       <Button variant="small" fullWidth={false} onPress={() => setOpenDialog('default')}>
-        Open — default
+        Open - default
       </Button>
       <Button variant="small" fullWidth={false} onPress={() => setOpenDialog('destructive')}>
-        Open — destructive
+        Open - destructive
       </Button>
 
       <ConfirmDialog
@@ -718,7 +718,7 @@ function FormattersSection() {
   ];
 
   return (
-    <Section title="Formatters — GL-104">
+    <Section title="Formatters - GL-104">
       <Text className="text-sm font-medium text-text-primary">Pay</Text>
       <Text className="text-sm text-text-secondary">{formatPay(2500, 'per_hour')}</Text>
       <Text className="text-sm text-text-secondary">{formatPay(4500, 'per_day')}</Text>

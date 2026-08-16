@@ -9,7 +9,7 @@ import { validateGigForm } from '../../utils/validation';
 
 const GENERIC_FORM_ERROR = 'Could not post this gig. Check your connection and try again.';
 
-// Only fields the create endpoint accepts (§10.3) — status and postedBy are
+// Only fields the create endpoint accepts (§10.3) - status and postedBy are
 // server-set and rejected if sent from the client.
 function buildGigPayload(values) {
   const payload = {

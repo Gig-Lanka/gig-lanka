@@ -1,4 +1,4 @@
-// GL-145 — the scroll behaviour shared by every screen that opens on the
+// GL-145 - the scroll behaviour shared by every screen that opens on the
 // gradient hero: the profile screens (GL-112), the public profile (GL-117)
 // and gig detail (GL-122). Extracted here so the three do not each keep
 // their own copy of the offset maths and drift apart.
@@ -11,7 +11,7 @@ import { Animated } from 'react-native';
 
 // Used only for the frames before the hero has reported its own height.
 // The hero is measured on layout, so this never decides the real handover
-// point — it just keeps the bar hidden until the measurement lands.
+// point - it just keeps the bar hidden until the measurement lands.
 const FALLBACK_HERO_HEIGHT = 260;
 
 // How far above the handover point the bar starts fading in. Roughly the
@@ -32,7 +32,7 @@ const INERT_AT = 0.1;
  * The opacity is interpolated from the scroll offset on the native side, so
  * the fade never waits on a JS frame and there is no flicker at the point
  * where the hero leaves and the bar takes over. React state changes once
- * per crossing — to flip `pointerEvents` — not once per scroll event.
+ * per crossing - to flip `pointerEvents` - not once per scroll event.
  *
  * Compose it like this (the sticky bar stays mounted; the wrapper's opacity
  * is what shows and hides it, which is why `visible` is always true):
