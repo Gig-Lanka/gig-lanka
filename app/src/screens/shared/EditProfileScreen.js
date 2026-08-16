@@ -3,7 +3,7 @@ import { ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 
-import { profileApi } from '../../api';
+import { profileApi, uploadApi } from '../../api';
 import Button from '../../components/ui/Button';
 import EmptyState from '../../components/ui/EmptyState';
 import Loader from '../../components/ui/Loader';
@@ -39,10 +39,8 @@ export default function EditProfileScreen() {
   const [status, setStatus] = useState(STATUS.LOADING);
   const [reloadToken, setReloadToken] = useState(0);
   const [passthrough, setPassthrough] = useState({});
-  // Local preview of a freshly picked photo — GL-152 only picks and
-  // validates the file. Actually uploading it and persisting the URL onto
-  // the profile (so it survives navigating away) is GL-153.
-  const [pickedPhotoUri, setPickedPhotoUri] = useState(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [photoError, setPhotoError] = useState('');
 
   const [name, setName] = useState('');
   const [bio, setBio] = useState('');
@@ -77,7 +75,7 @@ export default function EditProfileScreen() {
           setCity(data.city ?? '');
           setSkills(data.skills ?? []);
           setCategory(data.category ?? '');
-          setPickedPhotoUri(null);
+          setPhotoError('');
           setErrors({});
           setFormError('');
           setStatus(STATUS.READY);
@@ -99,6 +97,23 @@ export default function EditProfileScreen() {
     }, [reloadToken, isBusiness]),
   );
 
+  // Same shape for every PUT /api/profiles/me call this screen makes —
+  // Save and the photo auto-persist below both replace the full profile
+  // (§8.4), so both send every field this form owns, not just the one that
+  // changed. `overrides` lets the photo flow drop in the freshly uploaded
+  // URL without waiting for Save.
+  function buildProfilePayload(overrides = {}) {
+    const roleFields = isBusiness ? { category } : { skills };
+    return {
+      ...passthrough,
+      name: name.trim(),
+      bio,
+      city,
+      ...roleFields,
+      ...overrides,
+    };
+  }
+
   const handleSave = async () => {
     const trimmedName = name.trim();
     const validationErrors = validateEditProfileForm({ name: trimmedName, bio });
@@ -106,20 +121,13 @@ export default function EditProfileScreen() {
     setFormError('');
     if (Object.keys(validationErrors).length > 0) return;
 
-    const roleFields = isBusiness ? { category } : { skills };
     const knownFields = isBusiness
       ? ['name', 'bio', 'city', 'category']
       : ['name', 'bio', 'city', 'skills'];
 
     setSubmitting(true);
     try {
-      await profileApi.updateMyProfile({
-        ...passthrough,
-        name: trimmedName,
-        bio,
-        city,
-        ...roleFields,
-      });
+      await profileApi.updateMyProfile(buildProfilePayload());
       navigation.goBack();
     } catch (error) {
       const apiError = error.response?.data?.error;
@@ -143,6 +151,55 @@ export default function EditProfileScreen() {
     }
   };
 
+  // GL-154: a storage failure (502 STORAGE_UNAVAILABLE, from either the
+  // upload or the profile save that deletes the old object) reads as "try
+  // again later" — the file itself may have been fine. Every other rejection
+  // reads as the server's own reason (oversize, wrong type, etc.), so the two
+  // are never confused for one another.
+  function describePhotoError(error, fallbackMessage) {
+    const apiError = error.response?.data?.error;
+    if (apiError?.code === 'STORAGE_UNAVAILABLE') {
+      return 'Storage is temporarily unavailable. Please try again in a moment.';
+    }
+    return apiError?.message || fallbackMessage;
+  }
+
+  // GL-153: uploads straight to the API and persists the returned URL right
+  // away, independent of the Save button — the mockup and acceptance
+  // criteria call for the new photo to appear immediately, not on the next
+  // explicit save. `passthrough.photo` is updated on success so a later Save
+  // doesn't overwrite it with the stale value it was loaded with. Replacing
+  // an existing photo this way also deletes the old storage object — see
+  // `updateMyProfile` in `profile.service.js` (GL-154).
+  const handleImageSelected = async (asset) => {
+    setPhotoError('');
+    setUploadingPhoto(true);
+    try {
+      const url = await uploadApi.uploadImage(asset, 'avatars');
+      const updated = await profileApi.updateMyProfile(buildProfilePayload({ photo: url }));
+      setPassthrough((prev) => ({ ...prev, photo: updated.photo }));
+    } catch (error) {
+      setPhotoError(describePhotoError(error, 'Could not update your photo. Please try again.'));
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
+
+  // GL-154: clears the photo — the profile falls back to the initials
+  // avatar and the stored object is deleted server-side, same as a replace.
+  const handleRemovePhoto = async () => {
+    setPhotoError('');
+    setUploadingPhoto(true);
+    try {
+      const updated = await profileApi.updateMyProfile(buildProfilePayload({ photo: '' }));
+      setPassthrough((prev) => ({ ...prev, photo: updated.photo }));
+    } catch (error) {
+      setPhotoError(describePhotoError(error, 'Could not remove your photo. Please try again.'));
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
+
   if (status === STATUS.LOADING) {
     return <Loader fullScreen />;
   }
@@ -163,7 +220,7 @@ export default function EditProfileScreen() {
       <ScreenHeader
         title={isBusiness ? 'Edit business' : 'Edit profile'}
         small
-        onBack={submitting ? undefined : () => navigation.goBack()}
+        onBack={submitting || uploadingPhoto ? undefined : () => navigation.goBack()}
       />
 
       <ScrollView
@@ -172,11 +229,14 @@ export default function EditProfileScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <AvatarPicker
-          uri={pickedPhotoUri || passthrough.photo}
+          uri={passthrough.photo}
           name={name}
           square={isBusiness}
           disabled={submitting}
-          onImageSelected={(asset) => setPickedPhotoUri(asset.uri)}
+          uploading={uploadingPhoto}
+          error={photoError}
+          onImageSelected={handleImageSelected}
+          onRemove={handleRemovePhoto}
         />
 
         <TextInput
@@ -242,7 +302,7 @@ export default function EditProfileScreen() {
             {formError}
           </Notice>
         ) : null}
-        <Button onPress={handleSave} loading={submitting}>
+        <Button onPress={handleSave} loading={submitting} disabled={uploadingPhoto}>
           Save changes
         </Button>
       </View>

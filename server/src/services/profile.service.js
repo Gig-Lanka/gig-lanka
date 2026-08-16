@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import { Profile } from '../models/profile.model.js';
 import { User } from '../models/user.model.js';
 import { ApiError } from '../utils/ApiError.js';
+import { removeFile } from './storage.service.js';
 
 const NAME_MAX_LENGTH = 60;
 
@@ -72,12 +73,28 @@ export const updateMyProfile = async (user, body) => {
 
   const profile = await getOrCreateProfile(user);
   const roleFields = user.role === 'seeker' ? SEEKER_FIELDS : BUSINESS_FIELDS;
+  const previousPhoto = profile.photo;
 
   Object.entries({ ...SHARED_FIELDS, ...roleFields }).forEach(([field, cleared]) => {
     profile[field] = body[field] === undefined ? cleared : body[field];
   });
 
   await profile.save();
+
+  // GL-114 criteria 10/11: a replaced or removed photo leaves no orphan in
+  // storage. This runs after the save above, not before — the new value is
+  // already durable by the time the old object is deleted, so a storage
+  // hiccup here can't leave the profile pointing at nothing. Best-effort:
+  // cleanup failing must not turn an already-successful profile update into
+  // a failed request, but it's still logged so an orphaned object isn't
+  // silently unrecoverable.
+  if (previousPhoto && previousPhoto !== profile.photo) {
+    try {
+      await removeFile(previousPhoto);
+    } catch (err) {
+      console.error('Failed to delete previous profile photo from storage:', err);
+    }
+  }
 
   return profile.toJSON();
 };
