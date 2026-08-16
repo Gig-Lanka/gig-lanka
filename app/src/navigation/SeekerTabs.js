@@ -30,6 +30,7 @@ export default function SeekerTabs({ guest = false, onSignIn }) {
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
+        headerShown: false,
         tabBarActiveTintColor: '#5b4bff',
         tabBarInactiveTintColor: '#6b7280',
         tabBarIcon: ({ color, size, focused }) => (
