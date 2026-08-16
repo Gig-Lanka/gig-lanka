@@ -5,11 +5,17 @@ import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/nativ
 
 import { profileApi } from '../../api';
 import Avatar from '../../components/ui/Avatar';
+import Chip from '../../components/ui/Chip';
 import EmptyState from '../../components/ui/EmptyState';
 import HeroHeader, { HeroSheet, HeroStickyBar } from '../../components/ui/HeroHeader';
 import Loader from '../../components/ui/Loader';
+import EntryCard from '../../components/profile/EntryCard';
+import ProfileSectionHeader from '../../components/profile/ProfileSectionHeader';
 import ScreenHeader from '../../components/ui/ScreenHeader';
+import RatingSummary from '../../components/review/RatingSummary';
+import SkillsRow from '../../components/profile/SkillsRow';
 import useHeroScroll from '../../hooks/useHeroScroll';
+import { formatDateRange } from '../../utils/format';
 
 const STATUS = { LOADING: 'loading', READY: 'ready', ERROR: 'error', NOT_FOUND: 'not_found' };
 
@@ -66,7 +72,11 @@ export default function PublicProfileScreen() {
     return (
       <SafeAreaView className="flex-1 bg-paper" edges={['top', 'bottom']}>
         <ScreenHeader title="Profile" small onBack={handleBack} />
-        <EmptyState message="This profile is no longer available." actionLabel="Go back" onAction={handleBack} />
+        <EmptyState
+          message="This profile is no longer available."
+          actionLabel="Go back"
+          onAction={handleBack}
+        />
       </SafeAreaView>
     );
   }
@@ -90,8 +100,18 @@ export default function PublicProfileScreen() {
   // The public shape has no role field (docs/api-contract.md §8.2) — a
   // seeker subject always carries `skills` as an array, a business subject
   // never does, so that presence is the only signal available for which
-  // avatar shape to use here.
-  const { name, photo, city } = profile;
+  // avatar shape and sections to render here.
+  const {
+    name,
+    photo,
+    city,
+    bio,
+    category,
+    ratingSummary,
+    skills = [],
+    workExperience = [],
+    education = [],
+  } = profile;
   const isBusinessSubject = !Array.isArray(profile.skills);
 
   return (
@@ -121,7 +141,73 @@ export default function PublicProfileScreen() {
           </HeroHeader>
         </View>
 
-        <HeroSheet className="px-[22px] pb-8 pt-[22px]" />
+        <HeroSheet className="px-[22px] pb-8 pt-[22px]">
+          <RatingSummary rating={ratingSummary} className="mb-5" />
+
+          {bio ? <Text className="text-desc leading-[21px] text-muted">{bio}</Text> : null}
+
+          {/*
+            Skill Trial badges — read-only, no route into anything. Same
+            discipline as the own-profile screens: the per-entry shape isn't
+            published by Application & Hiring yet and skillTrialResults is
+            empty until Sprint 3, so nothing is rendered here rather than a
+            guessed shape.
+          */}
+
+          {isBusinessSubject ? (
+            category ? (
+              <View className="mt-5">
+                <ProfileSectionHeader title="Category" />
+                <View className="mt-[10px]">
+                  <Chip size="sm">{category}</Chip>
+                </View>
+              </View>
+            ) : null
+          ) : (
+            <>
+              {skills.length > 0 ? (
+                <View className="mt-5">
+                  <ProfileSectionHeader title="Skills" />
+                  <View className="mt-[10px]">
+                    <SkillsRow skills={skills} />
+                  </View>
+                </View>
+              ) : null}
+
+              {workExperience.length > 0 ? (
+                <View className="mt-5">
+                  <ProfileSectionHeader title="Work experience" />
+                  <View className="mt-[10px] gap-[10px]">
+                    {workExperience.map((entry) => (
+                      <EntryCard
+                        key={entry._id}
+                        title={entry.roleTitle}
+                        subtitle={entry.employer}
+                        dateRange={formatDateRange(entry)}
+                      />
+                    ))}
+                  </View>
+                </View>
+              ) : null}
+
+              {education.length > 0 ? (
+                <View className="mt-5">
+                  <ProfileSectionHeader title="Education" />
+                  <View className="mt-[10px] gap-[10px]">
+                    {education.map((entry) => (
+                      <EntryCard
+                        key={entry._id}
+                        title={entry.qualification}
+                        subtitle={entry.institution}
+                        dateRange={formatDateRange(entry)}
+                      />
+                    ))}
+                  </View>
+                </View>
+              ) : null}
+            </>
+          )}
+        </HeroSheet>
       </Animated.ScrollView>
 
       <Animated.View
