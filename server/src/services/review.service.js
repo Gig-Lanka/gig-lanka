@@ -2,7 +2,7 @@ import mongoose from 'mongoose';
 import { ApiError } from '../utils/ApiError.js';
 import { Review } from '../models/review.model.js';
 import { getApplicationWithParties } from './application.service.js';
-import { getPublicIdentity } from './profile.service.js';
+import { getPublicIdentity, setRatingSummary } from './profile.service.js';
 import {
   SEEKER_TO_BUSINESS_CATEGORIES,
   BUSINESS_TO_SEEKER_CATEGORIES,
@@ -14,6 +14,91 @@ const CATEGORIES_BY_DIRECTION = {
 };
 
 const PAGE_SIZE = 10;
+const STAR_VALUES = [1, 2, 3, 4, 5];
+const TOP_CATEGORIES_LIMIT = 3;
+const zeroedDistribution = () =>
+  STAR_VALUES.reduce((distribution, star) => ({ ...distribution, [star]: 0 }), {});
+const ZEROED_RATING_AGGREGATE = {
+  averageRating: 0,
+  reviewCount: 0,
+  topCategories: [],
+  distribution: zeroedDistribution(),
+};
+
+// One decimal place, rounded half up: 4.25 becomes 4.3, never 4.2. Every
+// rating is a whole number, so the only place a fraction appears at all is
+// this division — stating the rule here is what keeps it a decision instead
+// of whatever the float happens to land on.
+const roundToOneDecimal = (value) => Math.round(value * 10) / 10;
+
+// Count of reviews at each star value, 1 to 5. Always all five keys, so the
+// five counts sum to reviewCount even when a star value was never selected.
+const computeDistribution = (reviews) => {
+  const distribution = zeroedDistribution();
+
+  reviews.forEach((review) => {
+    distribution[review.rating] += 1;
+  });
+
+  return distribution;
+};
+
+// The most frequently selected categories, capped at TOP_CATEGORIES_LIMIT.
+// Ties are broken alphabetically by category value, never by insertion order
+// or Mongo's return order — either would make the same profile render a
+// different order on two consecutive loads.
+const computeTopCategories = (reviews) => {
+  const counts = new Map();
+
+  reviews.forEach((review) => {
+    review.categories.forEach((category) => {
+      counts.set(category, (counts.get(category) ?? 0) + 1);
+    });
+  });
+
+  return [...counts.entries()]
+    .sort(([categoryA, countA], [categoryB, countB]) => {
+      return countB - countA || categoryA.localeCompare(categoryB);
+    })
+    .slice(0, TOP_CATEGORIES_LIMIT)
+    .map(([category]) => category);
+};
+
+// The full aggregate for one user, recomputed from every review about them —
+// never adjusted incrementally, since a running counter drifts silently and
+// can't be repaired without a migration, while a recomputation is correct
+// every time and this collection is small. Filtered on `subject`, never
+// `author`: a user's aggregate counts reviews about them, not reviews they
+// wrote, and the two never mix.
+export const computeRatingAggregate = async (subjectId) => {
+  const reviews = await Review.find({ subject: subjectId }).select('rating categories').lean();
+
+  if (reviews.length === 0) {
+    return ZEROED_RATING_AGGREGATE;
+  }
+
+  const sum = reviews.reduce((total, review) => total + review.rating, 0);
+
+  return {
+    averageRating: roundToOneDecimal(sum / reviews.length),
+    reviewCount: reviews.length,
+    topCategories: computeTopCategories(reviews),
+    distribution: computeDistribution(reviews),
+  };
+};
+
+// Criterion 11: the review is the fact, the aggregate is derived from it, so
+// a failure here must never fail the review creation that already succeeded
+// and was reported to the user — the same best-effort, log-and-continue
+// pattern GL-114 used for deleting a replaced profile photo.
+const recomputeRatingSummary = async (subjectId) => {
+  try {
+    const ratingSummary = await computeRatingAggregate(subjectId);
+    await setRatingSummary(subjectId, ratingSummary);
+  } catch (err) {
+    console.error(`Failed to recompute rating summary for user ${subjectId}:`, err);
+  }
+};
 
 const assertCategoriesMatchDirection = (categories, direction) => {
   const allowed = CATEGORIES_BY_DIRECTION[direction];
@@ -67,6 +152,8 @@ export const createReview = async (applicationId, actor, body) => {
       categories,
       text: body.text,
     });
+
+    await recomputeRatingSummary(subject);
 
     return review.toJSON();
   } catch (err) {
