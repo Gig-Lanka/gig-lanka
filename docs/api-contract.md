@@ -469,7 +469,7 @@ The summary that lands on a profile once reviews exist for it: an average, a cou
   "averageRating": 4.6,
   "reviewCount": 12,
   "topCategories": ["communication", "punctuality"],
-  "distribution": { "1": 0, "2": 1, "3": 1, "4": 3, "5": 7 }
+  "distribution": { "1": 0, "2": 0, "3": 1, "4": 3, "5": 8 }
 }
 ```
 
@@ -1230,7 +1230,7 @@ Only the owner. Permanently deletes the gig. There is no soft delete and no undo
         "endDate": "2027-12-01"
       }
     ],
-    "rating": { "averageRating": 4.6, "reviewCount": 12, "topCategories": ["communication"], "distribution": { "1": 0, "2": 1, "3": 1, "4": 3, "5": 7 } }
+    "rating": { "averageRating": 4.6, "reviewCount": 12, "topCategories": ["communication"], "distribution": { "1": 0, "2": 0, "3": 1, "4": 3, "5": 8 } }
   },
   "status": "applied",
   "appliedAt": "2026-08-04T09:15:00.000Z",
