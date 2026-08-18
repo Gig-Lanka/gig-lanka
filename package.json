@@ -1,0 +1,19 @@
+{
+  "name": "gig-lanka",
+  "version": "1.0.0",
+  "description": "Monorepo root for Gig-Lanka (app/ and server/). Hosts Husky and lint-staged for pre-commit checks.",
+  "private": true,
+  "scripts": {
+    "prepare": "husky"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Gig-Lanka/gig-lanka.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "husky": "^9.1.7",
+    "lint-staged": "^16.4.0"
+  }
+}

@@ -1,0 +1,1381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Gig Lanka — Application &amp; Hiring, v3</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@500;600;700;800&family=Inter+Tight:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #101114;
+    --paper: #FFFFFF;
+    --haze: #F4F4F6;
+    --line: #E7E7EC;
+    --muted: #71727C;
+    --muted-dark: #9A9BA6;
+    --signal: #FF4A1C;
+    --signal-soft: #FFF1EC;
+    --signal-deep: #8A3517;
+
+    --danger: #E5484D;
+    --danger-soft: #FDECEC;
+    --danger-text: #C22F35;
+    --success-soft: #E8F6EE;
+    --success-text: #16794C;
+    --warning-soft: #FFF3DF;
+    --warning-text: #96570A;
+
+    --r-sheet: 34px;
+    --r-lg: 18px;
+    --r-md: 14px;
+    --r-sm: 10px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #DCDCE1;
+    font-family: 'Inter Tight', -apple-system, system-ui, sans-serif;
+    padding: 48px 40px 80px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ---------- page chrome ---------- */
+  .doc-head { max-width: 880px; margin: 0 auto 46px; }
+  .doc-title {
+    font-family: 'Schibsted Grotesk', sans-serif;
+    font-size: 29px; font-weight: 700; letter-spacing: -0.03em; color: var(--ink);
+  }
+  .doc-body { font-size: 15px; line-height: 1.6; color: #55565F; margin-top: 10px; }
+  .doc-body b { color: var(--ink); font-weight: 600; }
+  .band { max-width: 880px; margin: 0 auto 26px; display: flex; align-items: baseline; gap: 14px; }
+  .band-n {
+    font-family: 'Schibsted Grotesk', sans-serif;
+    font-size: 22px; font-weight: 700; letter-spacing: -0.02em; color: var(--ink);
+  }
+  .band-d { font-size: 13.5px; color: var(--muted); }
+  .band-sep { height: 1px; background: #C7C7CE; margin: 62px auto 32px; max-width: 880px; }
+
+  .canvas { display: flex; gap: 52px; justify-content: center; align-items: flex-start; flex-wrap: wrap; }
+  .frame-wrap { display: flex; flex-direction: column; gap: 10px; width: 390px; }
+  .frame-label {
+    font-size: 11px; font-weight: 700; letter-spacing: 0.13em;
+    text-transform: uppercase; color: #6E6F78;
+  }
+  .frame-note { font-size: 12.5px; line-height: 1.5; color: #6E6F78; }
+  .frame-note b { color: var(--ink); font-weight: 600; }
+
+  /* ---------- frames ---------- */
+  .frame {
+    position: relative; width: 390px; height: 844px;
+    background: var(--paper); border-radius: 38px; overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+  .frame-hero { background: var(--ink); }
+
+  /* ---------- status bar ---------- */
+  .status {
+    position: relative; height: 50px;
+    display: flex; align-items: flex-end; justify-content: space-between;
+    padding: 0 26px 6px; font-size: 14px; font-weight: 600; color: var(--ink);
+  }
+  .status-dk { color: var(--paper); height: 54px; padding: 0 28px 8px; }
+  .status-icons { display: flex; gap: 5px; align-items: flex-end; }
+  .bar { width: 3px; background: var(--ink); border-radius: 1px; }
+  .status-dk .bar { background: var(--paper); }
+  .bar-a { height: 5px; } .bar-b { height: 8px; } .bar-c { height: 11px; }
+  .battery { width: 24px; height: 12px; border: 1.5px solid var(--ink); border-radius: 3px; padding: 2px; margin-left: 3px; }
+  .status-dk .battery { border-color: var(--paper); }
+  .battery-fill { width: 72%; height: 100%; background: var(--ink); border-radius: 1px; }
+  .status-dk .battery-fill { background: var(--paper); }
+
+  /* ---------- gradient hero (scrolls with content) ---------- */
+  .hero-block { position: relative; background: var(--ink); flex-shrink: 0; }
+  .hero-ember {
+    position: absolute; top: -130px; right: -110px;
+    width: 340px; height: 340px;
+    background: radial-gradient(ellipse at 50% 50%, rgba(255,74,28,0.34) 0%, rgba(255,74,28,0.08) 46%, rgba(255,74,28,0) 72%);
+  }
+  .dk-nav {
+    position: relative; display: flex; align-items: center; justify-content: space-between;
+    padding: 0 22px; height: 44px;
+  }
+  .icon-dk {
+    width: 34px; height: 34px; border-radius: 50%;
+    background: rgba(255,255,255,0.10); border: 1px solid rgba(255,255,255,0.14);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--paper); font-size: 15px; font-weight: 600;
+  }
+  .dk-action { font-size: 14px; font-weight: 600; color: rgba(255,255,255,0.85); }
+  .dk-spacer { width: 34px; flex-shrink: 0; }
+  .hero { position: relative; padding: 8px 24px 28px; }
+  .hero-center { text-align: center; }
+  h1.entity {
+    font-family: 'Schibsted Grotesk', sans-serif;
+    font-size: 25px; line-height: 1.16; font-weight: 700;
+    letter-spacing: -0.032em; color: var(--paper);
+  }
+  .hero-sub { font-size: 13.5px; color: var(--muted-dark); }
+  .hero-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .profile-name {
+    font-family: 'Schibsted Grotesk', sans-serif;
+    font-size: 22px; font-weight: 700; letter-spacing: -0.025em; color: var(--paper); margin-top: 12px;
+  }
+  .meta-row { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 7px; flex-wrap: wrap; }
+  .location-text { font-size: 13px; font-weight: 500; color: var(--muted-dark); }
+  .rating-pill {
+    font-size: 12.5px; font-weight: 700; color: var(--paper);
+    background: rgba(255,74,28,0.22); border: 1px solid rgba(255,74,28,0.4);
+    padding: 5px 11px; border-radius: 20px;
+  }
+  .dk-pill {
+    font-size: 11.5px; font-weight: 700; color: var(--paper);
+    background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.16);
+    padding: 5px 11px; border-radius: 20px;
+  }
+  .dk-pill-pos {
+    font-size: 11.5px; font-weight: 700; color: #8FE3B8;
+    background: rgba(22,121,76,0.28); border: 1px solid rgba(143,227,184,0.35);
+    padding: 5px 11px; border-radius: 20px;
+  }
+  .avatar-circle {
+    width: 78px; height: 78px; border-radius: 50%;
+    background: var(--haze); border: 2.5px solid rgba(255,255,255,0.18);
+    display: flex; align-items: center; justify-content: center; margin: 0 auto;
+    font-family: 'Schibsted Grotesk', sans-serif; font-size: 25px; font-weight: 700; color: var(--ink);
+  }
+  .sheet-flow {
+    position: relative; flex: 1; min-height: 0; background: var(--paper);
+    border-top-left-radius: var(--r-sheet); border-top-right-radius: var(--r-sheet);
+    padding: 22px 22px 0; display: flex; flex-direction: column;
+  }
+
+  /* ---------- sticky bar (hero scrolled away) ---------- */
+  .stickybar {
+    flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 2px 22px 11px; border-bottom: 1px solid var(--line); background: var(--paper);
+  }
+  .sticky-id { display: flex; align-items: center; gap: 9px; flex: 1; min-width: 0; }
+  .sticky-name {
+    font-family: 'Schibsted Grotesk', sans-serif;
+    font-size: 15.5px; font-weight: 700; letter-spacing: -0.015em; color: var(--ink);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .sticky-rating { font-size: 12px; font-weight: 700; color: var(--signal); white-space: nowrap; }
+
+  /* ================= LIGHT SURFACE ================= */
+  .topbar {
+    position: relative; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 4px 22px 10px; min-height: 48px;
+  }
+  .page-title {
+    font-family: 'Schibsted Grotesk', sans-serif;
+    font-size: 25px; font-weight: 700; letter-spacing: -0.032em; color: var(--ink);
+  }
+  .page-title-sm { font-size: 17px; letter-spacing: -0.015em; }
+  .icon-lt {
+    width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0;
+    background: var(--haze); border: 1.5px solid var(--line);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 15px; font-weight: 600; color: var(--ink);
+  }
+  .avatar-mini {
+    width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0;
+    background: var(--haze); border: 1.5px solid var(--line);
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Schibsted Grotesk', sans-serif; font-size: 12.5px; font-weight: 700; color: var(--ink);
+  }
+  .bar-action { font-size: 14px; font-weight: 700; color: var(--signal); }
+  .bar-action-mute { font-size: 14px; font-weight: 600; color: var(--muted); }
+  .bar-spacer { width: 34px; flex-shrink: 0; }
+
+  .body-pad { padding: 0 22px; display: flex; flex-direction: column; flex: 1; min-height: 0; }
+  .scroll-area { position: relative; flex: 1; min-height: 0; overflow: hidden; }
+  .scroll-fade {
+    position: absolute; left: 0; right: 0; bottom: 0; height: 34px;
+    background: linear-gradient(to bottom, rgba(255,255,255,0) 0%, #FFFFFF 88%);
+  }
+
+  /* ---------- transparency tracker ---------- */
+  .track { display: flex; }
+  .tstep { flex: 1; display: flex; flex-direction: column; align-items: center; position: relative; }
+  .tstep::before {
+    content: ''; position: absolute; top: 9px; left: -50%; width: 100%; height: 2px; background: var(--line);
+  }
+  .tstep:first-child::before { display: none; }
+  .tstep-done::before, .tstep-now::before { background: var(--signal); }
+  .tdot {
+    width: 20px; height: 20px; border-radius: 50%; position: relative; z-index: 1;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: 700;
+  }
+  .tdot-done { background: var(--signal); color: var(--paper); }
+  .tdot-now { background: var(--paper); border: 3px solid var(--signal); }
+  .tdot-todo { background: var(--haze); border: 2px solid var(--line); }
+  .tdot-end { background: var(--muted); color: var(--paper); }
+  .tlabel { font-size: 10.5px; font-weight: 600; margin-top: 7px; color: var(--muted-dark); text-align: center; }
+  .tlabel-on { color: var(--ink); font-weight: 700; }
+  .track-line {
+    font-size: 13.5px; line-height: 1.45; font-weight: 500; color: var(--ink);
+    background: var(--haze); border-radius: var(--r-md); padding: 11px 13px; margin-top: 14px;
+  }
+
+  /* ---------- fields ---------- */
+  .input-label { font-size: 13px; font-weight: 600; color: var(--ink); margin-bottom: 8px; }
+  .field {
+    height: 52px; border-radius: var(--r-lg);
+    background: var(--haze); border: 1.5px solid transparent;
+    padding: 0 16px; display: flex; align-items: center; gap: 10px;
+  }
+  .field-focus { background: var(--paper); border: 1.5px solid var(--ink); }
+  .field-tall { height: 112px; align-items: flex-start; padding-top: 14px; }
+  .field-text { font-size: 15.5px; font-weight: 500; color: var(--ink); }
+  .field-hint { font-size: 15.5px; font-weight: 400; color: #A3A4AE; }
+  .field-body { font-size: 14.5px; font-weight: 400; line-height: 1.45; color: var(--ink); }
+  .grow { flex: 1; }
+  .hint-text { font-size: 12px; line-height: 1.45; color: var(--muted); }
+  .char-count { font-size: 11.5px; color: #9A9BA6; text-align: right; margin-top: 6px; }
+
+  .attach {
+    border-radius: var(--r-lg); border: 1.5px dashed var(--line); background: var(--haze);
+    padding: 13px 15px; display: flex; align-items: center; gap: 11px;
+  }
+  .attach-glyph {
+    width: 34px; height: 34px; border-radius: 11px; background: var(--paper); flex-shrink: 0;
+    border: 1px solid var(--line);
+    display: flex; align-items: center; justify-content: center; font-size: 14px; color: var(--muted);
+  }
+  .attach-title { font-size: 13.5px; font-weight: 600; color: var(--ink); }
+  .attach-sub { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+  .file-chip {
+    border-radius: var(--r-md); background: var(--haze); padding: 10px 13px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .file-name { font-size: 13px; font-weight: 600; color: var(--ink); flex: 1; }
+  .file-size { font-size: 11.5px; color: var(--muted-dark); }
+
+  .radio-item {
+    border-radius: var(--r-lg); background: var(--paper); border: 1.5px solid var(--line);
+    padding: 13px 15px; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    margin-bottom: 8px;
+  }
+  .radio-item-on { background: var(--signal-soft); border-color: var(--signal); }
+  .radio-text { font-size: 14px; font-weight: 500; color: var(--ink); }
+  .radio-text-on { color: var(--signal-deep); font-weight: 600; }
+  .radio {
+    width: 21px; height: 21px; border-radius: 50%; border: 1.5px solid var(--line); flex-shrink: 0;
+  }
+  .radio-on {
+    width: 21px; height: 21px; border-radius: 50%; background: var(--signal); flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--paper); font-size: 11px; font-weight: 700;
+  }
+
+  /* ---------- buttons ---------- */
+  .btn {
+    height: 54px; border-radius: var(--r-lg); background: var(--signal);
+    color: var(--paper); font-size: 16px; font-weight: 600; letter-spacing: -0.01em;
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+  }
+  .btn-off { background: var(--haze); color: #A9AAB4; }
+  .btn-outline { background: var(--paper); border: 1.5px solid var(--line); color: var(--ink); }
+  .btn-ink { background: var(--ink); color: var(--paper); }
+  .btn-danger-out { background: var(--paper); border: 1.5px solid #F3C8C9; color: var(--danger-text); }
+  .btn-arrow { font-size: 15px; }
+  .btn-row { display: flex; gap: 8px; }
+  .btn-xs {
+    height: 36px; border-radius: 12px; font-size: 12.5px; font-weight: 600;
+    display: flex; align-items: center; justify-content: center; flex: 1;
+  }
+  .btn-xs-out { background: var(--paper); border: 1.5px solid var(--line); color: var(--ink); }
+  .btn-xs-ink { background: var(--ink); color: var(--paper); }
+  .btn-block-reason { font-size: 12px; font-weight: 600; color: var(--muted); text-align: center; margin-top: 8px; }
+  .link-sm { font-size: 12.5px; font-weight: 600; color: var(--muted); }
+
+  /* ---------- chips / badges ---------- */
+  .chips { display: flex; flex-wrap: wrap; gap: 7px; }
+  .chips-row { display: flex; gap: 7px; align-items: center; }
+  .chip {
+    border-radius: 999px; padding: 7px 13px;
+    background: var(--paper); border: 1.5px solid var(--line);
+    font-size: 13px; font-weight: 500; color: var(--muted); white-space: nowrap;
+  }
+  .chip-on { background: var(--signal-soft); border-color: var(--signal); color: var(--signal); font-weight: 600; }
+  .chip-sm {
+    font-size: 12.5px; font-weight: 600; color: var(--ink);
+    background: var(--haze); border: 1px solid var(--line);
+    padding: 6px 12px; border-radius: 20px;
+  }
+
+  .badge { border-radius: 999px; padding: 4px 10px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+  /* §12 — Applied and Viewed neutral, Shortlisted positive, Hired strong positive,
+     Rejected / Withdrawn / Closed muted grey, never alarm red */
+  .badge-neutral { background: var(--haze); color: var(--muted); }
+  .badge-short { background: var(--success-soft); color: var(--success-text); }
+  .badge-hired { background: var(--success-text); color: var(--paper); }
+  .badge-ended { background: var(--haze); color: var(--muted-dark); }
+  .badge-req { background: var(--signal-soft); color: var(--signal-deep); }
+  .badge-trial-pass { background: var(--success-soft); color: var(--success-text); }
+  .badge-trial-sub { background: var(--warning-soft); color: var(--warning-text); }
+  .badge-trial-skip { background: var(--haze); color: var(--muted-dark); }
+  .badge-effort { background: var(--haze); color: var(--muted); }
+
+  /* ---------- cards / rows ---------- */
+  .card {
+    border-radius: 20px; padding: 15px 16px;
+    background: var(--paper); border: 1.5px solid var(--line);
+    margin-bottom: 10px;
+  }
+  .card-flat { background: var(--haze); border-color: transparent; }
+  .card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+  .card-title { font-size: 15px; font-weight: 600; line-height: 1.32; letter-spacing: -0.01em; color: var(--ink); flex: 1; }
+  .card-sub { font-size: 13px; color: var(--muted); margin-top: 3px; }
+  .card-foot {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    border-top: 1px solid var(--line); margin-top: 11px; padding-top: 10px;
+  }
+  .meta-sm { font-size: 11.5px; color: #9A9BA6; }
+
+  .who-row { display: flex; align-items: center; gap: 12px; }
+  .avatar {
+    width: 42px; height: 42px; border-radius: 14px; background: var(--ink);
+    color: var(--paper); font-family: 'Schibsted Grotesk', sans-serif;
+    font-size: 14px; font-weight: 700; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .avatar-signal { background: var(--signal); }
+  .avatar-sm { width: 36px; height: 36px; border-radius: 12px; font-size: 12.5px; }
+  .who-name { font-size: 15px; font-weight: 600; color: var(--ink); }
+  .who-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+  .section-label {
+    font-size: 11.5px; font-weight: 700; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--muted);
+  }
+  .section-head-row { display: flex; align-items: center; justify-content: space-between; }
+  .section-link { font-size: 12.5px; font-weight: 700; color: var(--signal); }
+  .sec-title {
+    font-family: 'Schibsted Grotesk', sans-serif;
+    font-size: 16px; font-weight: 700; letter-spacing: -0.02em; color: var(--ink);
+  }
+  .body-text { font-size: 14.5px; line-height: 1.55; color: var(--muted); }
+  .count-text { font-size: 11.5px; color: #9A9BA6; }
+
+  .drow {
+    display: flex; align-items: baseline; justify-content: space-between; gap: 14px;
+    padding: 9px 0; border-bottom: 1px solid var(--line);
+  }
+  .dlabel { font-size: 13.5px; color: var(--muted); }
+  .dvalue { font-size: 13.5px; font-weight: 600; color: var(--ink); text-align: right; }
+
+  .entry-card {
+    border-radius: var(--r-lg); border: 1.5px solid var(--line);
+    padding: 13px 15px; margin-bottom: 9px;
+  }
+  .entry-title { font-size: 14px; font-weight: 700; color: var(--ink); }
+  .entry-sub { font-size: 12.5px; font-weight: 500; color: var(--muted); margin-top: 2px; }
+  .entry-date { font-size: 11.5px; font-weight: 600; color: var(--muted-dark); margin-top: 4px; }
+
+  /* ---------- segmented tabs ---------- */
+  .segs { display: flex; gap: 18px; border-bottom: 1px solid var(--line); flex-shrink: 0; }
+  .seg { padding-bottom: 10px; font-size: 13.5px; font-weight: 600; color: var(--muted-dark); position: relative; white-space: nowrap; }
+  .seg-on { color: var(--ink); font-weight: 700; }
+  .seg-on::after {
+    content: ''; position: absolute; left: 0; right: 0; bottom: -1px;
+    height: 2.5px; background: var(--signal); border-radius: 2px;
+  }
+
+  /* ---------- notices ---------- */
+  .notice {
+    border-radius: var(--r-md); padding: 11px 13px; background: var(--signal-soft);
+    display: flex; gap: 10px; align-items: flex-start;
+  }
+  .notice-calm { background: var(--haze); }
+  .notice-dot {
+    width: 18px; height: 18px; border-radius: 50%; background: var(--signal); flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--paper); font-size: 11px; font-weight: 700;
+  }
+  .notice-dot-calm { background: var(--muted); }
+  .notice-text { font-size: 13px; line-height: 1.42; font-weight: 500; color: var(--signal-deep); }
+  .notice-text-calm { color: var(--muted); }
+  .banner { border-radius: var(--r-md); padding: 11px 14px; font-size: 13px; font-weight: 600; }
+  .banner-context { background: var(--signal-soft); color: var(--signal-deep); }
+  .banner-calm { background: var(--haze); color: var(--muted); }
+
+  /* ---------- decision block ---------- */
+  .decision {
+    border-radius: 20px; background: var(--haze); padding: 17px;
+  }
+  .decision-k {
+    font-size: 11px; font-weight: 700; letter-spacing: 0.09em;
+    text-transform: uppercase; color: var(--muted);
+  }
+  .decision-reason {
+    font-family: 'Schibsted Grotesk', sans-serif;
+    font-size: 19px; line-height: 1.25; font-weight: 700; letter-spacing: -0.025em;
+    color: var(--ink); margin-top: 9px;
+  }
+  .decision-note {
+    font-size: 13.5px; line-height: 1.5; color: var(--muted); margin-top: 11px;
+    border-top: 1px solid var(--line); padding-top: 11px;
+  }
+
+  /* ---------- modal sheet ---------- */
+  .scrim {
+    position: absolute; inset: 0; background: rgba(10,10,12,0.46);
+    display: flex; flex-direction: column; justify-content: flex-end;
+  }
+  .modal {
+    background: var(--paper);
+    border-top-left-radius: var(--r-sheet); border-top-right-radius: var(--r-sheet);
+    padding: 14px 22px 18px; max-height: 90%;
+    display: flex; flex-direction: column;
+  }
+  .grabber { width: 44px; height: 5px; border-radius: 3px; background: var(--line); margin: 0 auto 14px; }
+  .modal-title {
+    font-family: 'Schibsted Grotesk', sans-serif;
+    font-size: 21px; font-weight: 700; letter-spacing: -0.03em; color: var(--ink);
+  }
+  .modal-body { font-size: 14px; line-height: 1.5; color: var(--muted); margin-top: 9px; }
+  .conseq { display: flex; gap: 10px; align-items: flex-start; padding: 8px 0; }
+  .conseq-dot {
+    width: 6px; height: 6px; border-radius: 50%; background: var(--signal);
+    flex-shrink: 0; margin-top: 7px;
+  }
+  .conseq-text { font-size: 13.5px; line-height: 1.45; color: var(--ink); font-weight: 500; }
+
+  /* ---------- bottom tab bar ---------- */
+  .tabbar {
+    flex-shrink: 0; display: flex; border-top: 1px solid var(--line);
+    padding: 9px 6px 0; background: var(--paper);
+  }
+  .tab { flex: 1; text-align: center; }
+  .tab-glyph { font-size: 18px; line-height: 1; color: #B9BAC3; }
+  .tab-label { font-size: 10px; font-weight: 600; color: #9A9BA6; margin-top: 4px; }
+  .tab-on .tab-glyph { color: var(--signal); }
+  .tab-on .tab-label { color: var(--ink); font-weight: 700; }
+
+  /* ---------- misc ---------- */
+  .grow-space { flex: 1; }
+  .home-bar { width: 134px; height: 5px; border-radius: 3px; background: #D2D2D8; margin: 0 auto; }
+  .home-pad { padding-top: 10px; padding-bottom: 8px; flex-shrink: 0; }
+  .pinned { padding-top: 10px; padding-bottom: 8px; background: var(--paper); flex-shrink: 0; }
+
+  .g1 { height: 4px; } .g2 { height: 8px; } .g3 { height: 12px; } .g4 { height: 16px; }
+  .g5 { height: 20px; } .g6 { height: 24px; } .g7 { height: 28px; } .g8 { height: 32px; }
+</style>
+</head>
+<body>
+
+<div class="doc-head">
+  <div class="doc-title">Application &amp; Hiring — v3</div>
+  <div class="doc-body">
+    The seven screens in §13 plus the three decision sheets, since the reason-code list, the withdraw
+    confirmation and the hire confirmation each carry rules that live nowhere else. Same surface rule
+    as the other components: gradient only where the header carries one entity's identity — here the
+    application itself and the applicant. Status colours follow §12 exactly, which means
+    <b>no rejection is ever red</b>.
+  </div>
+</div>
+
+<div class="band">
+  <span class="band-n">Seeker</span>
+  <span class="band-d">apply, trial, track</span>
+</div>
+
+<div class="canvas">
+
+  <!-- ============ 1. APPLY ============ -->
+  <div class="frame-wrap" id="apply">
+    <div class="frame-label">ApplyScreen.js — required trial not yet submitted</div>
+    <div class="frame">
+      <div class="status">
+        <span>9:41</span>
+        <div class="status-icons">
+          <div class="bar bar-a"></div><div class="bar bar-b"></div><div class="bar bar-c"></div>
+          <div class="battery"><div class="battery-fill"></div></div>
+        </div>
+      </div>
+
+      <div class="topbar">
+        <span class="bar-action-mute">Cancel</span>
+        <div class="page-title page-title-sm">Apply</div>
+        <div class="bar-spacer"></div>
+      </div>
+
+      <div class="body-pad">
+        <div class="banner banner-context">Weekend café floor staff · Brew &amp; Co.</div>
+        <div class="g4"></div>
+
+        <div class="scroll-area">
+          <div class="section-label">Skill trial</div>
+          <div class="g3"></div>
+          <div class="card">
+            <div class="card-head">
+              <div class="card-title">Write a 3-line reply to an unhappy customer</div>
+              <span class="badge badge-req">Required</span>
+            </div>
+            <div class="g3"></div>
+            <div class="chips-row">
+              <span class="badge badge-effort">Under 30 minutes</span>
+              <span class="badge badge-neutral">Not submitted</span>
+            </div>
+            <div class="card-foot">
+              <span class="meta-sm">A sample of skill, not paid work</span>
+              <span class="section-link">Open the task →</span>
+            </div>
+          </div>
+
+          <div class="g5"></div>
+          <div class="section-head-row">
+            <div class="section-label">What Brew &amp; Co. will see</div>
+            <span class="count-text">Snapshot</span>
+          </div>
+          <div class="g3"></div>
+          <div class="card card-flat">
+            <div class="who-row">
+              <div class="avatar">AP</div>
+              <div class="grow">
+                <div class="who-name">Ashan Perera</div>
+                <div class="who-sub">Colombo · ★ 4.8 · 15 gigs completed</div>
+              </div>
+            </div>
+            <div class="g3"></div>
+            <div class="chips">
+              <div class="chip-sm">Tutoring</div>
+              <div class="chip-sm">Customer service</div>
+              <div class="chip-sm">Excel</div>
+            </div>
+            <div class="g3"></div>
+            <div class="entry-card" style="background:var(--paper); margin-bottom:0">
+              <div class="entry-title">Barista (part-time)</div>
+              <div class="entry-sub">Brew &amp; Co. · BSc IT, SLIIT</div>
+              <div class="entry-date">2 experience · 2 education entries</div>
+            </div>
+          </div>
+
+          <div class="g4"></div>
+          <div class="section-label">Resume (optional)</div>
+          <div class="g3"></div>
+          <div class="attach">
+            <div class="attach-glyph">↑</div>
+            <div class="grow">
+              <div class="attach-title">Attach a PDF</div>
+              <div class="attach-sub">Up to 5 MB. Your profile is the resume — this is an extra.</div>
+            </div>
+          </div>
+          <div class="scroll-fade"></div>
+        </div>
+
+        <div class="pinned">
+          <div class="btn btn-off">Submit application</div>
+          <div class="btn-block-reason">Complete the required skill trial to submit</div>
+          <div class="g3"></div>
+          <div class="home-bar"></div>
+        </div>
+      </div>
+    </div>
+    <div class="frame-note">
+      The trial sits <b>above</b> the snapshot because it's the blocking step. The disabled button
+      states its reason underneath rather than leaving the seeker to guess (§8).
+    </div>
+  </div>
+
+  <!-- ============ 2. SKILL TRIAL ============ -->
+  <div class="frame-wrap" id="skill-trial">
+    <div class="frame-label">SkillTrialScreen.js — seeker submission</div>
+    <div class="frame">
+      <div class="status">
+        <span>9:41</span>
+        <div class="status-icons">
+          <div class="bar bar-a"></div><div class="bar bar-b"></div><div class="bar bar-c"></div>
+          <div class="battery"><div class="battery-fill"></div></div>
+        </div>
+      </div>
+
+      <div class="topbar">
+        <div class="icon-lt">‹</div>
+        <div class="page-title page-title-sm">Skill trial</div>
+        <div class="bar-spacer"></div>
+      </div>
+
+      <div class="body-pad">
+        <div class="scroll-area">
+          <div class="sec-title">Write a 3-line reply to an unhappy customer</div>
+          <div class="g3"></div>
+          <div class="chips-row">
+            <span class="badge badge-req">Required</span>
+            <span class="badge badge-effort">Under 30 minutes</span>
+          </div>
+
+          <div class="g4"></div>
+          <div class="body-text">
+            A customer says their order took 25 minutes and arrived cold. Write the reply you'd give
+            at the counter — three lines, no more. We're looking at tone, not spelling.
+          </div>
+
+          <div class="g4"></div>
+          <div class="notice notice-calm">
+            <div class="notice-dot notice-dot-calm">i</div>
+            <div class="notice-text notice-text-calm">This is a sample of skill, never work the business would otherwise pay for. Effort is capped at two hours.</div>
+          </div>
+
+          <div class="g5"></div>
+          <div class="input-label">Your response</div>
+          <div class="field field-focus field-tall">
+            <span class="field-body">I'm really sorry — twenty-five minutes is far too long and cold coffee is on us…</span>
+          </div>
+          <div class="char-count">76 / 2,000 · 20 minimum</div>
+
+          <div class="g4"></div>
+          <div class="input-label">Attachment (optional)</div>
+          <div class="attach">
+            <div class="attach-glyph">↑</div>
+            <div class="grow">
+              <div class="attach-title">Add a file</div>
+              <div class="attach-sub">PDF, PNG or JPG · up to 5 MB</div>
+            </div>
+          </div>
+          <div class="scroll-fade"></div>
+        </div>
+
+        <div class="pinned">
+          <div class="btn">Submit trial</div>
+          <div class="btn-block-reason">You can't edit a trial after submitting</div>
+          <div class="g3"></div>
+          <div class="home-bar"></div>
+        </div>
+      </div>
+    </div>
+    <div class="frame-note">
+      Effort estimate sits next to the title, visible before the task is opened and again here (§12).
+      The unpaid-work rule is stated to the seeker, not just enforced on the business.
+    </div>
+  </div>
+
+  <!-- ============ 3. MY APPLICATIONS ============ -->
+  <div class="frame-wrap" id="my-applications">
+    <div class="frame-label">MyApplicationsScreen.js</div>
+    <div class="frame">
+      <div class="status">
+        <span>9:41</span>
+        <div class="status-icons">
+          <div class="bar bar-a"></div><div class="bar bar-b"></div><div class="bar bar-c"></div>
+          <div class="battery"><div class="battery-fill"></div></div>
+        </div>
+      </div>
+
+      <div class="topbar">
+        <div class="page-title">Applications</div>
+        <div class="avatar-mini">AP</div>
+      </div>
+
+      <div class="body-pad">
+        <div class="segs">
+          <div class="seg seg-on">All 7</div>
+          <div class="seg">Live 3</div>
+          <div class="seg">Decided 4</div>
+        </div>
+        <div class="g4"></div>
+
+        <div class="scroll-area">
+          <div class="card">
+            <div class="card-head">
+              <div class="card-title">Weekend café floor staff</div>
+              <span class="badge badge-short">Shortlisted</span>
+            </div>
+            <div class="card-sub">Brew &amp; Co.</div>
+            <div class="g3"></div>
+            <div class="track">
+              <div class="tstep tstep-done"><div class="tdot tdot-done">✓</div></div>
+              <div class="tstep tstep-done"><div class="tdot tdot-done">✓</div></div>
+              <div class="tstep tstep-now"><div class="tdot tdot-now"></div></div>
+              <div class="tstep"><div class="tdot tdot-todo"></div></div>
+            </div>
+            <div class="card-foot">
+              <span class="meta-sm">Applied 5d ago</span>
+              <span class="meta-sm">Shortlisted 1d ago</span>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-head">
+              <div class="card-title">Product photography — menu shoot</div>
+              <span class="badge badge-neutral">Viewed</span>
+            </div>
+            <div class="card-sub">Sithum Retail Store</div>
+            <div class="g3"></div>
+            <div class="track">
+              <div class="tstep tstep-done"><div class="tdot tdot-done">✓</div></div>
+              <div class="tstep tstep-now"><div class="tdot tdot-now"></div></div>
+              <div class="tstep"><div class="tdot tdot-todo"></div></div>
+              <div class="tstep"><div class="tdot tdot-todo"></div></div>
+            </div>
+            <div class="card-foot">
+              <span class="meta-sm">Viewed 3h ago</span>
+              <span class="badge badge-trial-pass">Trial passed</span>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-head">
+              <div class="card-title">Event crew — tech conference</div>
+              <span class="badge badge-neutral">Applied</span>
+            </div>
+            <div class="card-sub">Kandy Craft Collective</div>
+            <div class="g3"></div>
+            <div class="track">
+              <div class="tstep tstep-now"><div class="tdot tdot-now"></div></div>
+              <div class="tstep"><div class="tdot tdot-todo"></div></div>
+              <div class="tstep"><div class="tdot tdot-todo"></div></div>
+              <div class="tstep"><div class="tdot tdot-todo"></div></div>
+            </div>
+            <div class="card-foot">
+              <span class="meta-sm">Applied 2d ago</span>
+              <span class="meta-sm">Not opened yet</span>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-head">
+              <div class="card-title">Inventory data entry</div>
+              <span class="badge badge-ended">Closed – position filled</span>
+            </div>
+            <div class="card-sub">Amaya's Café</div>
+            <div class="card-foot">
+              <span class="meta-sm">Closed 6d ago</span>
+              <span class="meta-sm">Set automatically</span>
+            </div>
+          </div>
+          <div class="scroll-fade"></div>
+        </div>
+      </div>
+
+      <div class="tabbar">
+        <div class="tab"><div class="tab-glyph">⌕</div><div class="tab-label">Gigs</div></div>
+        <div class="tab"><div class="tab-glyph">★</div><div class="tab-label">Saved</div></div>
+        <div class="tab tab-on"><div class="tab-glyph">▤</div><div class="tab-label">Applications</div></div>
+        <div class="tab"><div class="tab-glyph">◍</div><div class="tab-label">Profile</div></div>
+      </div>
+      <div class="home-pad"><div class="home-bar"></div></div>
+    </div>
+    <div class="frame-note">
+      Each row carries its own mini tracker, so the list answers “where is this?” without opening
+      anything. “Not opened yet” is written out — blank space never means nothing happened (§12).
+    </div>
+  </div>
+
+  <!-- ============ 4. APPLICATION DETAIL — DECIDED ============ -->
+  <div class="frame-wrap" id="application-detail">
+    <div class="frame-label">ApplicationDetailScreen.js — rejected, at top</div>
+    <div class="frame frame-hero">
+      <div class="hero-block">
+        <div class="hero-ember"></div>
+        <div class="status status-dk">
+          <span>9:41</span>
+          <div class="status-icons">
+            <div class="bar bar-a"></div><div class="bar bar-b"></div><div class="bar bar-c"></div>
+            <div class="battery"><div class="battery-fill"></div></div>
+          </div>
+        </div>
+
+        <div class="dk-nav">
+          <div class="icon-dk">←</div>
+          <div class="dk-spacer"></div>
+        </div>
+
+        <div class="hero">
+          <h1 class="entity">Product photography<br>— menu shoot</h1>
+          <div class="g3"></div>
+          <div class="hero-row">
+            <span class="dk-pill">Rejected</span>
+            <span class="hero-sub">Sithum Retail Store</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="sheet-flow">
+        <div class="scroll-area">
+          <div class="track">
+            <div class="tstep tstep-done"><div class="tdot tdot-done">✓</div><div class="tlabel tlabel-on">Applied</div></div>
+            <div class="tstep tstep-done"><div class="tdot tdot-done">✓</div><div class="tlabel tlabel-on">Viewed</div></div>
+            <div class="tstep tstep-done"><div class="tdot tdot-done">✓</div><div class="tlabel tlabel-on">Shortlisted</div></div>
+            <div class="tstep tstep-done"><div class="tdot tdot-end">●</div><div class="tlabel tlabel-on">Decision</div></div>
+          </div>
+          <div class="track-line">You were shortlisted, then decided on 2 days ago. This gig is finished for you.</div>
+
+          <div class="g5"></div>
+          <div class="decision">
+            <div class="decision-k">Reason given</div>
+            <div class="decision-reason">Another applicant was a closer fit</div>
+            <div class="decision-note">
+              You were genuinely close — the shoot needed someone with studio lighting of their own.
+              Please do apply for the next one.
+            </div>
+          </div>
+
+          <div class="g5"></div>
+          <div class="section-label">What you submitted</div>
+          <div class="g3"></div>
+          <div class="card card-flat">
+            <div class="card-head">
+              <div class="card-title">Photograph one product on a plain background</div>
+              <span class="badge badge-trial-pass">Passed</span>
+            </div>
+            <div class="g2"></div>
+            <div class="meta-sm">Marked 4 days ago · shown on your profile as a badge</div>
+          </div>
+
+          <div class="g2"></div>
+          <div class="drow"><span class="dlabel">Applied</span><span class="dvalue">18 Jul, 9:12</span></div>
+          <div class="drow"><span class="dlabel">Viewed</span><span class="dvalue">19 Jul, 14:40</span></div>
+          <div class="drow"><span class="dlabel">Decided</span><span class="dvalue">21 Jul, 11:05</span></div>
+          <div class="drow"><span class="dlabel">Resume attached</span><span class="dvalue">None</span></div>
+          <div class="scroll-fade"></div>
+        </div>
+        <div class="home-pad"><div class="home-bar"></div></div>
+      </div>
+    </div>
+    <div class="frame-note">
+      The reason code is the largest thing on the screen, note directly beneath (§12). Status pill is
+      neutral grey on the hero — a rejection is not an error, and colouring it red would make the
+      applicant's history read like a list of failures.
+    </div>
+  </div>
+
+  <!-- ============ 5. WITHDRAW CONFIRM ============ -->
+  <div class="frame-wrap" id="withdraw-confirm">
+    <div class="frame-label">WithdrawConfirm.js — over a live application, scrolled</div>
+    <div class="frame">
+      <div class="status">
+        <span>9:41</span>
+        <div class="status-icons">
+          <div class="bar bar-a"></div><div class="bar bar-b"></div><div class="bar bar-c"></div>
+          <div class="battery"><div class="battery-fill"></div></div>
+        </div>
+      </div>
+
+      <div class="stickybar">
+        <div class="icon-lt">‹</div>
+        <div class="sticky-id">
+          <span class="sticky-name">Weekend café floor staff</span>
+        </div>
+        <span class="badge badge-short">Shortlisted</span>
+      </div>
+
+      <div class="body-pad">
+        <div class="g4"></div>
+        <div class="track">
+          <div class="tstep tstep-done"><div class="tdot tdot-done">✓</div><div class="tlabel tlabel-on">Applied</div></div>
+          <div class="tstep tstep-done"><div class="tdot tdot-done">✓</div><div class="tlabel tlabel-on">Viewed</div></div>
+          <div class="tstep tstep-now"><div class="tdot tdot-now"></div><div class="tlabel tlabel-on">Shortlisted</div></div>
+          <div class="tstep"><div class="tdot tdot-todo"></div><div class="tlabel">Decision</div></div>
+        </div>
+        <div class="track-line">Shortlisted 1 day ago — you're under real consideration.</div>
+        <div class="grow-space"></div>
+      </div>
+
+      <div class="scrim">
+        <div class="modal">
+          <div class="grabber"></div>
+          <div class="modal-title">Withdraw this application?</div>
+          <div class="modal-body">You're currently shortlisted for this gig.</div>
+
+          <div class="g4"></div>
+          <div class="conseq">
+            <div class="conseq-dot"></div>
+            <div class="conseq-text">This can't be undone.</div>
+          </div>
+          <div class="conseq">
+            <div class="conseq-dot"></div>
+            <div class="conseq-text">You can never apply to this gig again — withdrawing doesn't free the slot.</div>
+          </div>
+          <div class="conseq">
+            <div class="conseq-dot"></div>
+            <div class="conseq-text">Brew &amp; Co. will see the application as Withdrawn, so nobody waits on you.</div>
+          </div>
+
+          <div class="g4"></div>
+          <div class="notice notice-calm">
+            <div class="notice-dot notice-dot-calm">i</div>
+            <div class="notice-text notice-text-calm">No reason is required and nothing is held against you.</div>
+          </div>
+
+          <div class="g5"></div>
+          <div class="btn btn-ink">Keep my application</div>
+          <div class="g2"></div>
+          <div class="btn btn-danger-out">Withdraw</div>
+          <div class="g4"></div>
+          <div class="home-bar"></div>
+        </div>
+      </div>
+    </div>
+    <div class="frame-note">
+      The permanence rule (§5) is the whole reason this dialogue exists, so it's stated in full.
+      <b>Keep my application</b> is the weighted action; withdraw is the outline.
+    </div>
+  </div>
+
+</div>
+
+<div class="band-sep"></div>
+
+<div class="band">
+  <span class="band-n">Business</span>
+  <span class="band-d">review, mark, decide</span>
+</div>
+
+<div class="canvas">
+
+  <!-- ============ 6. APPLICANTS LIST ============ -->
+  <div class="frame-wrap" id="applicants">
+    <div class="frame-label">ApplicantsScreen.js — list for one gig</div>
+    <div class="frame">
+      <div class="status">
+        <span>9:41</span>
+        <div class="status-icons">
+          <div class="bar bar-a"></div><div class="bar bar-b"></div><div class="bar bar-c"></div>
+          <div class="battery"><div class="battery-fill"></div></div>
+        </div>
+      </div>
+
+      <div class="topbar">
+        <div class="icon-lt">‹</div>
+        <div class="page-title page-title-sm">Applicants</div>
+        <span class="bar-action">Sort</span>
+      </div>
+
+      <div class="body-pad">
+        <div class="banner banner-context">Weekend café floor staff · 2 positions · 11 applicants</div>
+        <div class="g3"></div>
+        <div class="chips-row">
+          <div class="chip chip-on">Trial passed first</div>
+          <div class="chip">Highest rated</div>
+          <div class="chip">Newest</div>
+        </div>
+
+        <div class="g3"></div>
+        <div class="segs">
+          <div class="seg seg-on">All 11</div>
+          <div class="seg">Trial passed 4</div>
+          <div class="seg">Shortlisted 2</div>
+          <div class="seg">Decided 3</div>
+        </div>
+        <div class="g4"></div>
+
+        <div class="scroll-area">
+          <div class="card">
+            <div class="who-row">
+              <div class="avatar">AP</div>
+              <div class="grow">
+                <div class="who-name">Ashan Perera</div>
+                <div class="who-sub">★ 4.8 · 15 gigs completed · Colombo</div>
+              </div>
+              <span class="badge badge-short">Shortlisted</span>
+            </div>
+            <div class="g3"></div>
+            <div class="chips-row">
+              <span class="badge badge-trial-pass">Trial passed</span>
+              <span class="meta-sm">Applied 5d ago</span>
+            </div>
+            <div class="g3"></div>
+            <div class="btn-row">
+              <div class="btn-xs btn-xs-ink">Open</div>
+              <div class="btn-xs btn-xs-out">Reject</div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="who-row">
+              <div class="avatar avatar-signal">NF</div>
+              <div class="grow">
+                <div class="who-name">Nimasha Fernando</div>
+                <div class="who-sub">★ 4.9 · 8 gigs completed · Dehiwala</div>
+              </div>
+              <span class="badge badge-neutral">Applied</span>
+            </div>
+            <div class="g3"></div>
+            <div class="chips-row">
+              <span class="badge badge-trial-sub">Trial submitted</span>
+              <span class="meta-sm">Applied 1d ago</span>
+            </div>
+            <div class="g3"></div>
+            <div class="btn-row">
+              <div class="btn-xs btn-xs-out">Shortlist</div>
+              <div class="btn-xs btn-xs-out">Reject</div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="who-row">
+              <div class="avatar">TJ</div>
+              <div class="grow">
+                <div class="who-name">Tharindu Jayasuriya</div>
+                <div class="who-sub">No ratings yet · Nugegoda</div>
+              </div>
+              <span class="badge badge-neutral">Viewed</span>
+            </div>
+            <div class="g3"></div>
+            <div class="chips-row">
+              <span class="badge badge-trial-skip">Trial skipped</span>
+              <span class="meta-sm">Applied 3d ago</span>
+            </div>
+            <div class="g3"></div>
+            <div class="btn-row">
+              <div class="btn-xs btn-xs-out">Shortlist</div>
+              <div class="btn-xs btn-xs-out">Reject</div>
+            </div>
+          </div>
+          <div class="scroll-fade"></div>
+        </div>
+      </div>
+
+      <div class="tabbar">
+        <div class="tab"><div class="tab-glyph">▤</div><div class="tab-label">My gigs</div></div>
+        <div class="tab tab-on"><div class="tab-glyph">◈</div><div class="tab-label">Applicants</div></div>
+        <div class="tab"><div class="tab-glyph">◍</div><div class="tab-label">Profile</div></div>
+      </div>
+      <div class="home-pad"><div class="home-bar"></div></div>
+    </div>
+    <div class="frame-note">
+      Shortlist and Reject sit on the row; hiring does not, because it requires opening the person
+      first (§9). Rating and completed-gig count are on the row for the same reason — that's what a
+      time-poor owner sorts on.
+    </div>
+  </div>
+
+  <!-- ============ 7. APPLICANT DETAIL ============ -->
+  <div class="frame-wrap" id="applicant-detail">
+    <div class="frame-label">ApplicantDetailScreen.js — opening this sets Viewed</div>
+    <div class="frame frame-hero">
+      <div class="hero-block">
+        <div class="hero-ember"></div>
+        <div class="status status-dk">
+          <span>9:41</span>
+          <div class="status-icons">
+            <div class="bar bar-a"></div><div class="bar bar-b"></div><div class="bar bar-c"></div>
+            <div class="battery"><div class="battery-fill"></div></div>
+          </div>
+        </div>
+
+        <div class="dk-nav">
+          <div class="icon-dk">←</div>
+          <span class="dk-action">Report</span>
+        </div>
+
+        <div class="hero hero-center">
+          <div class="avatar-circle">AP</div>
+          <div class="profile-name">Ashan Perera</div>
+          <div class="meta-row">
+            <span class="dk-pill">Shortlisted</span>
+            <span class="location-text">Colombo</span>
+          </div>
+          <div class="meta-row">
+            <span class="rating-pill">★ 4.8 · 15 gigs completed</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="sheet-flow">
+        <div class="scroll-area">
+          <div class="notice notice-calm">
+            <div class="notice-dot notice-dot-calm">i</div>
+            <div class="notice-text notice-text-calm">Opening this marked the application Viewed. Ashan can see that, and it can't be undone.</div>
+          </div>
+
+          <div class="g4"></div>
+          <div class="section-label">Skill trial</div>
+          <div class="g3"></div>
+          <div class="card">
+            <div class="card-head">
+              <div class="card-title">Write a 3-line reply to an unhappy customer</div>
+              <span class="badge badge-trial-sub">Submitted</span>
+            </div>
+            <div class="g2"></div>
+            <div class="meta-sm">Submitted 5d ago · not marked yet</div>
+            <div class="card-foot">
+              <span class="meta-sm">Under 30 minutes</span>
+              <span class="section-link">Review the trial →</span>
+            </div>
+          </div>
+
+          <div class="g4"></div>
+          <div class="section-label">Profile snapshot</div>
+          <div class="g3"></div>
+          <div class="entry-card">
+            <div class="entry-title">Barista (part-time)</div>
+            <div class="entry-sub">Brew &amp; Co.</div>
+            <div class="entry-date">Jun 2025 — Present</div>
+          </div>
+          <div class="entry-card">
+            <div class="entry-title">BSc (Hons) Information Technology</div>
+            <div class="entry-sub">SLIIT</div>
+            <div class="entry-date">2024 — Present</div>
+          </div>
+          <div class="g1"></div>
+          <div class="hint-text">Frozen as it stood when he applied on 4 Aug. Later profile edits don't change this.</div>
+          <div class="scroll-fade"></div>
+        </div>
+
+        <div class="pinned">
+          <div class="btn-row">
+            <div class="btn btn-outline" style="flex:1">Reject</div>
+            <div class="btn" style="flex:1">Hire</div>
+          </div>
+          <div class="g3"></div>
+          <div class="home-bar"></div>
+        </div>
+      </div>
+    </div>
+    <div class="frame-note">
+      Rating and completed-gig count are in the hero, above the fold (§13). The snapshot rule is
+      stated in the UI so a business doesn't expect a live profile.
+    </div>
+  </div>
+
+  <!-- ============ 8. TRIAL REVIEW ============ -->
+  <div class="frame-wrap" id="trial-review">
+    <div class="frame-label">TrialReviewScreen.js — mark passed or not passed</div>
+    <div class="frame">
+      <div class="status">
+        <span>9:41</span>
+        <div class="status-icons">
+          <div class="bar bar-a"></div><div class="bar bar-b"></div><div class="bar bar-c"></div>
+          <div class="battery"><div class="battery-fill"></div></div>
+        </div>
+      </div>
+
+      <div class="topbar">
+        <div class="icon-lt">‹</div>
+        <div class="page-title page-title-sm">Trial review</div>
+        <div class="bar-spacer"></div>
+      </div>
+
+      <div class="body-pad">
+        <div class="who-row">
+          <div class="avatar avatar-sm">AP</div>
+          <div class="grow">
+            <div class="who-name">Ashan Perera</div>
+            <div class="who-sub">Submitted 5d ago</div>
+          </div>
+          <span class="badge badge-trial-sub">Submitted</span>
+        </div>
+        <div class="g4"></div>
+
+        <div class="scroll-area">
+          <div class="card card-flat">
+            <div class="card-title">Write a 3-line reply to an unhappy customer</div>
+            <div class="g2"></div>
+            <div class="meta-sm">Under 30 minutes · text response</div>
+          </div>
+
+          <div class="g3"></div>
+          <div class="section-label">His response</div>
+          <div class="g3"></div>
+          <div class="card">
+            <div class="body-text" style="color:var(--ink); font-size:14px">
+              I'm really sorry — twenty-five minutes is far too long and cold coffee is on us.
+              I've remade it fresh and taken it off your bill. If you're in a hurry next time,
+              tell us at the counter and we'll put you first in the queue.
+            </div>
+          </div>
+
+          <div class="g4"></div>
+          <div class="input-label">Note to Ashan (optional)</div>
+          <div class="field field-tall" style="height:88px">
+            <span class="field-hint">Say what worked, or what didn't…</span>
+          </div>
+          <div class="char-count">0 / 300</div>
+
+          <div class="g3"></div>
+          <div class="notice">
+            <div class="notice-dot">!</div>
+            <div class="notice-text">A trial can only be marked once — pass and fail are both final. A pass appears publicly on his profile; a fail is only ever seen by him and you.</div>
+          </div>
+          <div class="scroll-fade"></div>
+        </div>
+
+        <div class="pinned">
+          <div class="btn-row">
+            <div class="btn btn-outline" style="flex:1">Not passed</div>
+            <div class="btn" style="flex:1">Passed</div>
+          </div>
+          <div class="g3"></div>
+          <div class="home-bar"></div>
+        </div>
+      </div>
+    </div>
+    <div class="frame-note">
+      Both the finality and the publicity rules are stated before the tap, since neither is
+      recoverable afterwards (§4).
+    </div>
+  </div>
+
+  <!-- ============ 9. REJECT REASON SHEET ============ -->
+  <div class="frame-wrap" id="reject-reason">
+    <div class="frame-label">RejectReasonSheet.js — reason code is mandatory</div>
+    <div class="frame">
+      <div class="status">
+        <span>9:41</span>
+        <div class="status-icons">
+          <div class="bar bar-a"></div><div class="bar bar-b"></div><div class="bar bar-c"></div>
+          <div class="battery"><div class="battery-fill"></div></div>
+        </div>
+      </div>
+
+      <div class="topbar">
+        <div class="icon-lt">‹</div>
+        <div class="page-title page-title-sm">Applicants</div>
+        <span class="bar-action">Sort</span>
+      </div>
+
+      <div class="body-pad">
+        <div class="banner banner-context">Weekend café floor staff · 2 positions · 11 applicants</div>
+        <div class="grow-space"></div>
+      </div>
+
+      <div class="tabbar">
+        <div class="tab"><div class="tab-glyph">▤</div><div class="tab-label">My gigs</div></div>
+        <div class="tab tab-on"><div class="tab-glyph">◈</div><div class="tab-label">Applicants</div></div>
+        <div class="tab"><div class="tab-glyph">◍</div><div class="tab-label">Profile</div></div>
+      </div>
+
+      <div class="scrim">
+        <div class="modal">
+          <div class="grabber"></div>
+          <div class="modal-title">Why are you rejecting?</div>
+          <div class="modal-body">Rejecting Tharindu Jayasuriya. He'll see the reason you pick.</div>
+
+          <div class="g4"></div>
+          <div class="radio-item">
+            <span class="radio-text">Schedule did not match</span>
+            <div class="radio"></div>
+          </div>
+          <div class="radio-item">
+            <span class="radio-text">Location too far</span>
+            <div class="radio"></div>
+          </div>
+          <div class="radio-item radio-item-on">
+            <span class="radio-text radio-text-on">Skill trial not attempted</span>
+            <div class="radio-on">✓</div>
+          </div>
+          <div class="radio-item">
+            <span class="radio-text">Skill trial not passed</span>
+            <div class="radio"></div>
+          </div>
+          <div class="radio-item">
+            <span class="radio-text">Looking for more relevant experience</span>
+            <div class="radio"></div>
+          </div>
+          <div class="radio-item">
+            <span class="radio-text">Another applicant was a closer fit</span>
+            <div class="radio"></div>
+          </div>
+          <div class="radio-item">
+            <span class="radio-text">Role no longer needed</span>
+            <div class="radio"></div>
+          </div>
+
+          <div class="g2"></div>
+          <div class="input-label">Add a note (optional)</div>
+          <div class="field"><span class="field-hint">Shown to him word for word</span></div>
+
+          <div class="g4"></div>
+          <div class="btn-row">
+            <div class="btn btn-outline" style="flex:1">Cancel</div>
+            <div class="btn" style="flex:1">Reject</div>
+          </div>
+          <div class="g4"></div>
+          <div class="home-bar"></div>
+        </div>
+      </div>
+    </div>
+    <div class="frame-note">
+      Seven codes, no “other”, no free-text-only escape. The two trial codes appear because this gig
+      carried a trial — on a gig without one they're absent. <b>Positions filled is deliberately not
+      in this list</b>; only the system sets it (§10).
+    </div>
+  </div>
+
+  <!-- ============ 10. HIRE CONFIRM ============ -->
+  <div class="frame-wrap" id="hire-confirm">
+    <div class="frame-label">HireConfirmSheet.js — the hire that fills the gig</div>
+    <div class="frame">
+      <div class="status">
+        <span>9:41</span>
+        <div class="status-icons">
+          <div class="bar bar-a"></div><div class="bar bar-b"></div><div class="bar bar-c"></div>
+          <div class="battery"><div class="battery-fill"></div></div>
+        </div>
+      </div>
+
+      <div class="stickybar">
+        <div class="icon-lt">‹</div>
+        <div class="sticky-id">
+          <div class="avatar-mini">AP</div>
+          <span class="sticky-name">Ashan Perera</span>
+        </div>
+        <span class="sticky-rating">★ 4.8</span>
+      </div>
+
+      <div class="body-pad">
+        <div class="g4"></div>
+        <div class="section-label">Profile snapshot</div>
+        <div class="g3"></div>
+        <div class="entry-card">
+          <div class="entry-title">Barista (part-time)</div>
+          <div class="entry-sub">Brew &amp; Co.</div>
+          <div class="entry-date">Jun 2025 — Present</div>
+        </div>
+        <div class="grow-space"></div>
+      </div>
+
+      <div class="scrim">
+        <div class="modal">
+          <div class="grabber"></div>
+          <div class="modal-title">Hire Ashan Perera?</div>
+          <div class="modal-body">This is the second of 2 positions, so hiring him fills the gig.</div>
+
+          <div class="g4"></div>
+          <div class="conseq">
+            <div class="conseq-dot"></div>
+            <div class="conseq-text">The gig moves to <b>Filled</b> and stops taking applications.</div>
+          </div>
+          <div class="conseq">
+            <div class="conseq-dot"></div>
+            <div class="conseq-text">6 applications that were never opened or never advanced close automatically as <b>Closed – position filled</b>.</div>
+          </div>
+          <div class="conseq">
+            <div class="conseq-dot"></div>
+            <div class="conseq-text">2 shortlisted people and 3 who submitted a trial <b>stay open</b> — they still need an answer from you.</div>
+          </div>
+
+          <div class="g3"></div>
+          <div class="notice">
+            <div class="notice-dot">!</div>
+            <div class="notice-text">My gigs will show “5 applicants still waiting on you” until you've answered each one. It doesn't expire.</div>
+          </div>
+
+          <div class="g4"></div>
+          <div class="btn-row">
+            <div class="btn btn-outline" style="flex:1">Cancel</div>
+            <div class="btn" style="flex:1">Hire</div>
+          </div>
+          <div class="g4"></div>
+          <div class="home-bar"></div>
+        </div>
+      </div>
+    </div>
+    <div class="frame-note">
+      §6 in one dialogue: what auto-closes, what doesn't, and the debt left behind. Stating the
+      remaining count before the tap is the only way the “still waiting on you” prompt isn't a shock.
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>
