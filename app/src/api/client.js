@@ -46,7 +46,7 @@ client.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
     // Only treat this as an expired-access-token case if the failing
-    // request actually carried a bearer token — login/register/refresh
+    // request actually carried a bearer token - login/register/refresh
     // calls never do, so a 401 from those is a real auth failure, not an
     // expired session.
     const isExpiredAccessToken =

@@ -29,11 +29,11 @@ export default function ProfileScreen() {
   const [status, setStatus] = useState(STATUS.LOADING);
   const [reloadToken, setReloadToken] = useState(0);
 
-  // Refetches on every focus, not just on mount — GL-148's edit screen
+  // Refetches on every focus, not just on mount - GL-148's edit screen
   // saves and calls goBack() rather than passing data back, so this is
   // what makes the new values actually show up on return. The fetch
   // itself only ever sets state after the `await`, matching AuthContext's
-  // bootstrap effect — the retry button is what flips status back to
+  // bootstrap effect - the retry button is what flips status back to
   // LOADING (from its own onPress, not from here), then bumps
   // `reloadToken` to run this again.
   useFocusEffect(
@@ -196,15 +196,15 @@ export default function ProfileScreen() {
           </View>
 
           {/*
-            Skill Trial badges — read-only, no route into anything. The
+            Skill Trial badges - read-only, no route into anything. The
             per-entry shape isn't published by Application & Hiring yet and
-            `skillTrialResults` is empty until Sprint 3, so — same discipline
-            as the rating summary slot above — nothing is rendered here
+            `skillTrialResults` is empty until Sprint 3, so - same discipline
+            as the rating summary slot above - nothing is rendered here
             rather than a guessed shape.
           */}
 
           {/*
-            TEMP — testing only, not part of GL-146. Account Settings
+            TEMP - testing only, not part of GL-146. Account Settings
             (Sprint 2, unticketed) is where Log Out actually belongs per the
             mockup index; remove this once that screen exists.
           */}

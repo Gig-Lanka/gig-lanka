@@ -5,7 +5,7 @@ import { APPLICATION_STATUSES } from '../../constants/enums';
 import { formatPay, formatRelativeTime } from '../../utils/format';
 
 // §12 of the mockup source: Applied and Viewed neutral, Shortlisted and
-// Hired positive, Rejected / Withdrawn / Closed muted grey — never alarm
+// Hired positive, Rejected / Withdrawn / Closed muted grey - never alarm
 // red, even for a rejection.
 const BADGE_VARIANT_BY_STATUS = {
   applied: 'neutral',

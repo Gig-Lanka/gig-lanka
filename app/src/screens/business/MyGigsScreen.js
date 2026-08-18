@@ -29,7 +29,7 @@ export default function MyGigsScreen() {
   // Refetches on every focus, not just mount, so returning from posting
   // (GL-119) or editing (GL-120) a gig shows the updated list without a
   // manual refresh. Only the first-ever load blocks the screen with a
-  // loader — later focuses refetch silently so re-entering the tab doesn't
+  // loader - later focuses refetch silently so re-entering the tab doesn't
   // flash it.
   useFocusEffect(
     useCallback(() => {

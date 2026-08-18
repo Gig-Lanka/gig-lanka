@@ -1,16 +1,16 @@
-// Upload client — GL-152. `POST /api/uploads` (docs/api-contract.md §9) takes
+// Upload client - GL-152. `POST /api/uploads` (docs/api-contract.md §9) takes
 // multipart form data under the fixed `file` field plus a `folder` purpose;
 // the client never talks to Supabase directly, only to this endpoint.
 //
 // React Native's `FormData` needs a `{ uri, name, type }` object for a file
-// entry, not a browser `File`/`Blob` — a mismatch here surfaces as an empty
+// entry, not a browser `File`/`Blob` - a mismatch here surfaces as an empty
 // upload rather than an error, so all three are always set explicitly from
 // the `expo-image-picker` asset.
 
 import client from './client';
 
 /**
- * `POST /api/uploads` — uploads a single image for the given purpose and
+ * `POST /api/uploads` - uploads a single image for the given purpose and
  * returns its stored URL (`data.url`, §9.1). `asset` is an
  * `expo-image-picker` result asset; `folder` is one of the server's closed
  * purposes (only `"avatars"` this sprint).

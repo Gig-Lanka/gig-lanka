@@ -10,7 +10,7 @@ function statusLabel(value) {
   return APPLICATION_STATUSES.find((entry) => entry.value === value)?.label ?? value;
 }
 
-// §11.1 only ever records `appliedAt`, `viewedAt` and `decidedAt` — there is
+// §11.1 only ever records `appliedAt`, `viewedAt` and `decidedAt` - there is
 // no `shortlistedAt`. A live application's own `status` says exactly which
 // path step it's on. A decided one only proves `applied` (always) and
 // `viewed` (iff `viewedAt` is set); whether it passed through `shortlisted`
@@ -36,7 +36,7 @@ function buildSteps(application) {
     return { key: value, label: statusLabel(value), state };
   });
 
-  // Withdrawn and Closed – position filled don't sit on the linear path —
+  // Withdrawn and Closed – position filled don't sit on the linear path -
   // they still occupy this final slot so every status renders somewhere,
   // but as a named outcome rather than a forced "Decision" step.
   const decisionStep = isTerminal
@@ -59,7 +59,7 @@ function buildSummary(application) {
   if (status === 'withdrawn') {
     return `Withdrawn ${formatRelativeTime(decidedAt)}. You can't apply to this gig again.`;
   }
-  return `Closed ${formatRelativeTime(decidedAt)} — the position was filled.`;
+  return `Closed ${formatRelativeTime(decidedAt)} - the position was filled.`;
 }
 
 const DOT_GLYPH = { done: '✓', end: '●' };

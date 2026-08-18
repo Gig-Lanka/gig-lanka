@@ -17,14 +17,14 @@ import { PROFILE_BIO_MAX_LENGTH, validateEditProfileForm } from '../../utils/val
 
 const STATUS = { LOADING: 'loading', READY: 'ready', ERROR: 'error' };
 
-// Fields this form doesn't show but must still send — PUT replaces the
+// Fields this form doesn't show but must still send - PUT replaces the
 // profile in full (docs/api-contract.md §8.4), so leaving these out of the
 // payload would clear them. `photo` is GL-114's field, `workExperience`
 // and `education` are GL-113's; none of the three are edited here.
 //
 // Seeker-only server-side: a business's own GET /me still returns
 // `workExperience: []` / `education: []` as schema defaults, but sending
-// either back — even empty — is rejected with "is not a field on a
+// either back - even empty - is rejected with "is not a field on a
 // business profile" (§8.4). So business only passes through `photo`.
 const PASSTHROUGH_FIELDS_BY_ROLE = {
   seeker: ['photo', 'workExperience', 'education'],
@@ -52,7 +52,7 @@ export default function EditProfileScreen() {
   const [formError, setFormError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  // Refetches every time this screen gains focus, not just on mount — the
+  // Refetches every time this screen gains focus, not just on mount - the
   // form is opened fresh from the view screen each time, and a stale copy
   // here would mean re-editing values that already changed.
   useFocusEffect(
@@ -97,7 +97,7 @@ export default function EditProfileScreen() {
     }, [reloadToken, isBusiness]),
   );
 
-  // Same shape for every PUT /api/profiles/me call this screen makes —
+  // Same shape for every PUT /api/profiles/me call this screen makes -
   // Save and the photo auto-persist below both replace the full profile
   // (§8.4), so both send every field this form owns, not just the one that
   // changed. `overrides` lets the photo flow drop in the freshly uploaded
@@ -153,7 +153,7 @@ export default function EditProfileScreen() {
 
   // GL-154: a storage failure (502 STORAGE_UNAVAILABLE, from either the
   // upload or the profile save that deletes the old object) reads as "try
-  // again later" — the file itself may have been fine. Every other rejection
+  // again later" - the file itself may have been fine. Every other rejection
   // reads as the server's own reason (oversize, wrong type, etc.), so the two
   // are never confused for one another.
   function describePhotoError(error, fallbackMessage) {
@@ -165,11 +165,11 @@ export default function EditProfileScreen() {
   }
 
   // GL-153: uploads straight to the API and persists the returned URL right
-  // away, independent of the Save button — the mockup and acceptance
+  // away, independent of the Save button - the mockup and acceptance
   // criteria call for the new photo to appear immediately, not on the next
   // explicit save. `passthrough.photo` is updated on success so a later Save
   // doesn't overwrite it with the stale value it was loaded with. Replacing
-  // an existing photo this way also deletes the old storage object — see
+  // an existing photo this way also deletes the old storage object - see
   // `updateMyProfile` in `profile.service.js` (GL-154).
   const handleImageSelected = async (asset) => {
     setPhotoError('');
@@ -185,7 +185,7 @@ export default function EditProfileScreen() {
     }
   };
 
-  // GL-154: clears the photo — the profile falls back to the initials
+  // GL-154: clears the photo - the profile falls back to the initials
   // avatar and the stored object is deleted server-side, same as a replace.
   const handleRemovePhoto = async () => {
     setPhotoError('');
@@ -282,7 +282,7 @@ export default function EditProfileScreen() {
           error={errors.city}
           hint={
             isBusiness && !errors.city
-              ? "Students search by city, so use the area they'd travel to — not a full address."
+              ? "Students search by city, so use the area they'd travel to - not a full address."
               : undefined
           }
           disabled={submitting}

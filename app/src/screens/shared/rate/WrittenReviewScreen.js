@@ -1,4 +1,4 @@
-// GL-204/GL-205 — WrittenReviewScreen.js from the v3 mockup. No Skip here,
+// GL-204/GL-205 - WrittenReviewScreen.js from the v3 mockup. No Skip here,
 // unlike the categories step: text is required server-side (§12.1), so
 // offering an escape hatch that leads to a submission that can never
 // succeed would be wrong.
@@ -24,7 +24,7 @@ function categoryLabel(categoryList, value) {
   return categoryList.find((category) => category.value === value)?.label ?? value;
 }
 
-// A generic fallback only — the 409s §12.1 defines (not hired, already
+// A generic fallback only - the 409s §12.1 defines (not hired, already
 // reviewed) and the 403 for a non-party both carry their own readable
 // `message` from the server, which is shown as-is when present.
 const GENERIC_SUBMIT_ERROR = 'Could not submit your rating. Check your connection and try again.';
@@ -49,7 +49,7 @@ export default function WrittenReviewScreen() {
     setSubmitting(true);
     try {
       await reviewApi.submitReview(applicationId, { rating, categories, text });
-      // replace, not navigate — a submitted review is permanent, so the
+      // replace, not navigate - a submitted review is permanent, so the
       // written-review step should never be reachable again by going back
       // from the confirmation that follows it.
       navigation.replace('RatingConfirmation');
@@ -87,7 +87,7 @@ export default function WrittenReviewScreen() {
           </Text>
 
           <Text className="mt-3 text-[12px] leading-[17.4px] text-muted">
-            Mention what stood out — the work itself, timing, or how they communicated. This is
+            Mention what stood out - the work itself, timing, or how they communicated. This is
             feedback about the gig, not the person.
           </Text>
 
