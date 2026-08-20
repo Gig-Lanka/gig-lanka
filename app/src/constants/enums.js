@@ -47,13 +47,19 @@ export const GIG_SORT_ORDERS = freezeList([
   { value: 'starting_soon', label: 'Starting soon' },
 ]);
 
-// `terminal` follows §11.2/§11.3: hired, rejected, withdrawn and
-// closed_filled have no outgoing transition and can never be reopened.
+// `terminal` marks the five §11.2 calls "decided" - hired, completed,
+// rejected, withdrawn and closed_filled - and drives isLiveApplication
+// (ApplicationStatusFilter.js), which the tracker also consumes. `hired`
+// keeps `terminal: true` even though §11.3 now gives it one outgoing move
+// (to completed): flipping it to false would make PATH_ORDER.indexOf('hired')
+// return -1, and buildSteps would then render every step of a hired
+// application as not reached - an empty tracker on hire.
 export const APPLICATION_STATUSES = freezeList([
   { value: 'applied', label: 'Applied', terminal: false },
   { value: 'viewed', label: 'Viewed', terminal: false },
   { value: 'shortlisted', label: 'Shortlisted', terminal: false },
   { value: 'hired', label: 'Hired', terminal: true },
+  { value: 'completed', label: 'Completed', terminal: true },
   { value: 'rejected', label: 'Rejected', terminal: true },
   { value: 'withdrawn', label: 'Withdrawn', terminal: true },
   { value: 'closed_filled', label: 'Closed – position filled', terminal: true },
