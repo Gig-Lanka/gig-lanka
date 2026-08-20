@@ -4,10 +4,15 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 
 import { authApi } from '../../api';
+import ConfirmDialog from '../../components/ui/ConfirmDialog';
+import EmptyState from '../../components/ui/EmptyState';
+import Loader from '../../components/ui/Loader';
 import ScreenHeader from '../../components/ui/ScreenHeader';
 import SectionLabel from '../../components/ui/SectionLabel';
 import useAuth from '../../hooks/useAuth';
 import { formatShortDate } from '../../utils/format';
+
+const STATUS = { LOADING: 'loading', READY: 'ready', ERROR: 'error' };
 
 const ROLE_LABELS = {
   seeker: 'Job Seeker',
@@ -46,22 +51,54 @@ export default function AccountSettingsScreen() {
 
   // AuthContext's user already carries createdAt from login/register/bootstrap
   // (docs/api-contract.md §5.1-5.2, §5.5), so this only round-trips to
-  // /auth/me for a context copy that predates that field.
-  const [fetchedCreatedAt, setFetchedCreatedAt] = useState(null);
-  const createdAt = user?.createdAt ?? fetchedCreatedAt;
+  // /auth/me for a context copy that predates that field - status starts
+  // READY already in the common case and never flashes a loader.
+  const [createdAt, setCreatedAt] = useState(user?.createdAt ?? null);
+  const [status, setStatus] = useState(user?.createdAt ? STATUS.READY : STATUS.LOADING);
+  const [reloadToken, setReloadToken] = useState(0);
+  const [logoutConfirmVisible, setLogoutConfirmVisible] = useState(false);
 
   useEffect(() => {
     if (user?.createdAt) return undefined;
 
     let cancelled = false;
-    authApi.getCurrentUser().then((result) => {
-      if (!cancelled) setFetchedCreatedAt(result.user.createdAt);
-    });
+
+    async function loadCreatedAt() {
+      try {
+        const result = await authApi.getCurrentUser();
+        if (!cancelled) {
+          setCreatedAt(result.user.createdAt);
+          setStatus(STATUS.READY);
+        }
+      } catch {
+        if (!cancelled) setStatus(STATUS.ERROR);
+      }
+    }
+
+    loadCreatedAt();
 
     return () => {
       cancelled = true;
     };
-  }, [user]);
+  }, [user, reloadToken]);
+
+  if (status === STATUS.LOADING) {
+    return <Loader fullScreen />;
+  }
+
+  if (status === STATUS.ERROR) {
+    return (
+      <EmptyState
+        className="bg-paper"
+        message="We couldn't load your account details."
+        actionLabel="Retry"
+        onAction={() => {
+          setStatus(STATUS.LOADING);
+          setReloadToken((token) => token + 1);
+        }}
+      />
+    );
+  }
 
   return (
     <SafeAreaView className="flex-1 bg-paper" edges={['top', 'bottom']}>
@@ -87,7 +124,7 @@ export default function AccountSettingsScreen() {
             onPress={() => navigation.navigate('ChangePassword')}
           />
           <Divider />
-          <NavRow label="Log out" onPress={logout} />
+          <NavRow label="Log out" onPress={() => setLogoutConfirmVisible(true)} />
         </View>
 
         <SectionLabel className="mt-6">Profile</SectionLabel>
@@ -106,6 +143,24 @@ export default function AccountSettingsScreen() {
           ) : null}
         </View>
       </ScrollView>
+
+      {/* Sprint 3 work (account deactivation) - disabled so the layout is
+          settled now rather than a destructive action landing later on a
+          screen that has already been reviewed. */}
+      <Pressable disabled className="items-center px-[22px] py-2 opacity-40">
+        <Text className="text-[14px] font-semibold text-danger">Deactivate account</Text>
+      </Pressable>
+
+      <ConfirmDialog
+        visible={logoutConfirmVisible}
+        destructive
+        title="Log out?"
+        body="You'll need to sign in again to access your account."
+        confirmLabel="Log out"
+        cancelLabel="Cancel"
+        onConfirm={logout}
+        onCancel={() => setLogoutConfirmVisible(false)}
+      />
     </SafeAreaView>
   );
 }

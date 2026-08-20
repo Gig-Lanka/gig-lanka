@@ -5,6 +5,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 
 import { profileApi } from '../../api';
 import Avatar from '../../components/ui/Avatar';
+import Button from '../../components/ui/Button';
 import Chip from '../../components/ui/Chip';
 import EmptyState from '../../components/ui/EmptyState';
 import HeroHeader, { HeroSheet, HeroStickyBar } from '../../components/ui/HeroHeader';
@@ -118,6 +119,15 @@ export default function ProfileScreen() {
               </View>
             </View>
           ) : null}
+
+          <Button
+            variant="small"
+            fullWidth={false}
+            onPress={() => navigation.navigate('AccountSettings')}
+            className="mt-8 self-center"
+          >
+            Account settings
+          </Button>
         </HeroSheet>
       </Animated.ScrollView>
 
