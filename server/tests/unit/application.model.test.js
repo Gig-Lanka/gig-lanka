@@ -43,10 +43,11 @@ describe('Application model', () => {
     expect(application.appliedAt).toBeInstanceOf(Date);
     expect(application.viewedAt).toBeNull();
     expect(application.decidedAt).toBeNull();
+    expect(application.completedAt).toBeNull();
     expect(application.profileSnapshot.name).toBe('Nimal Perera');
   });
 
-  it('only accepts the seven closed status values', async () => {
+  it('only accepts the eight closed status values', async () => {
     const application = new Application({
       gig: new mongoose.Types.ObjectId(),
       applicant: new mongoose.Types.ObjectId(),

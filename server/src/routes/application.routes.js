@@ -4,6 +4,7 @@ import {
   getMyApplications,
   getApplication,
   withdrawApplication,
+  completeApplication,
 } from '../controllers/application.controller.js';
 import { validate } from '../middleware/validate.middleware.js';
 import { requireAuth, requireRole } from '../middleware/auth.middleware.js';
@@ -36,5 +37,17 @@ router.get('/applications/:id', requireAuth, getApplication);
 // transitionApplicationStatus, the same layering gig.routes.js uses for
 // close/delete (role gate at the route, ownership in the service).
 router.patch('/applications/:id/withdraw', requireAuth, requireRole('seeker'), withdrawApplication);
+
+// GL-248. The mirror of withdraw, and the same layering: requireRole gates
+// the kind of actor, and which specific business owns the gig is checked
+// inside transitionApplicationStatus. Business-only — a seeker never marks
+// their own work complete, including the applicant themselves. No validate()
+// and no body: completion takes no reason.
+router.patch(
+  '/applications/:id/complete',
+  requireAuth,
+  requireRole('business'),
+  completeApplication,
+);
 
 export default router;
