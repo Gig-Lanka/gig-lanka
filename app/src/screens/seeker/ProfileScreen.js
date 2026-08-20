@@ -5,6 +5,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 
 import { profileApi } from '../../api';
 import Avatar from '../../components/ui/Avatar';
+import Button from '../../components/ui/Button';
 import EmptyState from '../../components/ui/EmptyState';
 import HeroHeader, { HeroSheet, HeroStickyBar } from '../../components/ui/HeroHeader';
 import Loader from '../../components/ui/Loader';
@@ -199,6 +200,15 @@ export default function ProfileScreen() {
             as the rating summary slot above - nothing is rendered here
             rather than a guessed shape.
           */}
+
+          <Button
+            variant="small"
+            fullWidth={false}
+            onPress={() => navigation.navigate('AccountSettings')}
+            className="mt-8 self-center"
+          >
+            Account settings
+          </Button>
         </HeroSheet>
       </Animated.ScrollView>
 
