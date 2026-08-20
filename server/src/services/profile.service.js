@@ -157,6 +157,24 @@ export const getPublicProfile = async (userId) => {
   return toPublicProfile(user, profile);
 };
 
+// The single writer of Profile.ratingSummary (GL-222/GL-265) — called only by
+// review.service.js after it recomputes a subject's aggregate from their
+// reviews. Narrow by design: this sets ratingSummary alone, never a general
+// profile write. Goes through getOrCreateProfile rather than a plain
+// updateOne so a subject who has never read their own profile still gets one
+// created here — otherwise the aggregate would silently not persist, and a
+// later lazy read would create a fresh, zeroed profile that looks like it was
+// never reviewed.
+export const setRatingSummary = async (userId, ratingSummary) => {
+  const user = await User.findById(userId);
+
+  if (!user) return;
+
+  const profile = await getOrCreateProfile(user);
+  profile.ratingSummary = ratingSummary;
+  await profile.save();
+};
+
 // The name and photo any other feature embeds when it shows who someone is —
 // a gig's business block, and later an application or review author. This is
 // the only shape other components should read a profile through, so when the
