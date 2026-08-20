@@ -7,11 +7,12 @@ import { getMyProfile } from './profile.service.js';
 
 // Source status -> target status -> which kind of actor may trigger that
 // move. Modeled as data, not a chain of conditionals, so Sprint 2's hiring
-// flow and Sprint 3's auto-close rule can extend it safely. Terminal
-// statuses (Hired, Rejected, Withdrawn, Closed – position filled) have no
-// entry here, so any move out of one of them falls straight through to the
-// 409 below — nothing reopens a terminal application, and status never
-// moves backwards.
+// flow and Sprint 3's auto-close rule can extend it safely. A status with
+// no entry here has no way out of it, so any move out of one falls straight
+// through to the 409 below — nothing reopens a finished application, and
+// status never moves backwards. Rejected, Withdrawn and Closed – position
+// filled are the three that end there; Hired's single outgoing move is to
+// Completed, added by GL-218 so the work itself can be marked finished.
 //
 // 'business' means the business that posted the gig, specifically — not
 // any business. 'applicant' means the seeker who owns the application.
@@ -36,10 +37,20 @@ const TRANSITION_RULES = {
     rejected: 'business',
     withdrawn: 'applicant',
   },
+  // The only way out of Hired, and only for the business that posted the
+  // gig. Nothing else is added here: `applied -> hired` and `viewed -> hired`
+  // stay refused, so hiring still requires shortlisting first — that chain is
+  // what the seeker's tracker exists to show.
+  hired: {
+    completed: 'business',
+  },
 };
 
 const TERMINAL_STATUSES = ['hired', 'rejected', 'withdrawn', 'closed_filled'];
-const LIVE_STATUSES = ['applied', 'viewed', 'shortlisted', 'hired'];
+// Completed is live: finishing the work is not leaving the process, so the
+// gig's applicantCount must not fall when hire -> complete happens. A count
+// that drops when a job is done reads as a bug.
+const LIVE_STATUSES = ['applied', 'viewed', 'shortlisted', 'hired', 'completed'];
 
 // The two Skill Trial reason codes only make sense once a gig can carry a
 // trial, which arrives in Sprint 3. `gig.skillTrial` does not exist on the
@@ -230,6 +241,10 @@ export const transitionApplicationStatus = async (application, targetStatus, act
     application.viewedAt = new Date();
   }
 
+  if (targetStatus === 'completed' && !application.completedAt) {
+    application.completedAt = new Date();
+  }
+
   if (TERMINAL_STATUSES.includes(targetStatus) && !application.decidedAt) {
     application.decidedAt = new Date();
   }
@@ -351,6 +366,28 @@ export const withdrawApplication = async (id, actor) => {
   const { application } = await getApplicationWithParties(id);
 
   const updated = await transitionApplicationStatus(application, 'withdrawn', actor);
+  const gig = await Gig.findById(updated.gig);
+
+  return {
+    application: { ...updated.toJSON(), gig: toGigSummary(gig) },
+  };
+};
+
+// GL-248: moves a hired application to Completed through
+// transitionApplicationStatus — the same single entry point withdrawing uses,
+// and there is no second path that writes the status, not even for testing.
+// That function enforces "only the business that posted the gig" by ownership
+// (403 for a seeker, including the applicant themselves, and for a business
+// that owns a different gig) and "only from Hired" (any other source status
+// has no `completed` target in TRANSITION_RULES, so it falls through to 409
+// INVALID_APPLICATION_TRANSITION naming both statuses). It also stamps
+// completedAt once. No reason is passed: completion takes none, and must not
+// acquire one — reasons belong to rejections. The applicant count is
+// untouched, since Completed is in the live set.
+export const completeApplication = async (id, actor) => {
+  const { application } = await getApplicationWithParties(id);
+
+  const updated = await transitionApplicationStatus(application, 'completed', actor);
   const gig = await Gig.findById(updated.gig);
 
   return {
