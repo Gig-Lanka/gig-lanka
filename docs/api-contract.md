@@ -462,15 +462,18 @@ Youth worker set (rated by the business):
 
 ### 6.10 Rating aggregate shape
 
-The summary that lands on a profile once reviews exist for it. Flat by design — an average, a count, and a short list of common categories, nothing here needs a histogram in Sprint 1.
+The summary that lands on a profile once reviews exist for it: an average, a count, a short list of common categories, and a star-by-star histogram.
 
 ```json
 {
   "averageRating": 4.6,
   "reviewCount": 12,
-  "topCategories": ["communication", "punctuality"]
+  "topCategories": ["communication", "punctuality"],
+  "distribution": { "1": 0, "2": 0, "3": 1, "4": 3, "5": 8 }
 }
 ```
+
+- `distribution` — the count of reviews at each star value, keyed `"1"` through `"5"`. Always all five keys, each defaulting to `0`. The five counts sum to `reviewCount`.
 
 **Ownership boundary**, stated in both directions so neither epic computes the other's number: the Review component (this contract's `6.9`) owns the aggregate and is the only thing that writes it, computed from the reviews collection starting in Sprint 2. User & Profile stores the aggregate on the profile document and displays it, and never writes it.
 
@@ -550,7 +553,8 @@ Returned by `GET /api/profiles/me` and `PUT /api/profiles/me`, under `data.profi
   "ratingSummary": {
     "averageRating": 0,
     "reviewCount": 0,
-    "topCategories": []
+    "topCategories": [],
+    "distribution": { "1": 0, "2": 0, "3": 0, "4": 0, "5": 0 }
   },
   "skillTrialResults": [],
   "createdAt": "2026-08-12T22:31:14.195Z",
@@ -608,7 +612,8 @@ Returned by `GET /api/profiles/:userId`, under `data.profile`. Built from an exp
   "ratingSummary": {
     "averageRating": 0,
     "reviewCount": 0,
-    "topCategories": []
+    "topCategories": [],
+    "distribution": { "1": 0, "2": 0, "3": 0, "4": 0, "5": 0 }
   }
 }
 ```
@@ -626,7 +631,8 @@ Returned by `GET /api/profiles/:userId`, under `data.profile`. Built from an exp
   "ratingSummary": {
     "averageRating": 0,
     "reviewCount": 0,
-    "topCategories": []
+    "topCategories": [],
+    "distribution": { "1": 0, "2": 0, "3": 0, "4": 0, "5": 0 }
   }
 }
 ```
@@ -656,7 +662,7 @@ Returns the signed-in user's full profile, creating it first if it does not exis
       "workExperience": [],
       "education": [],
       "skillTrialResults": [],
-      "ratingSummary": { "averageRating": 0, "reviewCount": 0, "topCategories": [] },
+      "ratingSummary": { "averageRating": 0, "reviewCount": 0, "topCategories": [], "distribution": { "1": 0, "2": 0, "3": 0, "4": 0, "5": 0 } },
       "createdAt": "2026-08-12T22:31:14.195Z",
       "updatedAt": "2026-08-12T22:31:14.195Z"
     }
@@ -1224,7 +1230,7 @@ Only the owner. Permanently deletes the gig. There is no soft delete and no undo
         "endDate": "2027-12-01"
       }
     ],
-    "rating": { "averageRating": 4.6, "reviewCount": 12, "topCategories": ["communication"] }
+    "rating": { "averageRating": 4.6, "reviewCount": 12, "topCategories": ["communication"], "distribution": { "1": 0, "2": 0, "3": 1, "4": 3, "5": 8 } }
   },
   "status": "applied",
   "appliedAt": "2026-08-04T09:15:00.000Z",
