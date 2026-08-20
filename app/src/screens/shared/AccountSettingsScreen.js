@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 
 import { authApi } from '../../api';
+import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import EmptyState from '../../components/ui/EmptyState';
 import Loader from '../../components/ui/Loader';
 import ScreenHeader from '../../components/ui/ScreenHeader';
@@ -55,6 +56,7 @@ export default function AccountSettingsScreen() {
   const [createdAt, setCreatedAt] = useState(user?.createdAt ?? null);
   const [status, setStatus] = useState(user?.createdAt ? STATUS.READY : STATUS.LOADING);
   const [reloadToken, setReloadToken] = useState(0);
+  const [logoutConfirmVisible, setLogoutConfirmVisible] = useState(false);
 
   useEffect(() => {
     if (user?.createdAt) return undefined;
@@ -122,7 +124,7 @@ export default function AccountSettingsScreen() {
             onPress={() => navigation.navigate('ChangePassword')}
           />
           <Divider />
-          <NavRow label="Log out" onPress={logout} />
+          <NavRow label="Log out" onPress={() => setLogoutConfirmVisible(true)} />
         </View>
 
         <SectionLabel className="mt-6">Profile</SectionLabel>
@@ -148,6 +150,17 @@ export default function AccountSettingsScreen() {
       <Pressable disabled className="items-center px-[22px] py-2 opacity-40">
         <Text className="text-[14px] font-semibold text-danger">Deactivate account</Text>
       </Pressable>
+
+      <ConfirmDialog
+        visible={logoutConfirmVisible}
+        destructive
+        title="Log out?"
+        body="You'll need to sign in again to access your account."
+        confirmLabel="Log out"
+        cancelLabel="Cancel"
+        onConfirm={logout}
+        onCancel={() => setLogoutConfirmVisible(false)}
+      />
     </SafeAreaView>
   );
 }
