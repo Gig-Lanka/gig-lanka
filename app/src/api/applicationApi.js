@@ -35,9 +35,20 @@ async function withdrawApplication(id) {
   return response.data.data;
 }
 
+/**
+ * `PATCH /api/applications/:id/complete` - mark a hired application complete
+ * (§11.11). Business-only, and only from `hired`. No request body:
+ * completion takes no reason.
+ */
+async function completeApplication(id) {
+  const response = await client.patch(`/applications/${id}/complete`);
+  return response.data.data;
+}
+
 export default {
   getMyApplications,
   getApplication,
   withdrawApplication,
+  completeApplication,
   apply,
 };
