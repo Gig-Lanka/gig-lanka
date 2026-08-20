@@ -238,10 +238,41 @@ describe('transitionApplicationStatus', () => {
       expect(result.viewedAt.getTime()).toBe(earlier.getTime());
     });
 
-    it('sets decidedAt the first time a terminal status is reached', async () => {
+    it('sets decidedAt the first time a decided status is reached', async () => {
       const application = await seedApplication('shortlisted');
 
       const result = await transitionApplicationStatus(application, 'hired', businessActor);
+
+      expect(result.decidedAt).toBeInstanceOf(Date);
+    });
+
+    // The trap GL-218 exists to stop: `hired` staying in DECIDED_STATUSES is
+    // what keeps decidedAt stamped at the moment of hire, now that Hired has
+    // an outgoing move. Drop it from the list and this test goes null.
+    it('stamps decidedAt at the moment of hire and completion does not move it', async () => {
+      const application = await seedApplication('shortlisted');
+
+      const hired = await transitionApplicationStatus(application, 'hired', businessActor);
+      const decidedAtHire = hired.decidedAt;
+      expect(decidedAtHire).toBeInstanceOf(Date);
+
+      const completed = await transitionApplicationStatus(hired, 'completed', businessActor);
+
+      expect(completed.status).toBe('completed');
+      expect(completed.decidedAt.getTime()).toBe(decidedAtHire.getTime());
+      expect(completed.completedAt).toBeInstanceOf(Date);
+
+      const reloaded = await Application.findById(application._id);
+      expect(reloaded.decidedAt.getTime()).toBe(decidedAtHire.getTime());
+    });
+
+    // Completing an application that somehow never had decidedAt stamped still
+    // gets one, because `completed` is in the list too — the seeker's tracker
+    // never renders a decided application against a null date.
+    it('stamps decidedAt on completion when the hire left it unset', async () => {
+      const application = await seedApplication('hired', { decidedAt: null });
+
+      const result = await transitionApplicationStatus(application, 'completed', businessActor);
 
       expect(result.decidedAt).toBeInstanceOf(Date);
     });

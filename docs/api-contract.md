@@ -99,7 +99,7 @@ Every error response — regardless of cause — returns the same outer shape:
 | `STORAGE_UNAVAILABLE` | The storage backend (Supabase) failed or was unreachable. Always `502`. |
 | `GIG_CLOSED` | Attempted to apply to or save a gig whose status isn't `open`. Always `409`. |
 | `APPLICATION_ALREADY_EXISTS` | `POST /api/gigs/:gigId/applications` for a `(gig, applicant)` pair that already has an application (§11.7). Always `409`; the duplicate-key error from the unique index (§11.1) is translated here rather than surfacing as `500` — the same trap GL-15 hit with duplicate emails. Holds whether the earlier application is live, withdrawn or rejected. |
-| `INVALID_APPLICATION_TRANSITION` | Attempted to move an application to a status not reachable from its current status (§11.3). Always `409`, and the message names both the current and the attempted status. Withdrawing a `hired` application (§11.10) surfaces through this same code — hiring has no outgoing move in the transition table, so it's refused the same way any other terminal status is, not by a withdraw-specific check. |
+| `INVALID_APPLICATION_TRANSITION` | Attempted to move an application to a status not reachable from its current status (§11.3). Always `409`, and the message names both the current and the attempted status. Withdrawing a `hired` application (§11.10) surfaces through this same code — Hired's only outgoing move is to `completed`, so a withdraw is refused by the transition table itself, not by a withdraw-specific check. Marking anything other than a `hired` application complete (§11.11) is refused the same way. |
 | `APPLICATION_NOT_HIRED` | `POST /api/applications/:applicationId/reviews` on an application whose status isn't `hired` (§12.3). Always `409` — a review requires a completed hire. |
 | `REVIEW_ALREADY_EXISTS` | `POST /api/applications/:applicationId/reviews` for an `(application, direction)` pair that already has a review (§12.3). Always `409`; the duplicate-key error from the unique index (§7) is translated here rather than surfacing as `500`. |
 
@@ -417,6 +417,7 @@ These are the closed vocabularies used throughout the product. "Closed" means no
 | `viewed` | Viewed |
 | `shortlisted` | Shortlisted |
 | `hired` | Hired |
+| `completed` | Completed |
 | `rejected` | Rejected |
 | `withdrawn` | Withdrawn |
 | `closed_filled` | Closed – position filled |
@@ -1236,6 +1237,7 @@ Only the owner. Permanently deletes the gig. There is no soft delete and no undo
   "appliedAt": "2026-08-04T09:15:00.000Z",
   "viewedAt": null,
   "decidedAt": null,
+  "completedAt": null,
   "createdAt": "2026-08-04T09:15:00.000Z",
   "updatedAt": "2026-08-04T09:15:00.000Z"
 }
@@ -1243,16 +1245,21 @@ Only the owner. Permanently deletes the gig. There is no soft delete and no undo
 
 - `gig`, `applicant` — reference ids. `gig` is indexed, `applicant` is indexed, and the pair is uniquely indexed together: one application per seeker per gig, permanently. Withdrawing does not free the slot — a withdrawn application still occupies that unique pair.
 - `profileSnapshot` — an embedded copy of the applicant's profile (`name`, `headline` from the profile's `bio`, `experience` from `workExperience`, `education`, `rating` from `ratingSummary`), taken once at submission. Not a reference: a later edit to the applicant's live profile (§8) never changes an existing application. What was submitted is what gets judged.
-- `status` — one of the seven values in §11.2. Defaults to `applied` and is never accepted from a request body; see §11.3 for how it changes.
+- `status` — one of the eight values in §11.2. Defaults to `applied` and is never accepted from a request body; see §11.3 for how it changes.
 - `appliedAt` — set once, at creation.
-- `viewedAt`, `decidedAt` — `null` until set by a transition (§11.3), never cleared or overwritten afterwards. Present as `null` rather than omitted, unlike the optional-field convention elsewhere in this document (§8.1) — these are always-present timestamps that happen to start empty, not optional data.
+- `viewedAt`, `decidedAt`, `completedAt` — `null` until set by a transition (§11.3), never cleared or overwritten afterwards. Present as `null` rather than omitted, unlike the optional-field convention elsewhere in this document (§8.1) — these are always-present timestamps that happen to start empty, not optional data.
+- `completedAt` — the moment the business marked the work finished, set the first time `completed` is reached. Separate from `decidedAt`, which is already occupied by the hire and guarded against being overwritten: one application carries both, and they are different moments.
 - `rejectionReasonCode`, `rejectionNote` — absent until the application is rejected. `rejectionReasonCode` is one of §11.4's codes. `rejectionNote` is free text up to 300 characters, stored exactly as written, shown to the applicant verbatim.
 
 ### 11.2 Status vocabulary
 
-The seven values are §6.7. Four are terminal — `hired`, `rejected`, `withdrawn`, `closed_filled` — and can never be reopened by any transition, by anyone, including the system. The other three — `applied`, `viewed`, `shortlisted` — are non-terminal.
+The eight values are §6.7. **Reachability is governed by the transition table in §11.3 and by nothing else** — a status can be moved out of exactly when §11.3 gives it an outgoing row.
 
-"Live" applications are `applied`, `viewed`, `shortlisted` and `hired` — the four that count toward a gig's `applicantCount` (§10.1, §11.5). `withdrawn` and `rejected` are not live.
+Four of the eight have no outgoing row and end the line: `completed`, `rejected`, `withdrawn` and `closed_filled` can never be reopened by any transition, by anyone, including the system. `hired` has exactly one outgoing move, to `completed` — a hire is a decision, but the work still has to be finished. The remaining three — `applied`, `viewed`, `shortlisted` — are the ones still in progress.
+
+Separately from reachability, five statuses are **decided** — `hired`, `completed`, `rejected`, `withdrawn` and `closed_filled` — meaning a decision has been made about the application. That is the set that stamps `decidedAt` (§11.3), and the only thing that set does. `hired` remains in it now that it has an outgoing move: dropping it would stop `decidedAt` being stamped at the moment of hire.
+
+"Live" applications are `applied`, `viewed`, `shortlisted`, `hired` and `completed` — the five that count toward a gig's `applicantCount` (§10.1, §11.5). `rejected`, `withdrawn` and `closed_filled` are not live. Finishing the work is not leaving the process, which is why `completed` is live.
 
 ### 11.3 Status transitions
 
@@ -1271,12 +1278,17 @@ The seven values are §6.7. Four are terminal — `hired`, `rejected`, `withdraw
 | `shortlisted` | `hired` | The business that posted the gig |
 | `shortlisted` | `rejected` | The business that posted the gig, with a reason code (§11.4) |
 | `shortlisted` | `withdrawn` | The applicant |
+| `hired` | `completed` | The business that posted the gig |
 
-Every move not in this table — including any move out of a terminal status, and any move backwards (a `shortlisted` application can never return to `viewed`) — is rejected with `409 INVALID_APPLICATION_TRANSITION`, naming the current and attempted status.
+`hired -> completed` is the **only** outgoing move Hired has, and the only way into `completed`. Hiring still requires shortlisting first: `applied -> hired` and `viewed -> hired` are absent from this table and stay refused, so the chain a seeker sees in the tracker is real.
+
+Every move not in this table — including any move out of a status that has no outgoing row, and any move backwards (a `shortlisted` application can never return to `viewed`) — is rejected with `409 INVALID_APPLICATION_TRANSITION`, naming the current and attempted status.
 
 "The business that posted the gig" is checked by ownership, not just role: a business token belonging to a different business gets `403 FORBIDDEN`, the same as a seeker token. "The applicant" is checked the same way: a seeker token that isn't the one who submitted the application gets `403 FORBIDDEN`. "System only" means no HTTP-authenticated actor at all — a request from a business (or anyone else) attempting `closed_filled` gets `403 FORBIDDEN`; only an internal call with no `actor` succeeds.
 
-`viewedAt` is set the first time `viewed` is reached and never cleared or overwritten by any later transition. `decidedAt` is set the first time any terminal status is reached and never changes afterwards.
+`viewedAt` is set the first time `viewed` is reached and never cleared or overwritten by any later transition. `decidedAt` is set the first time any **decided** status (§11.2) is reached and never changes afterwards — on a hired application that is the moment of hire, and completing it later does not move it. `completedAt` is set the first time `completed` is reached and is likewise never overwritten; completion needs a stamp of its own precisely because `decidedAt` is already occupied by the hire.
+
+Marking an application complete takes **no reason** — `reason` is inspected only when rejecting.
 
 ### 11.4 Rejection reason codes
 
@@ -1295,7 +1307,7 @@ A gig's `applicantCount` (§10.1) is maintained by this component, not by the ma
 - `+1` when an application is created (`applied` is a live status) — called by GL-110's apply endpoint.
 - `-1` the moment an application leaves the live set for `rejected`, `withdrawn` or `closed_filled` — called automatically by `transitionApplicationStatus` in the same operation as the status change, never as a separate call a client can forget to make.
 
-A move that stays within the live set (`applied -> viewed`, `viewed -> shortlisted`, `shortlisted -> hired`) never touches the count.
+The live set is `applied`, `viewed`, `shortlisted`, `hired` and `completed` (§11.2). A move that stays within it (`applied -> viewed`, `viewed -> shortlisted`, `shortlisted -> hired`, `hired -> completed`) never touches the count. `completed` is deliberately in the set: a count that falls the moment the work is finished reads as a bug, and the count should only fall when someone leaves the process.
 
 ### 11.6 Gig summary shape
 
@@ -1450,16 +1462,46 @@ Combined with the permanent unique index (§11.1), withdrawal is one-way: the se
 }
 ```
 
-### 11.11 Error codes for these endpoints
+### 11.11 Mark an application complete — `PATCH /api/applications/:id/complete`
+
+**The business that posted the gig marks the work finished, and nobody else.** Only from `hired` (§11.3). Moves the application to `completed` **through `transitionApplicationStatus`** (§11.3) — no route, controller or service here writes `status` directly, and there is no second path that does, not even for testing.
+
+**Request body:** none. Completion takes no reason (§11.3) — a body sent with the request is ignored, not stored.
+
+**Success — `200 OK`** — same shape as §11.9, with `status: "completed"` and `completedAt` now set. `decidedAt` keeps the moment of hire and does not move (§11.3). The gig's applicant count is **unchanged**: `completed` is a live status (§11.2, §11.5), because finishing the work is not leaving the process.
+
+**Failure — `401 Unauthorized`** (guest) — as in §8.6.
+
+**Failure — `403 Forbidden`** — `FORBIDDEN`. A seeker token, **including the applicant's own**, and a business token belonging to a business that did not post the gig. Ownership is checked exactly as every other business transition checks it (§11.3), not by role alone.
+
+**Failure — `404 Not Found`** (no application with that id, or a malformed id) — as in §11.9.
+
+**Failure — `409 Conflict`** (the application is at any status other than `hired`):
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "INVALID_APPLICATION_TRANSITION",
+    "message": "Cannot move an application from \"shortlisted\" to \"completed\"."
+  }
+}
+```
+
+Calling it twice returns this same `409` the second time, naming `completed` as the current status — `completed` has no outgoing row in §11.3, and `completedAt` is not moved by the refused call.
+
+**A known limitation, recorded rather than solved.** Because only the business can mark completion, a business that never marks it leaves both sides unable to review once GL-223 moves the review gate to `completed`. Nobody gains an advantage — each loses their review — but the seeker is the one who did the work. Accepted for Sprint 2 and carried in `ROADMAP.md`; disputes are the Sprint 4 admin story.
+
+### 11.12 Error codes for these endpoints
 
 | Status | Code | When |
 |---|---|---|
 | `401` | `AUTH_HEADER_MISSING` / `AUTH_HEADER_MALFORMED` / `TOKEN_EXPIRED` / `TOKEN_INVALID` | No/malformed/expired/invalid token — every endpoint in this section requires one. |
-| `403` | `FORBIDDEN` | A business token on §11.7 or §11.8; a seeker or business token that isn't a party to the application on §11.9; a business token or the wrong seeker on §11.10. |
-| `404` | `NOT_FOUND` | §11.7 for a gig that doesn't exist or has a malformed id. §11.9/§11.10 for an application that doesn't exist or has a malformed id, checked before the party/ownership check above. |
+| `403` | `FORBIDDEN` | A business token on §11.7 or §11.8; a seeker or business token that isn't a party to the application on §11.9; a business token or the wrong seeker on §11.10; any seeker token, or a business that didn't post the gig, on §11.11. |
+| `404` | `NOT_FOUND` | §11.7 for a gig that doesn't exist or has a malformed id. §11.9/§11.10/§11.11 for an application that doesn't exist or has a malformed id, checked before the party/ownership check above. |
 | `409` | `GIG_CLOSED` | §11.7 for a gig that exists but isn't `open`. |
 | `409` | `APPLICATION_ALREADY_EXISTS` | §11.7 for a `(gig, applicant)` pair that already has an application, live, withdrawn or rejected. |
-| `409` | `INVALID_APPLICATION_TRANSITION` | §11.10 for an application that isn't `applied`, `viewed` or `shortlisted` — most commonly `hired` or already `withdrawn`. |
+| `409` | `INVALID_APPLICATION_TRANSITION` | §11.10 for an application that isn't `applied`, `viewed` or `shortlisted` — most commonly `hired` or already `withdrawn`. §11.11 for an application that isn't `hired`. |
 
 ---
 

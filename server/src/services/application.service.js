@@ -46,7 +46,21 @@ const TRANSITION_RULES = {
   },
 };
 
-const TERMINAL_STATUSES = ['hired', 'rejected', 'withdrawn', 'closed_filled'];
+// The statuses that mean a decision has been made about the application, and
+// the only thing this list does is stamp `decidedAt` when one is reached. It
+// is *not* what stops an application being reopened, which is exactly what its
+// old name — TERMINAL_STATUSES — led readers to believe:
+//
+// The transition table alone governs reachability; the constant governs `decidedAt`.
+//
+// `hired` stays in the list even though it now has an outgoing move to
+// `completed`. Striking it off is the obvious "correction" once Hired stops
+// looking terminal, and it is wrong: it would silently stop `decidedAt` being
+// stamped at the moment of hire, and ApplicationTracker would render "Hired"
+// against a null date. `completed` joins it and is harmless — `decidedAt` is
+// guarded by `!application.decidedAt`, so it keeps the moment of hire and is
+// never overwritten by the completion, which has `completedAt` of its own.
+const DECIDED_STATUSES = ['hired', 'completed', 'rejected', 'withdrawn', 'closed_filled'];
 // Completed is live: finishing the work is not leaving the process, so the
 // gig's applicantCount must not fall when hire -> complete happens. A count
 // that drops when a job is done reads as a bug.
@@ -67,8 +81,10 @@ const FORBIDDEN_ERROR = () =>
 
 // The applicant count lives on the gig — declared and defaulted to zero by
 // GL-158 — but is maintained here, not by the marketplace. It counts live
-// applications only (Applied, Viewed, Shortlisted, Hired); Withdrawn and
-// Rejected applications drop out of it. Every write to it goes through this
+// applications only (Applied, Viewed, Shortlisted, Hired, Completed);
+// Rejected, Withdrawn and Closed – position filled applications drop out of
+// it — the count falls when someone leaves the process, not when the work
+// gets finished. Every write to it goes through this
 // helper, in the same operation as the status change that caused it, never
 // a separate call a client can forget to make — a count that drifts from
 // reality is worse than no count. GL-110 calls this directly with +1 when
@@ -245,17 +261,17 @@ export const transitionApplicationStatus = async (application, targetStatus, act
     application.completedAt = new Date();
   }
 
-  if (TERMINAL_STATUSES.includes(targetStatus) && !application.decidedAt) {
+  if (DECIDED_STATUSES.includes(targetStatus) && !application.decidedAt) {
     application.decidedAt = new Date();
   }
 
   await application.save();
 
   // Every transition this function permits either stays within the live
-  // set (Applied -> Viewed -> Shortlisted -> Hired) or leaves it for good —
-  // terminal statuses have no outgoing moves, so this only ever fires once
-  // per application, adjusting the gig in the same operation as the status
-  // change that caused it.
+  // set (Applied -> Viewed -> Shortlisted -> Hired -> Completed) or leaves it
+  // for good — the three statuses it can leave for have no outgoing moves at
+  // all, so this only ever fires once per application, adjusting the gig in
+  // the same operation as the status change that caused it.
   if (wasLive && !isLive) {
     await adjustGigApplicantCount(application.gig, -1);
   }
@@ -356,9 +372,10 @@ export const getApplicationById = async (id, actor) => {
 // (GL-179) — never a direct status write. That function already enforces
 // "only the applicant" (403 for anyone else, including the business or a
 // different seeker) and "only from Applied, Viewed or Shortlisted" (a Hired
-// application has no outgoing move in TRANSITION_RULES, so it falls through
-// to 409 INVALID_APPLICATION_TRANSITION — the same guard every other
-// terminal status gets, not a withdraw-specific check). It also decrements
+// application has no `withdrawn` target in TRANSITION_RULES — its one outgoing
+// move is to Completed — so it falls through to 409
+// INVALID_APPLICATION_TRANSITION, the same guard every other decided status
+// gets, not a withdraw-specific check). It also decrements
 // the applicant count in the same operation, since Withdrawn leaves the live
 // set. The application is never deleted or hidden — it stays visible to the
 // business exactly where it was, just with a new status.
