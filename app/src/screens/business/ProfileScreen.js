@@ -5,21 +5,18 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 
 import { profileApi } from '../../api';
 import Avatar from '../../components/ui/Avatar';
-import Button from '../../components/ui/Button';
 import Chip from '../../components/ui/Chip';
 import EmptyState from '../../components/ui/EmptyState';
 import HeroHeader, { HeroSheet, HeroStickyBar } from '../../components/ui/HeroHeader';
 import Loader from '../../components/ui/Loader';
 import ProfileSectionHeader from '../../components/profile/ProfileSectionHeader';
 import RatingSummary from '../../components/review/RatingSummary';
-import useAuth from '../../hooks/useAuth';
 import useHeroScroll from '../../hooks/useHeroScroll';
 
 const STATUS = { LOADING: 'loading', READY: 'ready', ERROR: 'error' };
 
 export default function ProfileScreen() {
   const navigation = useNavigation();
-  const { logout } = useAuth();
   const hero = useHeroScroll();
 
   const [profile, setProfile] = useState(null);
@@ -121,15 +118,6 @@ export default function ProfileScreen() {
               </View>
             </View>
           ) : null}
-
-          {/*
-            TEMP - testing only, not part of GL-147. Account Settings
-            (Sprint 2, unticketed) is where Log Out actually belongs per the
-            mockup index; remove this once that screen exists.
-          */}
-          <Button variant="small" fullWidth={false} onPress={logout} className="mt-8 self-center">
-            Log Out
-          </Button>
         </HeroSheet>
       </Animated.ScrollView>
 
