@@ -117,4 +117,28 @@ describe('rating aggregate computed from reviews', () => {
     // this exact zeroed shape, never by a real average of zero.
     expect(profileRes.body.data.profile.ratingSummary).toEqual(ZEROED_AGGREGATE);
   });
+
+  it('rounds a mean that lands exactly halfway to the next tenth up, not down', async () => {
+    const business = await registerBusiness('rounding-business@example.com');
+
+    // Four separate seekers, each with their own gig and hire, so each can
+    // post one seeker_to_business review of the same business: ratings
+    // 4, 4, 4, 5 sum to 17, and 17 / 4 = 4.25 exactly — the one mean in this
+    // rating range guaranteed to land on the boundary the documented
+    // round-half-up rule exists to settle, rather than on whatever a float
+    // happens to produce.
+    const ratings = [4, 4, 4, 5];
+    for (const [index, rating] of ratings.entries()) {
+      const seeker = await registerSeeker(`rounding-seeker-${index}@example.com`);
+      const application = await createHiredApplication(business.userId, seeker.userId);
+
+      const res = await postReview(application.id, seeker.accessToken, { rating });
+      expect(res.status).toBe(201);
+    }
+
+    const profileRes = await getProfile(business.userId, business.accessToken);
+
+    expect(profileRes.body.data.profile.ratingSummary.averageRating).toBe(4.3);
+    expect(profileRes.body.data.profile.ratingSummary.reviewCount).toBe(4);
+  });
 });
