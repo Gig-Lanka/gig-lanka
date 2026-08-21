@@ -1,8 +1,12 @@
 import mongoose from 'mongoose';
 import { ApiError } from '../utils/ApiError.js';
 import { Gig } from '../models/gig.model.js';
-import { Application, REJECTION_REASON_CODES } from '../models/application.model.js';
-import { assertGigIsOpen } from './gig.service.js';
+import {
+  Application,
+  APPLICATION_STATUSES,
+  REJECTION_REASON_CODES,
+} from '../models/application.model.js';
+import { assertGigIsOpen, findOwnedGig } from './gig.service.js';
 import { getMyProfile } from './profile.service.js';
 
 // Source status -> target status -> which kind of actor may trigger that
@@ -433,5 +437,67 @@ export const completeApplication = async (id, actor) => {
 
   return {
     application: { ...updated.toJSON(), gig: toGigSummary(gig) },
+  };
+};
+
+// Shared by both GL-252 lists: `status` may be one value or several
+// (repeated query params or a comma-separated string), validated against
+// §6.7 rather than left to Mongo to silently match nothing. Absent
+// entirely, no filter is applied.
+const parseStatusFilter = (query) => {
+  const raw = query?.status;
+  if (raw === undefined) return undefined;
+
+  const values = Array.isArray(raw) ? raw : raw.split(',');
+  const invalid = values.find((value) => !APPLICATION_STATUSES.includes(value));
+
+  if (invalid) {
+    throw new ApiError(400, 'VALIDATION_ERROR', 'Request validation failed.', [
+      { field: 'status', message: `"${invalid}" is not a valid application status` },
+    ]);
+  }
+
+  return values;
+};
+
+// GL-252: every application to one gig, to the business that posted it
+// only. findOwnedGig (gig.service.js) checks existence before ownership —
+// 404 for a gig that doesn't exist, 403 for one owned by someone else — so
+// a non-owning business can't tell the two apart, the same guarantee
+// close/update/delete already give a gig's owner.
+export const listApplicationsForGig = async (gigId, userId, query) => {
+  await findOwnedGig(gigId, userId);
+
+  const statusFilter = parseStatusFilter(query);
+  const filter = { gig: gigId };
+  if (statusFilter) filter.status = { $in: statusFilter };
+
+  const applications = await Application.find(filter).sort({ createdAt: -1, _id: -1 });
+
+  return { applications: applications.map((application) => application.toJSON()) };
+};
+
+// GL-252: every application across all of the signed-in business's gigs,
+// each with a gig summary so the caller can tell which posting it belongs
+// to. Ownership runs through the gig — found by `postedBy`, then
+// applications by gig `$in` — never a business id denormalised onto the
+// application itself.
+export const listApplicationsForMyGigs = async (userId, query) => {
+  const statusFilter = parseStatusFilter(query);
+
+  const gigs = await Gig.find({ postedBy: userId });
+  const gigIds = gigs.map((gig) => gig._id);
+  const gigById = new Map(gigs.map((gig) => [gig.id, gig]));
+
+  const filter = { gig: { $in: gigIds } };
+  if (statusFilter) filter.status = { $in: statusFilter };
+
+  const applications = await Application.find(filter).sort({ createdAt: -1, _id: -1 });
+
+  return {
+    applications: applications.map((application) => ({
+      ...application.toJSON(),
+      gig: toGigSummary(gigById.get(application.gig.toString())),
+    })),
   };
 };

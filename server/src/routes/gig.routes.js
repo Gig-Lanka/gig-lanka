@@ -8,6 +8,7 @@ import {
   closeGig,
   deleteGig,
 } from '../controllers/gig.controller.js';
+import { getGigApplications } from '../controllers/application.controller.js';
 import { validate, validateQuery } from '../middleware/validate.middleware.js';
 import { requireAuth, requireRole, optionalAuth } from '../middleware/auth.middleware.js';
 import { createGigSchema, updateGigSchema, listGigsQuerySchema } from '../validators/gig.validator.js';
@@ -21,5 +22,10 @@ router.get('/:id', optionalAuth, getGig);
 router.put('/:id', requireAuth, requireRole('business'), validate(updateGigSchema), updateGig);
 router.patch('/:id/close', requireAuth, requireRole('business'), closeGig);
 router.delete('/:id', requireAuth, requireRole('business'), deleteGig);
+
+// GL-252. Nested here rather than under application.routes.js — unlike the
+// POST that creates an application, this list belongs to a specific gig, so
+// gig.service.js's findOwnedGig (existence before ownership) is a direct fit.
+router.get('/:gigId/applications', requireAuth, requireRole('business'), getGigApplications);
 
 export default router;

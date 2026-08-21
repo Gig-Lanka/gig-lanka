@@ -91,7 +91,10 @@ const UPDATABLE_FIELDS = [
   'applicationsCloseDate',
 ];
 
-const findOwnedGig = async (id, userId) => {
+// Exported so other components needing the same existence-then-ownership
+// check on a gig can reuse it rather than growing a second copy — GL-252's
+// applicant list is the first caller outside this file.
+export const findOwnedGig = async (id, userId) => {
   if (!mongoose.isValidObjectId(id)) {
     throw new ApiError(404, 'NOT_FOUND', 'Gig not found.');
   }
