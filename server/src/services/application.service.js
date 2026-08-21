@@ -440,6 +440,76 @@ export const completeApplication = async (id, actor) => {
   };
 };
 
+// GL-253: moves an application from Applied to Viewed through
+// transitionApplicationStatus — only the business that posted the gig
+// (403 for anyone else, after the existence check in
+// getApplicationWithParties). GL-220 calls this every time a business opens
+// an applicant, including a second time: an application already past
+// Applied has no `viewed` target in TRANSITION_RULES, so it falls through
+// to the same 409 INVALID_APPLICATION_TRANSITION any other refused move
+// gets, and the client is expected to swallow that quietly — opening an
+// applicant twice is not an error a business should ever see.
+export const viewApplication = async (id, actor) => {
+  const { application } = await getApplicationWithParties(id);
+
+  const updated = await transitionApplicationStatus(application, 'viewed', actor);
+  const gig = await Gig.findById(updated.gig);
+
+  return {
+    application: { ...updated.toJSON(), gig: toGigSummary(gig) },
+  };
+};
+
+// GL-253: moves a viewed application to Shortlisted through
+// transitionApplicationStatus. Only from Viewed (§11.3) — Applied has no
+// `shortlisted` target, so an application must be opened first.
+export const shortlistApplication = async (id, actor) => {
+  const { application } = await getApplicationWithParties(id);
+
+  const updated = await transitionApplicationStatus(application, 'shortlisted', actor);
+  const gig = await Gig.findById(updated.gig);
+
+  return {
+    application: { ...updated.toJSON(), gig: toGigSummary(gig) },
+  };
+};
+
+// GL-253: moves a shortlisted application to Hired through
+// transitionApplicationStatus. Only from Shortlisted — `applied -> hired`
+// and `viewed -> hired` are absent from TRANSITION_RULES and stay refused,
+// so hiring still requires shortlisting first, the same chain the seeker's
+// tracker shows.
+export const hireApplication = async (id, actor) => {
+  const { application } = await getApplicationWithParties(id);
+
+  const updated = await transitionApplicationStatus(application, 'hired', actor);
+  const gig = await Gig.findById(updated.gig);
+
+  return {
+    application: { ...updated.toJSON(), gig: toGigSummary(gig) },
+  };
+};
+
+// GL-253: moves an application to Rejected through
+// transitionApplicationStatus, from Applied, Viewed or Shortlisted. `body`
+// is passed straight through as `reason` — assertValidRejection, inside
+// transitionApplicationStatus, is the only place `{ code, note }` is
+// inspected, so all four rejection rules (a missing code, a code that
+// isn't business-selectable, an unrecognised code, and a trial code on a
+// gig with no trial) fire from that single check, never a second copy
+// here. `note` is stored exactly as given — not trimmed, not sanitised.
+export const rejectApplication = async (id, actor, body) => {
+  const { application } = await getApplicationWithParties(id);
+
+  const reason = { code: body?.reasonCode, note: body?.note };
+  const updated = await transitionApplicationStatus(application, 'rejected', actor, reason);
+  const gig = await Gig.findById(updated.gig);
+
+  return {
+    application: { ...updated.toJSON(), gig: toGigSummary(gig) },
+  };
+};
+
 // Shared by both GL-252 lists: `status` may be one value or several
 // (repeated query params or a comma-separated string), validated against
 // §6.7 rather than left to Mongo to silently match nothing. Absent
