@@ -257,6 +257,7 @@ const run = async () => {
     seededUsers.seeker,
     ...extraApplicants,
   ];
+  const seekerActor = (user) => ({ id: user._id.toString(), role: 'seeker' });
 
   // Shortlisted, and left there - the "someone else got it" state. Two
   // applicants reach shortlisted; only one of the two goes on to be hired.
@@ -314,6 +315,62 @@ const run = async () => {
     note: 'Went with another applicant who was a closer fit for the shift pattern.',
   });
   console.log(`Seeded rejected application: ${rejectedApplicant.email} (id ${rejected.id})`);
+
+  // GL-247: the demo gig above only reaches shortlisted, completed and
+  // rejected - it has no "hired but not yet completed" or "withdrawn"
+  // applicant, and viewerApplication needs both to be reachable for manual
+  // verification. Rather than crowding a second business decision onto the
+  // demo gig's one open position (its own description names exactly three
+  // applicants), these two states are seeded on two of the plain browse
+  // gigs above instead, reusing the same three seeded seekers - each of
+  // whom already carries one status on the demo gig, and a seeker having a
+  // second application on a different gig is exactly what the unique
+  // (gig, applicant) index allows.
+  const hiredGig = await Gig.findOne({
+    title: 'Retail Store Assistant',
+    postedBy: seededUsers.business._id,
+  });
+  let hiredNotCompleted = await findOrCreateApplication(
+    hiredGig._id,
+    shortlistedOnlyApplicant._id,
+    seedApplicantSnapshot({
+      name: 'Nadeesha Silva',
+      headline: 'Available every weekend, previous cafe experience.',
+    }),
+  );
+  hiredNotCompleted = await advanceApplication(
+    hiredNotCompleted,
+    ['viewed', 'shortlisted', 'hired'],
+    'hired',
+    businessActor,
+  );
+  console.log(
+    `Seeded hired (not yet completed) application: ${shortlistedOnlyApplicant.email} on ` +
+      `"${hiredGig.title}" (id ${hiredNotCompleted.id})`,
+  );
+
+  const withdrawnGig = await Gig.findOne({
+    title: 'Hotel Front Desk Helper',
+    postedBy: seededUsers.business._id,
+  });
+  let withdrawn = await findOrCreateApplication(
+    withdrawnGig._id,
+    hiredApplicant._id,
+    seedApplicantSnapshot({
+      name: 'Ruwan Jayasuriya',
+      headline: 'Weekend availability, two years of hospitality experience.',
+    }),
+  );
+  withdrawn = await advanceApplication(
+    withdrawn,
+    ['withdrawn'],
+    'withdrawn',
+    seekerActor(hiredApplicant),
+  );
+  console.log(
+    `Seeded withdrawn application: ${hiredApplicant.email} on "${withdrawnGig.title}" ` +
+      `(id ${withdrawn.id})`,
+  );
 
   await mongoose.connection.close();
 };
