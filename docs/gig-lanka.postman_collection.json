@@ -63,6 +63,26 @@
       "value": ""
     },
     {
+      "key": "searchBusinessToken",
+      "value": ""
+    },
+    {
+      "key": "searchGigTutorId",
+      "value": ""
+    },
+    {
+      "key": "searchGigTechId",
+      "value": ""
+    },
+    {
+      "key": "searchGigRetailId",
+      "value": ""
+    },
+    {
+      "key": "searchGigClosedId",
+      "value": ""
+    },
+    {
       "key": "hiredApplicationId",
       "value": ""
     },
@@ -1870,6 +1890,436 @@
             "method": "GET",
             "header": [],
             "url": "{{baseUrl}}/gigs/{{gigId}}"
+          }
+        },
+        {
+          "name": "Setup - Register search/filter business",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set(\"searchBusinessToken\", pm.response.json().data.accessToken);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"search.filter.business@giglanka.test\",\n  \"password\": \"Password123!\",\n  \"role\": \"business\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/register"
+          }
+        },
+        {
+          "name": "Setup - Create tutoring gig in Galle",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set(\"searchGigTutorId\", pm.response.json().data.gig.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{searchBusinessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Search fixture - tutoring in Galle\",\n  \"description\": \"Fixture gig for the Postman search and filter checks below, tutoring category.\",\n  \"category\": \"tutoring\",\n  \"payAmount\": 1500,\n  \"payType\": \"per_hour\",\n  \"city\": \"Galle\",\n  \"schedule\": [\"weekday_evenings\"],\n  \"commitment\": \"ongoing\",\n  \"positions\": 1\n}"
+            },
+            "url": "{{baseUrl}}/gigs"
+          }
+        },
+        {
+          "name": "Setup - Create remote tech gig",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set(\"searchGigTechId\", pm.response.json().data.gig.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{searchBusinessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Search fixture - remote tech role\",\n  \"description\": \"Fixture gig for the Postman search and filter checks below, tech category, fully remote.\",\n  \"category\": \"tech\",\n  \"payAmount\": 20000,\n  \"payType\": \"fixed_price\",\n  \"remote\": true,\n  \"schedule\": [\"flexible_hours\"],\n  \"commitment\": \"one_off\",\n  \"positions\": 1\n}"
+            },
+            "url": "{{baseUrl}}/gigs"
+          }
+        },
+        {
+          "name": "Setup - Create retail gig with a start date",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set(\"searchGigRetailId\", pm.response.json().data.gig.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{searchBusinessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Search fixture - retail with a start date\",\n  \"description\": \"Fixture gig for the Postman search and filter checks below, retail category, including a Saturday market stall.\",\n  \"category\": \"retail\",\n  \"payAmount\": 900,\n  \"payType\": \"per_hour\",\n  \"city\": \"Colombo\",\n  \"schedule\": [\"weekday_evenings\", \"weekends\"],\n  \"commitment\": \"under_a_week\",\n  \"positions\": 1,\n  \"startDate\": \"2026-09-15\"\n}"
+            },
+            "url": "{{baseUrl}}/gigs"
+          }
+        },
+        {
+          "name": "Setup - Create gig to be closed, matching the tutoring fixture exactly",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set(\"searchGigClosedId\", pm.response.json().data.gig.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{searchBusinessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Search fixture - closed gig matching every filter\",\n  \"description\": \"This fixture must never appear once closed, even though it matches every filter below.\",\n  \"category\": \"tutoring\",\n  \"payAmount\": 1500,\n  \"payType\": \"per_hour\",\n  \"city\": \"Galle\",\n  \"schedule\": [\"weekday_evenings\"],\n  \"commitment\": \"ongoing\",\n  \"positions\": 1,\n  \"startDate\": \"2026-09-01\"\n}"
+            },
+            "url": "{{baseUrl}}/gigs"
+          }
+        },
+        {
+          "name": "Setup - Close that gig",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200, now closed\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json().data.gig.status).to.eql(\"closed\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{searchBusinessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/gigs/{{searchGigClosedId}}/close"
+          }
+        },
+        {
+          "name": "Search/filter - q matches only a description",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"finds the retail fixture by a phrase only in its description\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const ids = pm.response.json().data.gigs.map(function (g) { return g.id; });",
+                  "  pm.expect(ids).to.include(pm.collectionVariables.get(\"searchGigRetailId\"));",
+                  "  pm.expect(ids).to.not.include(pm.collectionVariables.get(\"searchGigTutorId\"));",
+                  "  pm.expect(ids).to.not.include(pm.collectionVariables.get(\"searchGigTechId\"));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/gigs?q=Saturday market"
+          }
+        },
+        {
+          "name": "Search/filter - category multi-value OR",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"tutoring OR tech matches both, not retail, not the closed decoy\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const ids = pm.response.json().data.gigs.map(function (g) { return g.id; });",
+                  "  pm.expect(ids).to.include(pm.collectionVariables.get(\"searchGigTutorId\"));",
+                  "  pm.expect(ids).to.include(pm.collectionVariables.get(\"searchGigTechId\"));",
+                  "  pm.expect(ids).to.not.include(pm.collectionVariables.get(\"searchGigRetailId\"));",
+                  "  pm.expect(ids).to.not.include(pm.collectionVariables.get(\"searchGigClosedId\"));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/gigs?category=tutoring,tech"
+          }
+        },
+        {
+          "name": "Search/filter - schedule multi-value OR",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"flexible_hours OR weekends matches tech and retail, not tutoring\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const ids = pm.response.json().data.gigs.map(function (g) { return g.id; });",
+                  "  pm.expect(ids).to.include(pm.collectionVariables.get(\"searchGigTechId\"));",
+                  "  pm.expect(ids).to.include(pm.collectionVariables.get(\"searchGigRetailId\"));",
+                  "  pm.expect(ids).to.not.include(pm.collectionVariables.get(\"searchGigTutorId\"));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/gigs?schedule=flexible_hours,weekends"
+          }
+        },
+        {
+          "name": "Search/filter - two filters combined (category and city)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"category AND city narrows to the one open gig matching both\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const ids = pm.response.json().data.gigs.map(function (g) { return g.id; });",
+                  "  pm.expect(ids).to.include(pm.collectionVariables.get(\"searchGigTutorId\"));",
+                  "  pm.expect(ids).to.not.include(pm.collectionVariables.get(\"searchGigTechId\"));",
+                  "  pm.expect(ids).to.not.include(pm.collectionVariables.get(\"searchGigClosedId\"));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/gigs?category=tutoring&city=galle"
+          }
+        },
+        {
+          "name": "Search/filter - minPay inclusive at the boundary",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"minPay=1500 includes the gig paying exactly 1500\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const ids = pm.response.json().data.gigs.map(function (g) { return g.id; });",
+                  "  pm.expect(ids).to.include(pm.collectionVariables.get(\"searchGigTutorId\"));",
+                  "  pm.expect(ids).to.not.include(pm.collectionVariables.get(\"searchGigRetailId\"));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/gigs?minPay=1500"
+          }
+        },
+        {
+          "name": "Search/filter - minPay excludes just above the boundary",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"minPay=1501 excludes the gig paying exactly 1500\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const ids = pm.response.json().data.gigs.map(function (g) { return g.id; });",
+                  "  pm.expect(ids).to.not.include(pm.collectionVariables.get(\"searchGigTutorId\"));",
+                  "  pm.expect(ids).to.include(pm.collectionVariables.get(\"searchGigTechId\"));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/gigs?minPay=1501"
+          }
+        },
+        {
+          "name": "Search/filter - unknown enum value - 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"400 VALIDATION_ERROR naming the field, not a silent empty list\", function () {",
+                  "  pm.response.to.have.status(400);",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.error.code).to.eql(\"VALIDATION_ERROR\");",
+                  "  pm.expect(body.error.errors[0].field).to.eql(\"category\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/gigs?category=not_a_real_category"
+          }
+        },
+        {
+          "name": "Search/filter - sort=highest_pay",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"highest pay first, among the fixtures, in order\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const ids = pm.response.json().data.gigs.map(function (g) { return g.id; });",
+                  "  const mine = [pm.collectionVariables.get(\"searchGigTechId\"), pm.collectionVariables.get(\"searchGigTutorId\"), pm.collectionVariables.get(\"searchGigRetailId\")];",
+                  "  const mineInOrder = ids.filter(function (id) { return mine.includes(id); });",
+                  "  pm.expect(mineInOrder).to.eql(mine);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/gigs?sort=highest_pay"
+          }
+        },
+        {
+          "name": "Search/filter - sort=starting_soon, undated gigs sort last",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"the only dated fixture comes first, undated fixtures follow in creation order\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const ids = pm.response.json().data.gigs.map(function (g) { return g.id; });",
+                  "  const mine = [pm.collectionVariables.get(\"searchGigRetailId\"), pm.collectionVariables.get(\"searchGigTutorId\"), pm.collectionVariables.get(\"searchGigTechId\")];",
+                  "  const mineInOrder = ids.filter(function (id) { return mine.includes(id); });",
+                  "  pm.expect(mineInOrder).to.eql(mine);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/gigs?sort=starting_soon"
+          }
+        },
+        {
+          "name": "Search/filter - closed gig satisfying every filter still excluded",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status: open beats every other parameter, even a gig matching all of them\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const ids = pm.response.json().data.gigs.map(function (g) { return g.id; });",
+                  "  pm.expect(ids).to.not.include(pm.collectionVariables.get(\"searchGigClosedId\"));",
+                  "  pm.expect(ids).to.include(pm.collectionVariables.get(\"searchGigTutorId\"));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/gigs?category=tutoring&payType=per_hour&minPay=1500&city=galle&remote=false&schedule=weekday_evenings&commitment=ongoing&sort=starting_soon"
           }
         }
       ]
