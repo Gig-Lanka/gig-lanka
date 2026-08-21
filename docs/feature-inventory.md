@@ -70,7 +70,7 @@ from the running app (details in §7).
 | E3 | Gig detail | ✅ |
 | E4 | Application model & status state machine | ✅ |
 | E4 | Apply & withdraw API | ✅ |
-| E4 | Apply screen | 🟡 built, no route into it |
+| E4 | Apply screen | ✅ |
 | E4 | My applications & application detail with tracker | ✅ |
 | E5 | Review model & rating aggregate schema | ✅ |
 | E5 | Star rating & review components | ✅ (`ReviewCard` unused) |
@@ -151,7 +151,7 @@ filtering on Browse, and deadline urgency states on gig cards (roadmap placed ur
 | Apply endpoint | ✅ | `POST /gigs/:gigId/applications`, seekers only, no accepted body. Returns the application plus `profileIncomplete` (no experience **and** no education) — a warning signal, never a block. Duplicate → 409 `APPLICATION_ALREADY_EXISTS` (translated from the index). Gig not open → 409 `GIG_CLOSED`. |
 | Read endpoints | ✅ | `GET /applications/mine` (seeker, own only, no id parameter exists), `GET /applications/:id` (either party, existence checked before the party check). Each carries a gig summary — never the full gig — which reads back `null` for a deleted gig rather than failing. |
 | Withdraw | ✅ | `PATCH /applications/:id/withdraw`, routed through the state machine like everything else. Withdrawing a `hired` application is refused by the transition table, not by a withdraw-specific check. The application stays visible to the business with its new status; it is never deleted or hidden. |
-| Apply screen | 🟡 | `seeker/ApplyScreen` — snapshot preview of what the business will see, thin-profile notice with a route to Profile, double-submit guard, and distinct messages for `GIG_CLOSED`, `APPLICATION_ALREADY_EXISTS` and `FORBIDDEN`. On success it replaces into the application detail. **Nothing navigates to it** (§7.1). |
+| Apply screen | ✅ | `seeker/ApplyScreen` — snapshot preview of what the business will see, thin-profile notice with a route to Profile, double-submit guard, and distinct messages for `GIG_CLOSED`, `APPLICATION_ALREADY_EXISTS` and `FORBIDDEN`. On success it replaces into the application detail. Reached from the gig detail screen's Apply action since GL-236 (§7.1). |
 | My applications | ✅ | `seeker/MyApplicationsScreen` — live/decided filter, refetch on focus without flashing the loader, pull-to-refresh, two distinct empty states. |
 | Application detail & tracker | ✅ | `seeker/ApplicationDetailScreen` — `ApplicationTracker` renders the transparency timeline; the rejection reason and note are shown **verbatim**, no softening or truncation. Withdraw sits behind a confirmation dialog and is offered only from `applied`/`viewed`/`shortlisted`. |
 | Applicant list & detail (business side) | 🚧 | `business/ApplicantsScreen` is a 7-line placeholder, and `GigActionRow`'s "Applicants (n)" button is permanently disabled. Sprint 2. |
@@ -250,7 +250,7 @@ on gig detail, behind a new optional-auth middleware (GL-213, GL-217); the calle
 | `ManageExperience` / `ExperienceForm` | seeker | seeker | ✅ |
 | `ManageEducation` / `EducationForm` | seeker | seeker | ✅ |
 | `ApplicationDetail` | `seeker/ApplicationDetailScreen` | seeker | ✅ |
-| `Apply` | `seeker/ApplyScreen` | seeker | 🟡 registered, unreachable |
+| `Apply` | `seeker/ApplyScreen` | seeker | ✅ |
 | `PostGig` (modal) | `business/PostGigScreen` | business | ✅ |
 | `EditGig` | `business/EditGigScreen` | business | ✅ |
 | `RateFlow` (4 steps) | `shared/rate/*` | both | 🟡 registered, unreachable |
@@ -282,20 +282,33 @@ on gig detail, behind a new optional-auth middleware (GL-213, GL-217); the calle
 
 Ranked by how much they affect a demo or Sprint 2.
 
-### 7.1 The apply flow is broken end to end — the screen has no route into it
-`app/src/screens/shared/GigDetailScreen.js:184` sets the seeker's primary action to
-`{ label: 'Apply for this gig' }` with **no `onPress`**, under a comment saying the apply screen
-"hasn't merged yet". It has since merged (GL-185/186/187) and is registered in `RootNavigator`,
-but the CTA was never wired up. Nothing anywhere navigates to `'Apply'`. A seeker can therefore
-browse, open a gig, and tap a button that does nothing. Everything behind it — the screen, the
-API call, the failure paths, the detail screen it replaces into — works. **This is a one-line fix
-and it is the single most demo-critical item in the repo.**
+### 7.1 The apply flow had no route into it — fixed by GL-236
+`app/src/screens/shared/GigDetailScreen.js`'s signed-in-seeker branch of `primaryAction` shipped
+with `{ label: 'Apply for this gig' }` and **no `onPress`**, under a comment saying the apply
+screen "hasn't merged yet". It had in fact merged (GL-185/186/187) and was registered in
+`RootNavigator`, but the CTA was never wired up. Nothing anywhere navigated to `'Apply'`. A seeker
+could therefore browse, open a gig, and tap a button that did nothing. Everything behind it — the
+screen, the API call, the failure paths, the detail screen it replaces into — worked.
 
-**Sprint 2: GL-214**, the first story of the sprint, which also rewrites this section when it
-merges. It closes GL-122 AC7 and GL-123 AC1, both marked met and neither actually met. The four
-apply failure paths from GL-187 — closed-gig race, duplicate, wrong role, guest — were signed off
-as device-verified while none of them was reachable, and are re-verified separately as a cleanup
-sub-task on GL-209, assigned to the E4 owner rather than to whoever fixes the button.
+**GL-236** adds `onPress: () => navigation.navigate('Apply', { gigId })` to that branch and
+deletes the stale comment, so tapping Apply on an open gig now opens `ApplyScreen` for that gig,
+which shows the profile snapshot preview. The other three `primaryAction` branches (owner → Edit,
+gig not open → disabled "Applications closed", guest → sign-in) are unchanged, checked in the same
+order. `'Apply'` was already registered in `RootNavigator` under the seeker branch of the stack, so
+no navigator change was needed. **Device verification as a signed-in seeker is still required
+before this closes** — see the PR for confirmation.
+
+This is the entry where GL-122 AC7 ("routes to the apply screen from GL-123") and GL-123 AC1
+("ApplyScreen.js is reached from the gig detail screen's Apply action") are actually met. Both
+Sprint 1 issues closed as Done with those criteria marked met when they were not; neither is
+reopened or re-transitioned, so this paragraph is the record of where the gap opened and where it
+closed.
+
+The four apply failure paths from GL-187 — the closed-gig race, the duplicate application, the
+wrong-role refusal, and the guest route — were signed off as device-verified while the screen had
+no in-app entry point, so none of them was actually reachable. All four now need real
+verification; that is a cleanup sub-task on **GL-209**, assigned to the E4 owner, not part of
+GL-236.
 
 ### 7.2 The rate flow has no entry point (expected, but worth stating)
 The temporary dev route was removed in `215647b` at the close of GL-206. There is no in-app path
@@ -429,7 +442,8 @@ In dependency order, based on what is already in place:
 6. **Search / filter / sort** (E3) — needs query parameters on `GET /gigs`, which also fixes §7.8.
    → **GL-215** and **GL-216**. **Saved gigs moved to Sprint 3.**
 
-And before any of that, the one-line fix in §7.1.
+And before any of that: the one-line fix in §7.1 has already landed, as **GL-236**, the first
+story of the sprint.
 
 ---
 
