@@ -1082,27 +1082,41 @@ Businesses only.
 
 ### 10.4 List gigs — `GET /api/gigs`
 
-Public — no `Authorization` header required. Returns only `open` gigs, newest first (`createdAt` descending), ten per page.
+Public — no `Authorization` header required. With no parameters: `status: 'open'` gigs, newest first (`createdAt` descending), ten per page — unchanged from Sprint 1. `page`, plus the search, filter and sort parameters below, narrow and reorder that same base set.
 
 **Request:** `?page=<n>` — optional, defaults to `1`. Malformed or missing values fall back to `1`.
 
-**Search, filter and sort parameters** — accepted and validated; the filtering and sorting they describe is applied to the result set in a follow-up change, not yet in this one. All are optional.
+**Search, filter and sort parameters.** All are optional.
 
-| Parameter | Type | Notes |
+| Parameter | Type | Matches |
 |---|---|---|
-| `q` | string, max 200 characters | |
-| `category` | one or more of §6.1 | comma-separated — see below |
-| `schedule` | one or more of §6.3 | comma-separated — see below |
-| `payType` | one or more of §6.2 | comma-separated — see below |
-| `commitment` | one or more of §6.4 | comma-separated — see below |
-| `remote` | boolean | `true` / `false` |
-| `city` | string, max 120 characters | |
-| `minPay` | number, `>= 0` | |
-| `sort` | one of §6.6 | defaults to `newest` |
+| `q` | string, max 200 characters | Case-insensitive substring, against `title` **or** `description`. Not full-text, not fuzzy, not ranked. |
+| `category` | one or more of §6.1 | A gig whose `category` is any of the given values. |
+| `schedule` | one or more of §6.3 | A gig whose `schedule` array contains any of the given tags. |
+| `payType` | one or more of §6.2 | A gig whose `payType` is any of the given values. |
+| `commitment` | one or more of §6.4 | A gig whose `commitment` is any of the given values. |
+| `remote` | boolean (`true` / `false`) | Exact match. |
+| `city` | string, max 120 characters | Case-insensitive **exact** match — not a substring. |
+| `minPay` | number, `>= 0` | `payAmount >= minPay`. See the limitation below. |
+| `sort` | one of §6.6 | Reorders the result; see below. Defaults to `newest`. |
+
+**Combination rules:** every parameter ANDs with every other — a gig must satisfy `q` **and** `category` **and** `remote`, etc., all at once. Within `category`, `schedule`, `payType` and `commitment`, multiple values OR — a gig matching *any one* of the values given for that parameter satisfies it. `status: 'open'` is applied unconditionally underneath all of this; no combination of parameters can surface a `closed`, `filled` or `draft` gig.
 
 **Multi-value wire format:** `category`, `schedule`, `payType` and `commitment` each take a **comma-separated** list of values from their closed vocabulary — e.g. `?category=tech,creative`. A single value needs no comma. This is the one shape both this endpoint and its client (GL-216) build to; repeated keys (`category=tech&category=creative`) are not accepted.
 
 An item outside the vocabulary fails the whole request with `400 VALIDATION_ERROR` naming that field — it is never dropped silently, which would otherwise be indistinguishable from "no gigs match". Empty items from a stray comma (`?category=tech,`) are ignored; an entirely empty value (`?category=` or `?category=,`) still 400s, since it names no value at all.
+
+**`minPay`'s known limitation:** it compares the raw `payAmount` regardless of `payType`, so `minPay=1000` matches a Rs 1,000-per-hour gig and a Rs 1,000 fixed-price gig identically. This is deliberate, not an oversight — normalising per-hour against fixed-price would require an assumed number of hours that a gig does not carry. Do not "fix" this into a guessed conversion.
+
+**`sort` — one of `newest` (default), `highest_pay`, `starting_soon`:**
+
+| Value | Orders by | Tiebreak |
+|---|---|---|
+| `newest` | `createdAt` descending | `_id` descending |
+| `highest_pay` | `payAmount` descending | `_id` descending |
+| `starting_soon` | `startDate` ascending, gigs with **no** `startDate` sorted last | `_id` ascending |
+
+Every sort carries a secondary `_id` tiebreak in the same direction as the primary key, so a paginated scroll never repeats or drops a row between pages. `startDate` is optional; without the explicit "no date sorts last" rule, `starting_soon` would put every undated gig first, since Mongo orders a missing field before every value ascending.
 
 **Failure — `400 Bad Request`** (an unrecognised value on a closed-vocabulary parameter):
 
@@ -1133,9 +1147,11 @@ An item outside the vocabulary fails the whole request with `400 VALIDATION_ERRO
 }
 ```
 
-`total` is the count of every `open` gig matching the (currently unfiltered) query, not just the page returned — the client uses it to render "23 gigs" or to compute the last page. A closed or filled gig never appears here, even to the business that posted it.
+`total` is the count of every `open` gig matching the request's filters, not just the page returned — computed after filtering, so the number on screen and the list always agree. The client uses it to render "23 gigs" or to compute the last page. A closed, filled or draft gig never appears here, even to the business that posted it, and no parameter can change that.
 
-No failure modes — an empty result set is still `200` with `"gigs": []`.
+`gigs`, `page` and `limit` (`10`) are unchanged in shape from Sprint 1. `sort`, `page` and every filter compose freely — pagination and sorting are always applied on top of the filtered set, never the other way round.
+
+No failure modes beyond the `400` above — an empty result set is still `200` with `"gigs": []`.
 
 ### 10.5 Read a gig — `GET /api/gigs/:id`
 
