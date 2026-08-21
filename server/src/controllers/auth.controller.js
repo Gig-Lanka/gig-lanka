@@ -37,7 +37,7 @@ export const me = asyncHandler(async (req, res) => {
 });
 
 export const changePassword = asyncHandler(async (req, res) => {
-  await changeUserPassword(req.user, req.body);
+  const { accessToken, refreshToken } = await changeUserPassword(req.user, req.body);
 
-  sendSuccess(res, null, 200);
+  sendSuccess(res, { accessToken, refreshToken }, 200);
 });

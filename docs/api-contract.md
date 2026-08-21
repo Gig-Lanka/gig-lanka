@@ -340,6 +340,8 @@ Returns the authenticated user. Requires `Authorization: Bearer <accessToken>`.
 
 Changes the authenticated user's password. Requires `Authorization: Bearer <accessToken>`.
 
+On success, every refresh token belonging to the user is revoked and a fresh access/refresh pair is issued — the caller stays signed in on this device with the returned pair; every other device is signed out at its next `/api/auth/refresh` call.
+
 **Request body**
 
 ```json
@@ -354,7 +356,10 @@ Changes the authenticated user's password. Requires `Authorization: Bearer <acce
 ```json
 {
   "success": true,
-  "data": null
+  "data": {
+    "accessToken": "eyJhbGciOi...",
+    "refreshToken": "3a5f8c1d9b2e04f6..."
+  }
 }
 ```
 

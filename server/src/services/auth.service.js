@@ -1,7 +1,12 @@
 import bcrypt from 'bcryptjs';
 import { User } from '../models/user.model.js';
 import { ApiError } from '../utils/ApiError.js';
-import { issueTokens, rotateRefreshToken, revokeRefreshToken } from './token.service.js';
+import {
+  issueTokens,
+  rotateRefreshToken,
+  revokeRefreshToken,
+  revokeAllRefreshTokensForUser,
+} from './token.service.js';
 
 const SALT_ROUNDS = 10;
 
@@ -64,4 +69,8 @@ export const changeUserPassword = async (user, { currentPassword, newPassword })
 
   user.passwordHash = await bcrypt.hash(newPassword, SALT_ROUNDS);
   await user.save();
+
+  await revokeAllRefreshTokensForUser(user._id);
+
+  return issueTokens(user);
 };
