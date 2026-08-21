@@ -44,3 +44,24 @@ export const loginUser = async ({ email, password }) => {
 
   return { user, accessToken, refreshToken };
 };
+
+export const changeUserPassword = async (user, { currentPassword, newPassword }) => {
+  const isMatch = await bcrypt.compare(currentPassword, user.passwordHash);
+
+  if (!isMatch) {
+    throw new ApiError(401, 'INVALID_CURRENT_PASSWORD', 'Current password is incorrect.');
+  }
+
+  const isSamePassword = await bcrypt.compare(newPassword, user.passwordHash);
+
+  if (isSamePassword) {
+    throw new ApiError(
+      400,
+      'PASSWORD_UNCHANGED',
+      'New password must be different from your current password.',
+    );
+  }
+
+  user.passwordHash = await bcrypt.hash(newPassword, SALT_ROUNDS);
+  await user.save();
+};

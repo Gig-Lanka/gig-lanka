@@ -83,6 +83,8 @@ Every error response — regardless of cause — returns the same outer shape:
 |---|---|
 | `VALIDATION_ERROR` | Request body/params/query failed schema validation. |
 | `INVALID_CREDENTIALS` | Login email/password combination doesn't match. |
+| `INVALID_CURRENT_PASSWORD` | `POST /api/auth/change-password` called with a `currentPassword` that doesn't match the stored hash. Always `401`, distinguishable from `TOKEN_EXPIRED`/`TOKEN_INVALID` so the client shows a field error instead of re-authenticating. |
+| `PASSWORD_UNCHANGED` | `POST /api/auth/change-password` called with a `newPassword` identical to the current password. Always `400`. |
 | `EMAIL_ALREADY_EXISTS` | Register called with an email already in the database. |
 | `UNAUTHENTICATED` | Reached a role check with no authenticated user. |
 | `AUTH_HEADER_MISSING` | No `Authorization` header on a request that requires one. |
@@ -330,6 +332,69 @@ Returns the authenticated user. Requires `Authorization: Bearer <accessToken>`.
       "role": "seeker",
       "createdAt": "2026-08-01T09:15:00.000Z"
     }
+  }
+}
+```
+
+### 5.6 Change password — `POST /api/auth/change-password`
+
+Changes the authenticated user's password. Requires `Authorization: Bearer <accessToken>`.
+
+**Request body**
+
+```json
+{
+  "currentPassword": "Password123!",
+  "newPassword": "NewPassword456!"
+}
+```
+
+**Success — `200 OK`**
+
+```json
+{
+  "success": true,
+  "data": null
+}
+```
+
+**Failure — `401 Unauthorized`** (no/invalid/expired access token — same codes as §5.5)
+
+**Failure — `401 Unauthorized`** (`currentPassword` doesn't match the stored hash)
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "INVALID_CURRENT_PASSWORD",
+    "message": "Current password is incorrect."
+  }
+}
+```
+
+**Failure — `400 Bad Request`** (`newPassword` shorter than the minimum registration enforces)
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Request validation failed.",
+    "errors": [
+      { "field": "newPassword", "message": "must be at least 8 characters" }
+    ]
+  }
+}
+```
+
+**Failure — `400 Bad Request`** (`newPassword` identical to `currentPassword`)
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "PASSWORD_UNCHANGED",
+    "message": "New password must be different from your current password."
   }
 }
 ```
