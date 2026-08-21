@@ -11,8 +11,26 @@ async function createGig(payload) {
   return response.data.data;
 }
 
-async function listGigs({ page } = {}) {
-  const response = await client.get('/gigs', { params: page ? { page } : undefined });
+// Every multi-value parameter (schedule, category, payType, commitment) goes
+// over the wire comma-separated, per the contract §10.4 - joining an array
+// here is what keeps this client and the server's Joi schema agreeing on one
+// shape rather than each guessing (comma-separated vs. repeated keys).
+async function listGigs(params = {}) {
+  const query = {};
+
+  Object.entries(params).forEach(([key, value]) => {
+    if (value === undefined || value === null || value === '') return;
+    if (Array.isArray(value)) {
+      if (value.length === 0) return;
+      query[key] = value.join(',');
+    } else {
+      query[key] = value;
+    }
+  });
+
+  const response = await client.get('/gigs', {
+    params: Object.keys(query).length ? query : undefined,
+  });
   return response.data.data;
 }
 
