@@ -196,4 +196,33 @@ describe('rating aggregate computed from reviews', () => {
       'clear_job_description',
     ]);
   });
+
+  it('never mixes a review written by a user into their own aggregate as subject', async () => {
+    const { business, seeker, application } = await seedHire(
+      'both-directions-business@example.com',
+      'both-directions-seeker@example.com',
+    );
+
+    // Same application, both directions: the seeker rates the business, and
+    // the business rates the seeker back. Each is subject on exactly one of
+    // the two reviews and author on the other — the case that mixing subject
+    // and author would corrupt in both directions at once.
+    const seekerReview = await postReview(application.id, seeker.accessToken, { rating: 5 });
+    expect(seekerReview.status).toBe(201);
+
+    const businessReview = await postReview(application.id, business.accessToken, { rating: 3 });
+    expect(businessReview.status).toBe(201);
+
+    const businessProfile = await getProfile(business.userId, seeker.accessToken);
+    expect(businessProfile.body.data.profile.ratingSummary).toMatchObject({
+      averageRating: 5,
+      reviewCount: 1,
+    });
+
+    const seekerProfile = await getProfile(seeker.userId, business.accessToken);
+    expect(seekerProfile.body.data.profile.ratingSummary).toMatchObject({
+      averageRating: 3,
+      reviewCount: 1,
+    });
+  });
 });
