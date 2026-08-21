@@ -1086,6 +1086,39 @@ Public — no `Authorization` header required. Returns only `open` gigs, newest 
 
 **Request:** `?page=<n>` — optional, defaults to `1`. Malformed or missing values fall back to `1`.
 
+**Search, filter and sort parameters** — accepted and validated; the filtering and sorting they describe is applied to the result set in a follow-up change, not yet in this one. All are optional.
+
+| Parameter | Type | Notes |
+|---|---|---|
+| `q` | string, max 200 characters | |
+| `category` | one or more of §6.1 | comma-separated — see below |
+| `schedule` | one or more of §6.3 | comma-separated — see below |
+| `payType` | one or more of §6.2 | comma-separated — see below |
+| `commitment` | one or more of §6.4 | comma-separated — see below |
+| `remote` | boolean | `true` / `false` |
+| `city` | string, max 120 characters | |
+| `minPay` | number, `>= 0` | |
+| `sort` | one of §6.6 | defaults to `newest` |
+
+**Multi-value wire format:** `category`, `schedule`, `payType` and `commitment` each take a **comma-separated** list of values from their closed vocabulary — e.g. `?category=tech,creative`. A single value needs no comma. This is the one shape both this endpoint and its client (GL-216) build to; repeated keys (`category=tech&category=creative`) are not accepted.
+
+An item outside the vocabulary fails the whole request with `400 VALIDATION_ERROR` naming that field — it is never dropped silently, which would otherwise be indistinguishable from "no gigs match". Empty items from a stray comma (`?category=tech,`) are ignored; an entirely empty value (`?category=` or `?category=,`) still 400s, since it names no value at all.
+
+**Failure — `400 Bad Request`** (an unrecognised value on a closed-vocabulary parameter):
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Request validation failed.",
+    "errors": [
+      { "field": "category", "message": "category must only contain: tutoring, delivery, event_help, retail, hospitality, admin_data_entry, creative, tech, other" }
+    ]
+  }
+}
+```
+
 **Success — `200 OK`**
 
 ```json
