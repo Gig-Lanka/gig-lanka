@@ -3,9 +3,10 @@
 // propagate as-is: axios rejections already carry `error.response.data.error`
 // in the same shape the mock fakes.
 //
-// changePassword (GL-229) has no mock counterpart yet - GL-230 decides
-// deliberately whether ./mock/authApi.js gains a stub, so calling it while
-// EXPO_PUBLIC_USE_MOCK is unset (the default) throws until that lands.
+// changePassword takes an `accessToken` field too (unused here - the
+// request interceptor in ./client.js attaches it) purely so the same call
+// site works against ./mock/authApi.js, which has no interceptor to do that
+// for it.
 
 import client from './client';
 

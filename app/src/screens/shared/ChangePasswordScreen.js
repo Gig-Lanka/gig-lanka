@@ -60,6 +60,7 @@ export default function ChangePasswordScreen() {
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [errors, setErrors] = useState({});
   const [formError, setFormError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -69,15 +70,26 @@ export default function ChangePasswordScreen() {
   const handleSubmit = async () => {
     if (!canSubmit || submitting) return;
 
+    setErrors({});
     setFormError('');
     setSubmitting(true);
     try {
       await changePassword({ currentPassword, newPassword });
-      navigation.goBack();
+      // Pops back to the already-mounted AccountSettings instance (it's
+      // always what pushed this screen - AC10) and hands it the confirmation
+      // to render, rather than a plain goBack() that would say nothing.
+      navigation.navigate('AccountSettings', { passwordChanged: true });
     } catch (error) {
-      setFormError(
-        error.response?.data?.error?.message || 'Something went wrong. Please try again.',
-      );
+      const apiError = error.response?.data?.error;
+      // Only a wrong current password gets field-level treatment (AC15) and
+      // only that field is cleared (AC16) - new/confirm survive every
+      // failure so a mistyped old password never costs the new one too.
+      if (apiError?.code === 'INVALID_CURRENT_PASSWORD') {
+        setErrors({ currentPassword: apiError.message });
+        setCurrentPassword('');
+      } else {
+        setFormError(apiError?.message || 'Something went wrong. Please try again.');
+      }
     } finally {
       setSubmitting(false);
     }
@@ -102,6 +114,7 @@ export default function ChangePasswordScreen() {
           secureTextEntry
           value={currentPassword}
           onChangeText={setCurrentPassword}
+          error={errors.currentPassword}
           disabled={submitting}
         />
 
