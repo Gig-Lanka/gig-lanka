@@ -4,6 +4,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 
 import gigApi from '../../api/gigApi';
 import GigCard from '../../components/gig/GigCard';
+import GigFilters from '../../components/gig/GigFilters';
 import Chip from '../../components/ui/Chip';
 import EmptyState from '../../components/ui/EmptyState';
 import Loader from '../../components/ui/Loader';
@@ -17,6 +18,7 @@ const SEARCH_PLACEHOLDER = 'Search tutoring, delivery, events…';
 // Chosen so a burst of keystrokes collapses into one request without the
 // field feeling laggy - stated here per the PR note this ticket asked for.
 const SEARCH_DEBOUNCE_MS = 400;
+const DEFAULT_SORT = 'newest';
 
 export default function BrowseGigsScreen() {
   const navigation = useNavigation();
@@ -30,12 +32,34 @@ export default function BrowseGigsScreen() {
   const [loadMoreError, setLoadMoreError] = useState(null);
   const [selectedTags, setSelectedTags] = useState([]);
   const [searchText, setSearchText] = useState('');
+  const [commitment, setCommitment] = useState([]);
+  const [category, setCategory] = useState([]);
+  const [sort, setSort] = useState(DEFAULT_SORT);
+  const [city, setCity] = useState('');
+  const [minPay, setMinPay] = useState('');
+  const [filtersVisible, setFiltersVisible] = useState(false);
   const isFetchingRef = useRef(false);
   const hasLoadedRef = useRef(false);
   const searchDebounceRef = useRef(null);
 
   const hasMore = gigs.length < total;
-  const hasFilter = selectedTags.length > 0 || searchText.trim().length > 0;
+  const hasFilter =
+    selectedTags.length > 0 ||
+    searchText.trim().length > 0 ||
+    commitment.length > 0 ||
+    category.length > 0 ||
+    sort !== DEFAULT_SORT ||
+    city.trim().length > 0 ||
+    minPay.trim().length > 0;
+  // Drives the "Filters (n)" entry point - counts distinct sheet groups with
+  // an active value, not the search box, which shows its own current text.
+  const activeFilterCount =
+    (selectedTags.length > 0 ? 1 : 0) +
+    (commitment.length > 0 ? 1 : 0) +
+    (category.length > 0 ? 1 : 0) +
+    (sort !== DEFAULT_SORT ? 1 : 0) +
+    (city.trim().length > 0 ? 1 : 0) +
+    (minPay.trim().length > 0 ? 1 : 0);
 
   // Single entry point for every fetch (initial load, pull-to-refresh, load
   // more, search, filter change) so there is exactly one place guarding
@@ -63,9 +87,26 @@ export default function BrowseGigsScreen() {
 
       const q = (overrides.q ?? searchText).trim();
       const schedule = overrides.schedule ?? selectedTags;
+      const commitmentValue = overrides.commitment ?? commitment;
+      const categoryValue = overrides.category ?? category;
+      const sortValue = overrides.sort ?? sort;
+      const cityValue = (overrides.city ?? city).trim();
+      const minPayRaw = (overrides.minPay ?? minPay).trim();
+      const minPayValue = minPayRaw !== '' && !Number.isNaN(Number(minPayRaw))
+        ? Number(minPayRaw)
+        : undefined;
 
       gigApi
-        .listGigs({ page: targetPage, q, schedule })
+        .listGigs({
+          page: targetPage,
+          q,
+          schedule,
+          commitment: commitmentValue,
+          category: categoryValue,
+          sort: sortValue,
+          city: cityValue,
+          minPay: minPayValue,
+        })
         .then((data) => {
           setGigs((prev) => (mode === 'more' ? [...prev, ...data.gigs] : data.gigs));
           setTotal(data.total);
@@ -85,7 +126,7 @@ export default function BrowseGigsScreen() {
           setLoadingMore(false);
         });
     },
-    [searchText, selectedTags],
+    [searchText, selectedTags, commitment, category, sort, city, minPay],
   );
 
   // useFocusEffect rather than a plain mount effect only to keep the fetch
@@ -146,12 +187,67 @@ export default function BrowseGigsScreen() {
     [load, searchText, selectedTags],
   );
 
-  const clearFilters = useCallback(() => {
+  // Resets exactly what the sheet owns - its own four groups plus the
+  // shared schedule chips - and leaves the search box alone, since search
+  // isn't one of the sheet's controls.
+  const handleClearFilters = useCallback(() => {
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    setSelectedTags([]);
+    setCommitment([]);
+    setCategory([]);
+    setSort(DEFAULT_SORT);
+    setCity('');
+    setMinPay('');
+    load(1, 'initial', {
+      schedule: [],
+      commitment: [],
+      category: [],
+      sort: DEFAULT_SORT,
+      city: '',
+      minPay: '',
+      q: searchText,
+    });
+  }, [load, searchText]);
+
+  // The screen's own "Clear all" - resets every filter dimension including
+  // the search box, since its label promises "all" and by now several
+  // independent controls can be why the list is short.
+  const handleClearAll = useCallback(() => {
     if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
     setSelectedTags([]);
     setSearchText('');
-    load(1, 'initial', { schedule: [], q: '' });
+    setCommitment([]);
+    setCategory([]);
+    setSort(DEFAULT_SORT);
+    setCity('');
+    setMinPay('');
+    load(1, 'initial', {
+      schedule: [],
+      commitment: [],
+      category: [],
+      sort: DEFAULT_SORT,
+      city: '',
+      minPay: '',
+      q: '',
+    });
   }, [load]);
+
+  const handleApplyFilters = useCallback(
+    (draft) => {
+      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+      setCommitment(draft.commitment);
+      setCategory(draft.category);
+      setSort(draft.sort);
+      setCity(draft.city);
+      setMinPay(draft.minPay);
+      setFiltersVisible(false);
+      load(1, 'initial', { ...draft, schedule: selectedTags, q: searchText });
+    },
+    [load, searchText, selectedTags],
+  );
+
+  const handleOpenFilters = useCallback(() => setFiltersVisible(true), []);
+  const handleCloseFilters = useCallback(() => setFiltersVisible(false), []);
 
   return (
     <Screen>
@@ -171,8 +267,17 @@ export default function BrowseGigsScreen() {
         horizontal
         showsHorizontalScrollIndicator={false}
         className="mb-4 flex-grow-0"
-        contentContainerClassName="gap-2 pr-4"
+        contentContainerClassName="items-center gap-2 pr-4"
       >
+        <Pressable
+          onPress={handleOpenFilters}
+          className="flex-row items-center gap-1.5 rounded-full border-[1.5px] border-signal bg-paper px-[14px] py-[7px]"
+        >
+          <Text className="text-[13px] font-semibold text-signal">Filters</Text>
+          {activeFilterCount > 0 ? (
+            <Text className="text-[13px] font-semibold text-signal">({activeFilterCount})</Text>
+          ) : null}
+        </Pressable>
         {SCHEDULE_TAGS.map((tag) => (
           <Chip
             key={tag.value}
@@ -183,6 +288,20 @@ export default function BrowseGigsScreen() {
           </Chip>
         ))}
       </ScrollView>
+
+      <GigFilters
+        visible={filtersVisible}
+        onRequestClose={handleCloseFilters}
+        schedule={selectedTags}
+        onToggleSchedule={toggleTag}
+        commitment={commitment}
+        category={category}
+        sort={sort}
+        city={city}
+        minPay={minPay}
+        onClear={handleClearFilters}
+        onApply={handleApplyFilters}
+      />
 
       {loading ? (
         <Loader fullScreen />
@@ -201,7 +320,7 @@ export default function BrowseGigsScreen() {
                   {hasFilter ? ' match your filters' : ''}
                 </Text>
                 {hasFilter ? (
-                  <Pressable onPress={clearFilters}>
+                  <Pressable onPress={handleClearAll}>
                     <Text className="text-label font-semibold text-signal">Clear all</Text>
                   </Pressable>
                 ) : null}
@@ -213,7 +332,7 @@ export default function BrowseGigsScreen() {
               <EmptyState
                 message="No gigs match your search or filters."
                 actionLabel="Clear filters"
-                onAction={clearFilters}
+                onAction={handleClearAll}
               />
             ) : (
               <EmptyState message="No gigs are open right now. Check back soon." />
