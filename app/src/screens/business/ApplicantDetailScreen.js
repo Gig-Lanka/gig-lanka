@@ -11,6 +11,7 @@ import Avatar from '../../components/ui/Avatar';
 import EmptyState from '../../components/ui/EmptyState';
 import EntryCard from '../../components/profile/EntryCard';
 import HeroHeader, { HeroSheet, HeroStickyBar } from '../../components/ui/HeroHeader';
+import HireConfirmSheet from '../../components/application/HireConfirmSheet';
 import Loader from '../../components/ui/Loader';
 import Notice from '../../components/ui/Notice';
 import RejectReasonSheet from '../../components/application/RejectReasonSheet';
@@ -42,11 +43,12 @@ function formatRating(rating) {
 
 const SHORTLIST_ERROR_MESSAGE = 'Could not shortlist this applicant. Try again.';
 const REJECT_ERROR_MESSAGE = 'Could not reject this applicant. Try again.';
+const HIRE_ERROR_MESSAGE = 'Could not hire this applicant. Try again.';
+const COMPLETE_ERROR_MESSAGE = 'Could not mark this application complete. Try again.';
 
 // Pushed from a row on ApplicantsScreen. GL-260 built the pinned action row
-// and wired Shortlist, the one action with no sheet; this wires Reject to
-// GL-261's RejectReasonSheet. Hire and Mark complete open GL-262's
-// HireConfirmSheet, so those two stay unwired here.
+// and wired Shortlist; GL-261 wired Reject to RejectReasonSheet. This wires
+// Hire and Mark complete to GL-262's HireConfirmSheet.
 export default function ApplicantDetailScreen() {
   const navigation = useNavigation();
   const { params } = useRoute();
@@ -62,6 +64,12 @@ export default function ApplicantDetailScreen() {
   const [rejectInstance, setRejectInstance] = useState(0);
   const [rejecting, setRejecting] = useState(false);
   const [rejectError, setRejectError] = useState(null);
+  const [hireVisible, setHireVisible] = useState(false);
+  const [hiring, setHiring] = useState(false);
+  const [hireError, setHireError] = useState(null);
+  const [completeVisible, setCompleteVisible] = useState(false);
+  const [completing, setCompleting] = useState(false);
+  const [completeError, setCompleteError] = useState(null);
   const hasFiredViewRef = useRef(false);
 
   // Refetches on every focus, not just mount - same pattern as the seeker's
@@ -153,6 +161,63 @@ export default function ApplicantDetailScreen() {
       setRejectError(error.response?.data?.error?.message || REJECT_ERROR_MESSAGE);
     } finally {
       setRejecting(false);
+      setPendingAction(null);
+    }
+  }
+
+  function handleHire() {
+    if (pendingAction) return;
+    setHireError(null);
+    setHireVisible(true);
+  }
+
+  function handleCancelHire() {
+    if (hiring) return;
+    setHireVisible(false);
+  }
+
+  // Same in-place update as handleShortlist/handleConfirmReject - the hero
+  // pill and the action row re-render to `hired` (Mark complete only) as
+  // soon as this resolves.
+  async function handleConfirmHire() {
+    setHiring(true);
+    setPendingAction('hire');
+    setHireError(null);
+    try {
+      const { application: updated } = await applicationApi.hireApplication(application.id);
+      setApplication(updated);
+      setHireVisible(false);
+    } catch (error) {
+      setHireError(error.response?.data?.error?.message || HIRE_ERROR_MESSAGE);
+    } finally {
+      setHiring(false);
+      setPendingAction(null);
+    }
+  }
+
+  function handleMarkComplete() {
+    if (pendingAction) return;
+    setCompleteError(null);
+    setCompleteVisible(true);
+  }
+
+  function handleCancelComplete() {
+    if (completing) return;
+    setCompleteVisible(false);
+  }
+
+  async function handleConfirmComplete() {
+    setCompleting(true);
+    setPendingAction('complete');
+    setCompleteError(null);
+    try {
+      const { application: updated } = await applicationApi.completeApplication(application.id);
+      setApplication(updated);
+      setCompleteVisible(false);
+    } catch (error) {
+      setCompleteError(error.response?.data?.error?.message || COMPLETE_ERROR_MESSAGE);
+    } finally {
+      setCompleting(false);
       setPendingAction(null);
     }
   }
@@ -279,8 +344,8 @@ export default function ApplicantDetailScreen() {
               pendingAction={pendingAction}
               onShortlist={handleShortlist}
               onReject={handleReject}
-              // onHire/onComplete stay undefined until GL-262 wires
-              // HireConfirmSheet in - those buttons render present but inert.
+              onHire={handleHire}
+              onComplete={handleMarkComplete}
             />
             {actionError ? (
               <Text className="mt-2 text-[12.5px] text-danger-ink">{actionError}</Text>
@@ -297,6 +362,28 @@ export default function ApplicantDetailScreen() {
         error={rejectError}
         onConfirm={handleConfirmReject}
         onCancel={handleCancelReject}
+      />
+
+      <HireConfirmSheet
+        visible={hireVisible}
+        title={`Hire ${profileSnapshot?.name}?`}
+        body="This confirms hiring them for this gig."
+        confirmLabel="Hire"
+        submitting={hiring}
+        error={hireError}
+        onConfirm={handleConfirmHire}
+        onCancel={handleCancelHire}
+      />
+
+      <HireConfirmSheet
+        visible={completeVisible}
+        title="Mark this hire complete?"
+        body="This unlocks rating for both sides and can't be undone."
+        confirmLabel="Mark complete"
+        submitting={completing}
+        error={completeError}
+        onConfirm={handleConfirmComplete}
+        onCancel={handleCancelComplete}
       />
     </View>
   );
