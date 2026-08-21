@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { FlatList, Pressable, ScrollView, Text, View } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 
@@ -9,9 +9,14 @@ import EmptyState from '../../components/ui/EmptyState';
 import Loader from '../../components/ui/Loader';
 import Screen from '../../components/ui/Screen';
 import ScreenHeader from '../../components/ui/ScreenHeader';
+import TextInput from '../../components/ui/TextInput';
 import { SCHEDULE_TAGS } from '../../constants/enums';
 
 const LOAD_ERROR_MESSAGE = 'Could not load gigs. Check your connection and try again.';
+const SEARCH_PLACEHOLDER = 'Search tutoring, delivery, events…';
+// Chosen so a burst of keystrokes collapses into one request without the
+// field feeling laggy - stated here per the PR note this ticket asked for.
+const SEARCH_DEBOUNCE_MS = 400;
 
 export default function BrowseGigsScreen() {
   const navigation = useNavigation();
@@ -24,62 +29,64 @@ export default function BrowseGigsScreen() {
   const [error, setError] = useState(null);
   const [loadMoreError, setLoadMoreError] = useState(null);
   const [selectedTags, setSelectedTags] = useState([]);
+  const [searchText, setSearchText] = useState('');
   const isFetchingRef = useRef(false);
   const hasLoadedRef = useRef(false);
+  const searchDebounceRef = useRef(null);
 
   const hasMore = gigs.length < total;
-  const hasFilter = selectedTags.length > 0;
-
-  // Narrows whatever's already loaded rather than querying the server -
-  // GET /api/gigs has no filter param this sprint, and adding one is a
-  // server-side change that's explicitly out of scope. Scrolling to the
-  // bottom of a short filtered view still fetches further raw pages (see
-  // handleEndReached), since a later page may hold more matches.
-  const filteredGigs = useMemo(() => {
-    if (!hasFilter) return gigs;
-    return gigs.filter((gig) => (gig.schedule ?? []).some((tag) => selectedTags.includes(tag)));
-  }, [gigs, hasFilter, selectedTags]);
+  const hasFilter = selectedTags.length > 0 || searchText.trim().length > 0;
 
   // Single entry point for every fetch (initial load, pull-to-refresh, load
-  // more) so there is exactly one place guarding against overlapping
-  // requests - onEndReached can fire several times before state updates
-  // land, and isFetchingRef blocks every one of those beyond the first.
-  const load = useCallback((targetPage, mode) => {
-    if (isFetchingRef.current) return;
-    isFetchingRef.current = true;
+  // more, search, filter change) so there is exactly one place guarding
+  // against overlapping requests - onEndReached can fire several times
+  // before state updates land, and isFetchingRef blocks every one of those
+  // beyond the first. q and schedule default to the current committed state
+  // so pagination always repeats the same query as the page it follows;
+  // toggling a filter passes the new value explicitly instead, since the
+  // state setter that commits it hasn't landed yet at the point load() runs.
+  const load = useCallback(
+    (targetPage, mode, overrides = {}) => {
+      if (isFetchingRef.current) return;
+      isFetchingRef.current = true;
 
-    if (mode === 'refresh') {
-      setRefreshing(true);
-      setError(null);
-    } else if (mode === 'more') {
-      setLoadingMore(true);
-      setLoadMoreError(null);
-    } else {
-      setLoading(true);
-      setError(null);
-    }
+      if (mode === 'refresh') {
+        setRefreshing(true);
+        setError(null);
+      } else if (mode === 'more') {
+        setLoadingMore(true);
+        setLoadMoreError(null);
+      } else {
+        setLoading(true);
+        setError(null);
+      }
 
-    gigApi
-      .listGigs({ page: targetPage })
-      .then((data) => {
-        setGigs((prev) => (mode === 'more' ? [...prev, ...data.gigs] : data.gigs));
-        setTotal(data.total);
-        setPage(data.page);
-      })
-      .catch(() => {
-        if (mode === 'more') {
-          setLoadMoreError(LOAD_ERROR_MESSAGE);
-        } else {
-          setError(LOAD_ERROR_MESSAGE);
-        }
-      })
-      .finally(() => {
-        isFetchingRef.current = false;
-        setLoading(false);
-        setRefreshing(false);
-        setLoadingMore(false);
-      });
-  }, []);
+      const q = (overrides.q ?? searchText).trim();
+      const schedule = overrides.schedule ?? selectedTags;
+
+      gigApi
+        .listGigs({ page: targetPage, q, schedule })
+        .then((data) => {
+          setGigs((prev) => (mode === 'more' ? [...prev, ...data.gigs] : data.gigs));
+          setTotal(data.total);
+          setPage(data.page);
+        })
+        .catch(() => {
+          if (mode === 'more') {
+            setLoadMoreError(LOAD_ERROR_MESSAGE);
+          } else {
+            setError(LOAD_ERROR_MESSAGE);
+          }
+        })
+        .finally(() => {
+          isFetchingRef.current = false;
+          setLoading(false);
+          setRefreshing(false);
+          setLoadingMore(false);
+        });
+    },
+    [searchText, selectedTags],
+  );
 
   // useFocusEffect rather than a plain mount effect only to keep the fetch
   // inside an async callback rather than a synchronous setState-on-mount -
@@ -91,6 +98,15 @@ export default function BrowseGigsScreen() {
       load(1, 'initial');
     }, [load]),
   );
+
+  // Clears any pending debounce timer on unmount so a keystroke made just
+  // before navigating away never fires load() after the screen is gone -
+  // that would be a state update on an unmounted component.
+  useEffect(() => {
+    return () => {
+      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    };
+  }, []);
 
   const handleRetry = useCallback(() => load(1, 'initial'), [load]);
   const handleRefresh = useCallback(() => load(1, 'refresh'), [load]);
@@ -104,21 +120,53 @@ export default function BrowseGigsScreen() {
     [navigation],
   );
 
-  const toggleTag = useCallback((tag) => {
-    setSelectedTags((prev) =>
-      prev.includes(tag) ? prev.filter((value) => value !== tag) : [...prev, tag],
-    );
-  }, []);
+  const handleSearchChange = useCallback(
+    (text) => {
+      setSearchText(text);
+      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+      searchDebounceRef.current = setTimeout(() => {
+        load(1, 'initial', { q: text, schedule: selectedTags });
+      }, SEARCH_DEBOUNCE_MS);
+    },
+    [load, selectedTags],
+  );
 
-  const clearTags = useCallback(() => setSelectedTags([]), []);
+  const toggleTag = useCallback(
+    (tag) => {
+      // Supersedes any debounced search still waiting to fire - otherwise it
+      // could land after this tap and overwrite the schedule change with the
+      // stale selectedTags it closed over at keystroke time.
+      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+      const next = selectedTags.includes(tag)
+        ? selectedTags.filter((value) => value !== tag)
+        : [...selectedTags, tag];
+      setSelectedTags(next);
+      load(1, 'initial', { schedule: next, q: searchText });
+    },
+    [load, searchText, selectedTags],
+  );
+
+  const clearFilters = useCallback(() => {
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    setSelectedTags([]);
+    setSearchText('');
+    load(1, 'initial', { schedule: [], q: '' });
+  }, [load]);
 
   return (
     <Screen>
       <ScreenHeader title="Find a gig" />
 
+      <TextInput
+        value={searchText}
+        onChangeText={handleSearchChange}
+        placeholder={SEARCH_PLACEHOLDER}
+        returnKeyType="search"
+        autoCorrect={false}
+      />
+
       {/* Always visible, never behind a filter sheet - schedule is the
-          first thing this audience filters by. Room is left below for the
-          Sprint 2 search field and a "Filters" entry point beside this row. */}
+          first thing this audience filters by. */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -142,19 +190,18 @@ export default function BrowseGigsScreen() {
         <EmptyState message={error} actionLabel="Retry" onAction={handleRetry} />
       ) : (
         <FlatList
-          data={filteredGigs}
+          data={gigs}
           keyExtractor={(gig) => gig.id}
           renderItem={({ item }) => <GigCard gig={item} onPress={() => handleCardPress(item)} />}
           ListHeaderComponent={
             gigs.length > 0 ? (
               <View className="mb-3 flex-row items-center justify-between gap-3">
                 <Text className="text-label text-muted">
-                  {hasFilter
-                    ? `${filteredGigs.length} ${filteredGigs.length === 1 ? 'gig' : 'gigs'} match your filters`
-                    : `${total} ${total === 1 ? 'gig' : 'gigs'}`}
+                  {total} {total === 1 ? 'gig' : 'gigs'}
+                  {hasFilter ? ' match your filters' : ''}
                 </Text>
                 {hasFilter ? (
-                  <Pressable onPress={clearTags}>
+                  <Pressable onPress={clearFilters}>
                     <Text className="text-label font-semibold text-signal">Clear all</Text>
                   </Pressable>
                 ) : null}
@@ -162,14 +209,14 @@ export default function BrowseGigsScreen() {
             ) : null
           }
           ListEmptyComponent={
-            gigs.length === 0 ? (
-              <EmptyState message="No gigs are open right now. Check back soon." />
-            ) : (
+            hasFilter ? (
               <EmptyState
-                message="No gigs match your selected schedule filters."
+                message="No gigs match your search or filters."
                 actionLabel="Clear filters"
-                onAction={clearTags}
+                onAction={clearFilters}
               />
+            ) : (
+              <EmptyState message="No gigs are open right now. Check back soon." />
             )
           }
           ListFooterComponent={
