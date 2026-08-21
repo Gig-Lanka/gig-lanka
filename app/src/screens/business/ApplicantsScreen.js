@@ -11,10 +11,12 @@ import ApplicantStatusFilter, {
 import EmptyState from '../../components/ui/EmptyState';
 import Loader from '../../components/ui/Loader';
 import Notice from '../../components/ui/Notice';
+import RejectReasonSheet from '../../components/application/RejectReasonSheet';
 import Screen from '../../components/ui/Screen';
 import ScreenHeader from '../../components/ui/ScreenHeader';
 
 const LOAD_ERROR_MESSAGE = 'Could not load applicants. Check your connection and try again.';
+const REJECT_ERROR_MESSAGE = 'Could not reject this applicant. Try again.';
 
 // Serves both the Applicants tab (no gigId, GET /api/applications/for-my-gigs)
 // and the pushed, gig-scoped instance (a gigId param, GET
@@ -33,6 +35,10 @@ export default function ApplicantsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
+  const [rejectTarget, setRejectTarget] = useState(null);
+  const [rejectInstance, setRejectInstance] = useState(0);
+  const [rejecting, setRejecting] = useState(false);
+  const [rejectError, setRejectError] = useState(null);
   const hasLoadedRef = useRef(false);
 
   const fetchApplicants = useCallback(async () => {
@@ -95,6 +101,33 @@ export default function ApplicantsScreen() {
       .finally(() => setRefreshing(false));
   }, [fetchApplicants]);
 
+  function handleCancelReject() {
+    if (rejecting) return;
+    setRejectTarget(null);
+  }
+
+  // Updates the one row in place rather than refetching, matching
+  // ApplicantDetailScreen's handleShortlist/handleConfirmReject - the row
+  // for this application re-renders with its new status on the next paint.
+  async function handleConfirmReject({ reasonCode, note }) {
+    setRejecting(true);
+    setRejectError(null);
+    try {
+      const { application: updated } = await applicationApi.rejectApplication(rejectTarget.id, {
+        reasonCode,
+        note,
+      });
+      setApplications((current) =>
+        current.map((application) => (application.id === updated.id ? updated : application)),
+      );
+      setRejectTarget(null);
+    } catch (error) {
+      setRejectError(error.response?.data?.error?.message || REJECT_ERROR_MESSAGE);
+    } finally {
+      setRejecting(false);
+    }
+  }
+
   const filteredApplications = useMemo(() => {
     if (segment === 'all') return applications;
     return applications.filter((application) => applicantSegment(application) === segment);
@@ -138,6 +171,11 @@ export default function ApplicantsScreen() {
                 application={item}
                 showGig={!isScoped}
                 onOpen={() => navigation.navigate('ApplicantDetail', { applicationId: item.id })}
+                onReject={() => {
+                  setRejectError(null);
+                  setRejectInstance((value) => value + 1);
+                  setRejectTarget(item);
+                }}
                 className="mb-[10px]"
               />
             )}
@@ -160,6 +198,16 @@ export default function ApplicantsScreen() {
           />
         </>
       )}
+
+      <RejectReasonSheet
+        key={rejectInstance}
+        visible={Boolean(rejectTarget)}
+        applicantName={rejectTarget?.profileSnapshot?.name}
+        submitting={rejecting}
+        error={rejectError}
+        onConfirm={handleConfirmReject}
+        onCancel={handleCancelReject}
+      />
     </Screen>
   );
 }

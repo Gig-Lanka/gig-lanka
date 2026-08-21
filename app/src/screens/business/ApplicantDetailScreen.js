@@ -13,6 +13,7 @@ import EntryCard from '../../components/profile/EntryCard';
 import HeroHeader, { HeroSheet, HeroStickyBar } from '../../components/ui/HeroHeader';
 import Loader from '../../components/ui/Loader';
 import Notice from '../../components/ui/Notice';
+import RejectReasonSheet from '../../components/application/RejectReasonSheet';
 import ScreenHeader from '../../components/ui/ScreenHeader';
 import SectionLabel from '../../components/ui/SectionLabel';
 import useHeroScroll from '../../hooks/useHeroScroll';
@@ -40,11 +41,12 @@ function formatRating(rating) {
 }
 
 const SHORTLIST_ERROR_MESSAGE = 'Could not shortlist this applicant. Try again.';
+const REJECT_ERROR_MESSAGE = 'Could not reject this applicant. Try again.';
 
-// Pushed from a row on ApplicantsScreen. GL-260 builds the pinned action row
-// itself and wires Shortlist, the one action with no sheet; Reject opens
-// GL-261's RejectReasonSheet and Hire/Mark complete open GL-262's
-// HireConfirmSheet, so those three stay unwired here.
+// Pushed from a row on ApplicantsScreen. GL-260 built the pinned action row
+// and wired Shortlist, the one action with no sheet; this wires Reject to
+// GL-261's RejectReasonSheet. Hire and Mark complete open GL-262's
+// HireConfirmSheet, so those two stay unwired here.
 export default function ApplicantDetailScreen() {
   const navigation = useNavigation();
   const { params } = useRoute();
@@ -56,6 +58,10 @@ export default function ApplicantDetailScreen() {
   const [reloadToken, setReloadToken] = useState(0);
   const [pendingAction, setPendingAction] = useState(null);
   const [actionError, setActionError] = useState(null);
+  const [rejectVisible, setRejectVisible] = useState(false);
+  const [rejectInstance, setRejectInstance] = useState(0);
+  const [rejecting, setRejecting] = useState(false);
+  const [rejectError, setRejectError] = useState(null);
   const hasFiredViewRef = useRef(false);
 
   // Refetches on every focus, not just mount - same pattern as the seeker's
@@ -114,6 +120,39 @@ export default function ApplicantDetailScreen() {
     } catch (error) {
       setActionError(error.response?.data?.error?.message || SHORTLIST_ERROR_MESSAGE);
     } finally {
+      setPendingAction(null);
+    }
+  }
+
+  function handleReject() {
+    if (pendingAction) return;
+    setRejectError(null);
+    setRejectInstance((value) => value + 1);
+    setRejectVisible(true);
+  }
+
+  function handleCancelReject() {
+    if (rejecting) return;
+    setRejectVisible(false);
+  }
+
+  // Same in-place update as handleShortlist - the hero pill and the action
+  // row re-render to `rejected` (no actions left) as soon as this resolves.
+  async function handleConfirmReject({ reasonCode, note }) {
+    setRejecting(true);
+    setPendingAction('reject');
+    setRejectError(null);
+    try {
+      const { application: updated } = await applicationApi.rejectApplication(application.id, {
+        reasonCode,
+        note,
+      });
+      setApplication(updated);
+      setRejectVisible(false);
+    } catch (error) {
+      setRejectError(error.response?.data?.error?.message || REJECT_ERROR_MESSAGE);
+    } finally {
+      setRejecting(false);
       setPendingAction(null);
     }
   }
@@ -239,8 +278,9 @@ export default function ApplicantDetailScreen() {
               status={applicationStatus}
               pendingAction={pendingAction}
               onShortlist={handleShortlist}
-              // onReject/onHire/onComplete stay undefined until GL-261/GL-262
-              // wire their sheets in - the buttons render present but inert.
+              onReject={handleReject}
+              // onHire/onComplete stay undefined until GL-262 wires
+              // HireConfirmSheet in - those buttons render present but inert.
             />
             {actionError ? (
               <Text className="mt-2 text-[12.5px] text-danger-ink">{actionError}</Text>
@@ -248,6 +288,16 @@ export default function ApplicantDetailScreen() {
           </View>
         </SafeAreaView>
       ) : null}
+
+      <RejectReasonSheet
+        key={rejectInstance}
+        visible={rejectVisible}
+        applicantName={profileSnapshot?.name}
+        submitting={rejecting}
+        error={rejectError}
+        onConfirm={handleConfirmReject}
+        onCancel={handleCancelReject}
+      />
     </View>
   );
 }
