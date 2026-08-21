@@ -9,6 +9,7 @@ import ComponentDemoScreen from '../screens/dev/ComponentDemoScreen';
 import ApplicationDetailScreen from '../screens/seeker/ApplicationDetailScreen';
 import ApplyScreen from '../screens/seeker/ApplyScreen';
 import AccountSettingsScreen from '../screens/shared/AccountSettingsScreen';
+import ApplicantsScreen from '../screens/business/ApplicantsScreen';
 import EditGigScreen from '../screens/business/EditGigScreen';
 import EditProfileScreen from '../screens/shared/EditProfileScreen';
 import EducationFormScreen from '../screens/seeker/EducationFormScreen';
@@ -45,6 +46,10 @@ function AppStack({ role }) {
             options={{ presentation: 'modal' }}
           />
           <Stack.Screen name="EditGig" component={EditGigScreen} />
+          {/* Its own route name, distinct from the "Applicants" tab, so the
+              tab can never inherit a gigId left over from this pushed,
+              gig-scoped instance (GL-257). */}
+          <Stack.Screen name="GigApplicants" component={ApplicantsScreen} />
         </>
       ) : (
         <>
