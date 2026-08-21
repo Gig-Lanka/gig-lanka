@@ -9,6 +9,7 @@ import ComponentDemoScreen from '../screens/dev/ComponentDemoScreen';
 import ApplicationDetailScreen from '../screens/seeker/ApplicationDetailScreen';
 import ApplyScreen from '../screens/seeker/ApplyScreen';
 import AccountSettingsScreen from '../screens/shared/AccountSettingsScreen';
+import ApplicantDetailScreen from '../screens/business/ApplicantDetailScreen';
 import ApplicantsScreen from '../screens/business/ApplicantsScreen';
 import EditGigScreen from '../screens/business/EditGigScreen';
 import EditProfileScreen from '../screens/shared/EditProfileScreen';
@@ -50,6 +51,7 @@ function AppStack({ role }) {
               tab can never inherit a gigId left over from this pushed,
               gig-scoped instance (GL-257). */}
           <Stack.Screen name="GigApplicants" component={ApplicantsScreen} />
+          <Stack.Screen name="ApplicantDetail" component={ApplicantDetailScreen} />
         </>
       ) : (
         <>
