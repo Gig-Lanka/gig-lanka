@@ -8,6 +8,10 @@ import {
   completeApplication as completeApplicationService,
   listApplicationsForGig as listApplicationsForGigService,
   listApplicationsForMyGigs as listApplicationsForMyGigsService,
+  viewApplication as viewApplicationService,
+  shortlistApplication as shortlistApplicationService,
+  hireApplication as hireApplicationService,
+  rejectApplication as rejectApplicationService,
 } from '../services/application.service.js';
 
 export const applyToGig = asyncHandler(async (req, res) => {
@@ -39,6 +43,34 @@ export const withdrawApplication = asyncHandler(async (req, res) => {
 export const completeApplication = asyncHandler(async (req, res) => {
   const actor = { id: req.user.id, role: req.user.role };
   const result = await completeApplicationService(req.params.id, actor);
+
+  sendSuccess(res, result, 200);
+});
+
+export const viewApplication = asyncHandler(async (req, res) => {
+  const actor = { id: req.user.id, role: req.user.role };
+  const result = await viewApplicationService(req.params.id, actor);
+
+  sendSuccess(res, result, 200);
+});
+
+export const shortlistApplication = asyncHandler(async (req, res) => {
+  const actor = { id: req.user.id, role: req.user.role };
+  const result = await shortlistApplicationService(req.params.id, actor);
+
+  sendSuccess(res, result, 200);
+});
+
+export const hireApplication = asyncHandler(async (req, res) => {
+  const actor = { id: req.user.id, role: req.user.role };
+  const result = await hireApplicationService(req.params.id, actor);
+
+  sendSuccess(res, result, 200);
+});
+
+export const rejectApplication = asyncHandler(async (req, res) => {
+  const actor = { id: req.user.id, role: req.user.role };
+  const result = await rejectApplicationService(req.params.id, actor, req.body);
 
   sendSuccess(res, result, 200);
 });

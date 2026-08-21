@@ -6,10 +6,14 @@ import {
   withdrawApplication,
   completeApplication,
   getApplicationsForMyGigs,
+  viewApplication,
+  shortlistApplication,
+  hireApplication,
+  rejectApplication,
 } from '../controllers/application.controller.js';
 import { validate } from '../middleware/validate.middleware.js';
 import { requireAuth, requireRole } from '../middleware/auth.middleware.js';
-import { applyToGigSchema } from '../validators/application.validator.js';
+import { applyToGigSchema, rejectApplicationSchema } from '../validators/application.validator.js';
 
 const router = Router();
 
@@ -59,6 +63,30 @@ router.patch(
   requireAuth,
   requireRole('business'),
   completeApplication,
+);
+
+// GL-253. Same layering as withdraw/complete: requireRole gates the kind of
+// actor, and which specific business owns the gig is checked inside
+// transitionApplicationStatus. No validate() and no body — view, shortlist
+// and hire take none.
+router.patch('/applications/:id/view', requireAuth, requireRole('business'), viewApplication);
+router.patch(
+  '/applications/:id/shortlist',
+  requireAuth,
+  requireRole('business'),
+  shortlistApplication,
+);
+router.patch('/applications/:id/hire', requireAuth, requireRole('business'), hireApplication);
+
+// GL-253. reject takes { reasonCode, note } — validate() only shapes the
+// body (strips unknown fields); the four rejection rules themselves live in
+// assertValidRejection (application.service.js), not here.
+router.patch(
+  '/applications/:id/reject',
+  requireAuth,
+  requireRole('business'),
+  validate(rejectApplicationSchema),
+  rejectApplication,
 );
 
 export default router;
