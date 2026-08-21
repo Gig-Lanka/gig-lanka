@@ -5,6 +5,76 @@ import { getPublicIdentity } from './profile.service.js';
 
 const PAGE_SIZE = 10;
 
+const REGEX_METACHARACTERS = /[.*+?^${}()|[\]\\]/g;
+const escapeRegExp = (value) => value.replace(REGEX_METACHARACTERS, '\\$&');
+
+const SORT_SPECS = {
+  newest: { createdAt: -1, _id: -1 },
+  highest_pay: { payAmount: -1, _id: -1 },
+};
+
+// Builds the filter for the public listing only — status: 'open' is fixed
+// here and never derived from `query`, so no combination of parameters can
+// widen the result past open gigs.
+const buildOpenGigFilter = (query) => {
+  const filter = { status: 'open' };
+
+  if (query.q) {
+    // Metacharacters must be escaped before building the RegExp: an
+    // unescaped `(` throws (crashing the request) and `.*` turns the match
+    // into an unanchored full scan.
+    const pattern = new RegExp(escapeRegExp(query.q), 'i');
+    filter.$or = [{ title: pattern }, { description: pattern }];
+  }
+
+  // $in gives OR-within-field for both a scalar field (category, payType,
+  // commitment) and an array field (schedule, where it matches a gig
+  // carrying any of the requested tags).
+  if (query.category) filter.category = { $in: query.category };
+  if (query.schedule) filter.schedule = { $in: query.schedule };
+  if (query.payType) filter.payType = { $in: query.payType };
+  if (query.commitment) filter.commitment = { $in: query.commitment };
+
+  if (typeof query.remote === 'boolean') filter.remote = query.remote;
+
+  if (query.city) {
+    filter.city = new RegExp(`^${escapeRegExp(query.city)}$`, 'i');
+  }
+
+  if (typeof query.minPay === 'number') {
+    filter.payAmount = { $gte: query.minPay };
+  }
+
+  return filter;
+};
+
+// startDate is optional and stored as a plain string, so Mongo's normal
+// ascending sort treats every undated gig as `null` and puts it first. This
+// resolves the order (undated last) via aggregation, but only to pick the
+// page's ids — the actual documents are still hydrated through Gig.find so
+// the schema's toJSON transform and `savedBy`'s select:false keep applying,
+// the same as every other read path.
+const listByStartingSoon = async (filter, page) => {
+  const idRows = await Gig.aggregate([
+    { $match: filter },
+    {
+      $addFields: {
+        _hasStartDate: { $cond: [{ $ifNull: ['$startDate', false] }, 0, 1] },
+      },
+    },
+    { $sort: { _hasStartDate: 1, startDate: 1, _id: 1 } },
+    { $skip: (page - 1) * PAGE_SIZE },
+    { $limit: PAGE_SIZE },
+    { $project: { _id: 1 } },
+  ]);
+
+  const orderedIds = idRows.map((row) => row._id);
+  const gigs = await Gig.find({ _id: { $in: orderedIds } });
+  const gigById = new Map(gigs.map((gig) => [gig._id.toString(), gig]));
+
+  return orderedIds.map((id) => gigById.get(id.toString())).filter(Boolean);
+};
+
 const UPDATABLE_FIELDS = [
   'title',
   'description',
@@ -46,13 +116,16 @@ export const createGig = async (body, postedBy) => {
 
 export const listOpenGigs = async (query) => {
   const page = Math.max(1, parseInt(query.page, 10) || 1);
-  const filter = { status: 'open' };
+  const filter = buildOpenGigFilter(query);
+  const sort = query.sort ?? 'newest';
 
   const [gigs, total] = await Promise.all([
-    Gig.find(filter)
-      .sort({ createdAt: -1, _id: -1 })
-      .skip((page - 1) * PAGE_SIZE)
-      .limit(PAGE_SIZE),
+    sort === 'starting_soon'
+      ? listByStartingSoon(filter, page)
+      : Gig.find(filter)
+          .sort(SORT_SPECS[sort] ?? SORT_SPECS.newest)
+          .skip((page - 1) * PAGE_SIZE)
+          .limit(PAGE_SIZE),
     Gig.countDocuments(filter),
   ]);
 
