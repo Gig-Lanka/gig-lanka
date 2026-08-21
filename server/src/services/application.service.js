@@ -323,6 +323,30 @@ const toGigSummary = (gig) => {
   };
 };
 
+// GL-245: the read behind gig detail's `viewerApplication` field, composed
+// into that response by gig.controller.js rather than imported into
+// gig.service.js — the reverse edge would close an import cycle, since this
+// service already imports gig.service.js for assertGigIsOpen. Only a
+// signed-in seeker can own an application, so a guest or a business gets
+// null without a query. Looked up by (gig, applicant) - the same pair the
+// unique index enforces - at any status, since a withdrawn or rejected
+// application is exactly the case gig detail needs to surface. Kept to
+// { id, status }: the snapshot, the rejection reason and timestamps belong
+// to the application detail screen, not this E3 response.
+export const getViewerApplication = async (gigId, user) => {
+  if (!user || user.role !== 'seeker') {
+    return null;
+  }
+
+  const application = await Application.findOne({ gig: gigId, applicant: user.id });
+
+  if (!application) {
+    return null;
+  }
+
+  return { id: application.id, status: application.status };
+};
+
 // GL-183: the signed-in seeker's own applications, newest first, each with
 // a summary of the gig it belongs to. Scoped to `applicant: userId` only —
 // there is no parameter that reaches another seeker's applications.

@@ -1155,7 +1155,9 @@ No failure modes beyond the `400` above — an empty result set is still `200` w
 
 ### 10.5 Read a gig — `GET /api/gigs/:id`
 
-Public — no `Authorization` header required. Returns one gig **at any status** to anyone, so a link to a since-closed gig still resolves.
+Public — no `Authorization` header required, and none of the behaviour below changes that. Returns one gig **at any status** to anyone, so a link to a since-closed gig still resolves.
+
+An `Authorization` header is read if present (optional authentication), purely to compute `viewerApplication`. A missing header, a malformed one, or an expired or invalid token all fall through to exactly the same response a guest gets — this endpoint never 401s.
 
 **Success — `200 OK`**
 
@@ -1164,10 +1166,13 @@ Public — no `Authorization` header required. Returns one gig **at any status**
   "success": true,
   "data": {
     "gig": { /* 10.1 */ },
-    "business": { /* 10.2 */ }
+    "business": { /* 10.2 */ },
+    "viewerApplication": { "id": "...", "status": "shortlisted" }
   }
 }
 ```
+
+`viewerApplication` is `{ id, status }` for a signed-in seeker who has an application against this gig, **at any status** — applied, viewed, shortlisted, hired, completed, rejected or withdrawn all carry it. It is `null` in every other case: a guest, a signed-in business, or a signed-in seeker who has never applied to this gig. A seeker whose access token has expired is treated as a guest here and also gets `null`. Nothing beyond `id` and `status` is included — the profile snapshot, the rejection reason and every timestamp live on `GET /api/applications/:id` (§11.9), not here.
 
 **Failure — `404 Not Found`** (no gig with that id, or the id isn't a valid Mongo id — both answer identically):
 
