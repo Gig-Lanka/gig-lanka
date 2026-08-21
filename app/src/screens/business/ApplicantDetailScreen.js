@@ -4,6 +4,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 
 import applicationApi from '../../api/applicationApi';
+import ApplicantActionRow, {
+  applicantActionsForStatus,
+} from '../../components/application/ApplicantActionRow';
 import Avatar from '../../components/ui/Avatar';
 import EmptyState from '../../components/ui/EmptyState';
 import EntryCard from '../../components/profile/EntryCard';
@@ -36,9 +39,12 @@ function formatRating(rating) {
   return `★ ${averageRating.toFixed(1)} (${reviewCount})`;
 }
 
-// Pushed from a row on ApplicantsScreen. The pinned Reject/Hire bar the
-// mockup frame draws is GL-221's ("...from applicant detail"), not built
-// here.
+const SHORTLIST_ERROR_MESSAGE = 'Could not shortlist this applicant. Try again.';
+
+// Pushed from a row on ApplicantsScreen. GL-260 builds the pinned action row
+// itself and wires Shortlist, the one action with no sheet; Reject opens
+// GL-261's RejectReasonSheet and Hire/Mark complete open GL-262's
+// HireConfirmSheet, so those three stay unwired here.
 export default function ApplicantDetailScreen() {
   const navigation = useNavigation();
   const { params } = useRoute();
@@ -48,6 +54,8 @@ export default function ApplicantDetailScreen() {
   const [application, setApplication] = useState(null);
   const [status, setStatus] = useState(STATUS.LOADING);
   const [reloadToken, setReloadToken] = useState(0);
+  const [pendingAction, setPendingAction] = useState(null);
+  const [actionError, setActionError] = useState(null);
   const hasFiredViewRef = useRef(false);
 
   // Refetches on every focus, not just mount - same pattern as the seeker's
@@ -92,6 +100,24 @@ export default function ApplicantDetailScreen() {
 
   const handleBack = () => navigation.goBack();
 
+  // Updates `application` in place from the response rather than
+  // refetching, so the hero pill and the action row re-render to
+  // `shortlisted` immediately (GL-221 §2, §13) - ApplicantsScreen picks up
+  // the same change on its own next focus (GL-257's refetch-on-focus).
+  async function handleShortlist() {
+    if (pendingAction) return;
+    setActionError(null);
+    setPendingAction('shortlist');
+    try {
+      const { application: updated } = await applicationApi.shortlistApplication(application.id);
+      setApplication(updated);
+    } catch (error) {
+      setActionError(error.response?.data?.error?.message || SHORTLIST_ERROR_MESSAGE);
+    } finally {
+      setPendingAction(null);
+    }
+  }
+
   if (status === STATUS.LOADING) {
     return <Loader fullScreen />;
   }
@@ -122,6 +148,7 @@ export default function ApplicantDetailScreen() {
   const isRejected = applicationStatus === 'rejected';
   const experience = profileSnapshot?.experience ?? [];
   const education = profileSnapshot?.education ?? [];
+  const hasActions = applicantActionsForStatus(applicationStatus).length > 0;
 
   return (
     <View className="flex-1 bg-ink">
@@ -149,7 +176,7 @@ export default function ApplicantDetailScreen() {
           </HeroHeader>
         </View>
 
-        <HeroSheet className="px-[22px] pb-8 pt-[22px]">
+        <HeroSheet className={['px-[22px] pt-[22px]', hasActions ? 'pb-32' : 'pb-8'].join(' ')}>
           <Notice className="mb-5">
             Opening this marked the application Viewed. The applicant can see that, and it
             can&apos;t be undone.
@@ -204,6 +231,23 @@ export default function ApplicantDetailScreen() {
           <HeroStickyBar title={profileSnapshot?.name ?? 'Applicant'} onBack={handleBack} visible />
         </SafeAreaView>
       </Animated.View>
+
+      {hasActions ? (
+        <SafeAreaView edges={['bottom']} className="border-t border-line bg-paper">
+          <View className="px-[22px] pb-3 pt-3">
+            <ApplicantActionRow
+              status={applicationStatus}
+              pendingAction={pendingAction}
+              onShortlist={handleShortlist}
+              // onReject/onHire/onComplete stay undefined until GL-261/GL-262
+              // wire their sheets in - the buttons render present but inert.
+            />
+            {actionError ? (
+              <Text className="mt-2 text-[12.5px] text-danger-ink">{actionError}</Text>
+            ) : null}
+          </View>
+        </SafeAreaView>
+      ) : null}
     </View>
   );
 }
