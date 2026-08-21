@@ -18,6 +18,12 @@ import ScreenHeader from '../../components/ui/ScreenHeader';
 const LOAD_ERROR_MESSAGE = 'Could not load applicants. Check your connection and try again.';
 const REJECT_ERROR_MESSAGE = 'Could not reject this applicant. Try again.';
 
+// GL-221 §14: same wording as ApplicantDetailScreen's conflictMessage - a
+// 409 here means someone else (the seeker withdrawing, or the business from
+// another session) already decided this application first.
+const REJECT_CONFLICT_MESSAGE =
+  "This application's status has already changed, so it can no longer be rejected.";
+
 // Serves both the Applicants tab (no gigId, GET /api/applications/for-my-gigs)
 // and the pushed, gig-scoped instance (a gigId param, GET
 // /api/gigs/:gigId/applications) - GL-257 gives that pushed entry its own
@@ -39,6 +45,7 @@ export default function ApplicantsScreen() {
   const [rejectInstance, setRejectInstance] = useState(0);
   const [rejecting, setRejecting] = useState(false);
   const [rejectError, setRejectError] = useState(null);
+  const [rejectFieldErrors, setRejectFieldErrors] = useState({});
   const hasLoadedRef = useRef(false);
 
   const fetchApplicants = useCallback(async () => {
@@ -109,9 +116,13 @@ export default function ApplicantsScreen() {
   // Updates the one row in place rather than refetching, matching
   // ApplicantDetailScreen's handleShortlist/handleConfirmReject - the row
   // for this application re-renders with its new status on the next paint.
+  // §15: routes a 400 from the rejection rules to the sheet's field errors
+  // (always `reasonCode`) instead of the generic banner, same as the detail
+  // screen's handleConfirmReject.
   async function handleConfirmReject({ reasonCode, note }) {
     setRejecting(true);
     setRejectError(null);
+    setRejectFieldErrors({});
     try {
       const { application: updated } = await applicationApi.rejectApplication(rejectTarget.id, {
         reasonCode,
@@ -122,7 +133,20 @@ export default function ApplicantsScreen() {
       );
       setRejectTarget(null);
     } catch (error) {
-      setRejectError(error.response?.data?.error?.message || REJECT_ERROR_MESSAGE);
+      const apiError = error.response?.data?.error;
+      if (apiError?.code === 'VALIDATION_ERROR' && apiError.errors) {
+        const fieldErrors = {};
+        apiError.errors.forEach((entry) => {
+          fieldErrors[entry.field] = entry.message;
+        });
+        setRejectFieldErrors(fieldErrors);
+      } else {
+        setRejectError(
+          error.response?.status === 409
+            ? REJECT_CONFLICT_MESSAGE
+            : apiError?.message || REJECT_ERROR_MESSAGE,
+        );
+      }
     } finally {
       setRejecting(false);
     }
@@ -173,6 +197,7 @@ export default function ApplicantsScreen() {
                 onOpen={() => navigation.navigate('ApplicantDetail', { applicationId: item.id })}
                 onReject={() => {
                   setRejectError(null);
+                  setRejectFieldErrors({});
                   setRejectInstance((value) => value + 1);
                   setRejectTarget(item);
                 }}
@@ -205,6 +230,7 @@ export default function ApplicantsScreen() {
         applicantName={rejectTarget?.profileSnapshot?.name}
         submitting={rejecting}
         error={rejectError}
+        errors={rejectFieldErrors}
         onConfirm={handleConfirmReject}
         onCancel={handleCancelReject}
       />

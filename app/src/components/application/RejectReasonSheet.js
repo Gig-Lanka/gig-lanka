@@ -51,9 +51,16 @@ function ReasonOption({ label, selected, onPress }) {
  * The bottom sheet from GL-221's `#reject-reason` frame - opened from both
  * the applicant detail screen and the Reject action on the applicants list
  * row (GL-221 §5). Each caller owns the actual `PATCH .../reject` call and
- * its `submitting`/`error` state; this component only picks the code and
- * the note. `ConfirmDialog` (GL-103) is a centred modal - this is a scrim
- * sheet, so it isn't reused here, per GL-221's technical note.
+ * its `submitting`/`error`/`errors` state; this component only picks the
+ * code and the note. `ConfirmDialog` (GL-103) is a centred modal - this is
+ * a scrim sheet, so it isn't reused here, per GL-221's technical note.
+ *
+ * `errors.reasonCode`, if set, renders against the reason list itself
+ * (GL-221 §15 - a 400 from the rejection rules targets the field that
+ * caused it, the same `{ field, message }` shape and rendering
+ * `PostGigScreen.js` already uses for its own validation errors). `error`
+ * is for anything else - a 409 (someone else decided this application
+ * first) or a network failure - and stays a single line near the buttons.
  *
  * The caller should change `key` every time it opens this for a new pick
  * (e.g. an incrementing counter bumped alongside `visible`) so the code and
@@ -65,6 +72,7 @@ export default function RejectReasonSheet({
   applicantName,
   submitting = false,
   error,
+  errors = {},
   onConfirm,
   onCancel,
 }) {
@@ -113,6 +121,12 @@ export default function RejectReasonSheet({
                 />
               ))}
             </View>
+
+            {errors.reasonCode ? (
+              <Text className="mt-1.5 text-[13px] font-medium text-danger">
+                {errors.reasonCode}
+              </Text>
+            ) : null}
 
             <TextInput
               label="Add a note (optional)"

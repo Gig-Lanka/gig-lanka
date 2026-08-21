@@ -46,6 +46,16 @@ const REJECT_ERROR_MESSAGE = 'Could not reject this applicant. Try again.';
 const HIRE_ERROR_MESSAGE = 'Could not hire this applicant. Try again.';
 const COMPLETE_ERROR_MESSAGE = 'Could not mark this application complete. Try again.';
 
+// GL-221 §14: the seeker can withdraw at any moment, including while one of
+// these sheets is open, so a 409 here is a real race, not a theoretical one
+// - it must read as "someone else already decided this," not a generic
+// failure. Same wording as ApplicationDetailScreen's withdraw 409, the
+// seeker-side precedent this mirrors, parameterised per action rather than
+// four near-identical strings.
+function conflictMessage(action) {
+  return `This application's status has already changed, so it can no longer be ${action}.`;
+}
+
 // Pushed from a row on ApplicantsScreen. GL-260 built the pinned action row
 // and wired Shortlist; GL-261 wired Reject to RejectReasonSheet. This wires
 // Hire and Mark complete to GL-262's HireConfirmSheet.
@@ -64,6 +74,7 @@ export default function ApplicantDetailScreen() {
   const [rejectInstance, setRejectInstance] = useState(0);
   const [rejecting, setRejecting] = useState(false);
   const [rejectError, setRejectError] = useState(null);
+  const [rejectFieldErrors, setRejectFieldErrors] = useState({});
   const [hireVisible, setHireVisible] = useState(false);
   const [hiring, setHiring] = useState(false);
   const [hireError, setHireError] = useState(null);
@@ -126,7 +137,11 @@ export default function ApplicantDetailScreen() {
       const { application: updated } = await applicationApi.shortlistApplication(application.id);
       setApplication(updated);
     } catch (error) {
-      setActionError(error.response?.data?.error?.message || SHORTLIST_ERROR_MESSAGE);
+      setActionError(
+        error.response?.status === 409
+          ? conflictMessage('shortlisted')
+          : error.response?.data?.error?.message || SHORTLIST_ERROR_MESSAGE,
+      );
     } finally {
       setPendingAction(null);
     }
@@ -135,6 +150,7 @@ export default function ApplicantDetailScreen() {
   function handleReject() {
     if (pendingAction) return;
     setRejectError(null);
+    setRejectFieldErrors({});
     setRejectInstance((value) => value + 1);
     setRejectVisible(true);
   }
@@ -146,10 +162,16 @@ export default function ApplicantDetailScreen() {
 
   // Same in-place update as handleShortlist - the hero pill and the action
   // row re-render to `rejected` (no actions left) as soon as this resolves.
+  // §15: a 400 from the four rejection rules (§11.4) always names
+  // `reasonCode` (assertValidRejection never inspects `note`), so it's
+  // routed to the sheet's field errors instead of the generic banner -
+  // same `errors[]` -> `{ field: message }` shape PostGigScreen already
+  // builds from its own VALIDATION_ERROR responses.
   async function handleConfirmReject({ reasonCode, note }) {
     setRejecting(true);
     setPendingAction('reject');
     setRejectError(null);
+    setRejectFieldErrors({});
     try {
       const { application: updated } = await applicationApi.rejectApplication(application.id, {
         reasonCode,
@@ -158,7 +180,20 @@ export default function ApplicantDetailScreen() {
       setApplication(updated);
       setRejectVisible(false);
     } catch (error) {
-      setRejectError(error.response?.data?.error?.message || REJECT_ERROR_MESSAGE);
+      const apiError = error.response?.data?.error;
+      if (apiError?.code === 'VALIDATION_ERROR' && apiError.errors) {
+        const fieldErrors = {};
+        apiError.errors.forEach((entry) => {
+          fieldErrors[entry.field] = entry.message;
+        });
+        setRejectFieldErrors(fieldErrors);
+      } else {
+        setRejectError(
+          error.response?.status === 409
+            ? conflictMessage('rejected')
+            : apiError?.message || REJECT_ERROR_MESSAGE,
+        );
+      }
     } finally {
       setRejecting(false);
       setPendingAction(null);
@@ -188,7 +223,11 @@ export default function ApplicantDetailScreen() {
       setApplication(updated);
       setHireVisible(false);
     } catch (error) {
-      setHireError(error.response?.data?.error?.message || HIRE_ERROR_MESSAGE);
+      setHireError(
+        error.response?.status === 409
+          ? conflictMessage('hired')
+          : error.response?.data?.error?.message || HIRE_ERROR_MESSAGE,
+      );
     } finally {
       setHiring(false);
       setPendingAction(null);
@@ -215,7 +254,11 @@ export default function ApplicantDetailScreen() {
       setApplication(updated);
       setCompleteVisible(false);
     } catch (error) {
-      setCompleteError(error.response?.data?.error?.message || COMPLETE_ERROR_MESSAGE);
+      setCompleteError(
+        error.response?.status === 409
+          ? conflictMessage('marked complete')
+          : error.response?.data?.error?.message || COMPLETE_ERROR_MESSAGE,
+      );
     } finally {
       setCompleting(false);
       setPendingAction(null);
@@ -360,6 +403,7 @@ export default function ApplicantDetailScreen() {
         applicantName={profileSnapshot?.name}
         submitting={rejecting}
         error={rejectError}
+        errors={rejectFieldErrors}
         onConfirm={handleConfirmReject}
         onCancel={handleCancelReject}
       />
