@@ -164,4 +164,36 @@ describe('rating aggregate computed from reviews', () => {
     expect(reviewCount).toBe(5);
     expect(Object.values(distribution).reduce((sum, count) => sum + count, 0)).toBe(reviewCount);
   });
+
+  it('breaks a top-categories tie alphabetically, as documented', async () => {
+    const business = await registerBusiness('tie-break-business@example.com');
+
+    // fair_payment and communication both land at count 2; clear_job_description
+    // and respectful_treatment both land at count 1. Nothing about insertion
+    // order or Mongo's return order should decide the winner within either
+    // tied pair — only categoryA.localeCompare(categoryB) does, so the
+    // expected order is fixed regardless of which review is posted first.
+    const reviewCategories = [
+      ['fair_payment', 'communication'],
+      ['fair_payment'],
+      ['communication'],
+      ['clear_job_description', 'respectful_treatment'],
+    ];
+
+    for (const [index, categories] of reviewCategories.entries()) {
+      const seeker = await registerSeeker(`tie-break-seeker-${index}@example.com`);
+      const application = await createHiredApplication(business.userId, seeker.userId);
+
+      const res = await postReview(application.id, seeker.accessToken, { rating: 4, categories });
+      expect(res.status).toBe(201);
+    }
+
+    const profileRes = await getProfile(business.userId, business.accessToken);
+
+    expect(profileRes.body.data.profile.ratingSummary.topCategories).toEqual([
+      'communication',
+      'fair_payment',
+      'clear_job_description',
+    ]);
+  });
 });
