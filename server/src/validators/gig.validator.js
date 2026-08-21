@@ -18,6 +18,8 @@ const SCHEDULE_TAG_VALUES = ['weekday_mornings', 'weekday_evenings', 'weekends',
 
 const COMMITMENT_VALUES = ['one_off', 'under_a_week', 'one_to_four_weeks', 'ongoing'];
 
+const GIG_SORT_ORDER_VALUES = ['newest', 'highest_pay', 'starting_soon'];
+
 const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 const isValidCalendarDate = (value) => {
@@ -84,3 +86,47 @@ export const gigSchema = Joi.object({
 export const createGigSchema = gigSchema;
 
 export const updateGigSchema = gigSchema;
+
+// Wire format for a multi-value query parameter is a comma-separated list
+// (`?category=tech,creative`), documented in the contract at §10.4 so GL-216
+// builds against the same shape. Each item is matched against the closed
+// vocabulary so an unrecognised value 400s naming the field, rather than
+// silently filtering it out into an empty result.
+const commaSeparatedEnum = (values) =>
+  Joi.string()
+    .custom((raw, helpers) => {
+      const items = raw
+        .split(',')
+        .map((item) => item.trim())
+        .filter((item) => item.length > 0);
+
+      if (items.length === 0) {
+        return helpers.error('any.empty');
+      }
+
+      const invalid = items.find((item) => !values.includes(item));
+      if (invalid) {
+        return helpers.error('any.only');
+      }
+
+      return items;
+    })
+    .messages({
+      'any.empty': 'must not be empty',
+      'any.only': `must only contain: ${values.join(', ')}`,
+    });
+
+export const listGigsQuerySchema = Joi.object({
+  page: Joi.any().optional(),
+  q: Joi.string().trim().max(200).optional(),
+  category: commaSeparatedEnum(GIG_CATEGORY_VALUES).optional(),
+  schedule: commaSeparatedEnum(SCHEDULE_TAG_VALUES).optional(),
+  payType: commaSeparatedEnum(PAY_TYPE_VALUES).optional(),
+  commitment: commaSeparatedEnum(COMMITMENT_VALUES).optional(),
+  remote: Joi.boolean().optional(),
+  city: Joi.string().trim().max(120).optional(),
+  minPay: Joi.number().min(0).optional(),
+  sort: Joi.string()
+    .valid(...GIG_SORT_ORDER_VALUES)
+    .default('newest'),
+});
