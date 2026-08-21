@@ -8,14 +8,14 @@ import {
   closeGig,
   deleteGig,
 } from '../controllers/gig.controller.js';
-import { validate } from '../middleware/validate.middleware.js';
+import { validate, validateQuery } from '../middleware/validate.middleware.js';
 import { requireAuth, requireRole } from '../middleware/auth.middleware.js';
-import { createGigSchema, updateGigSchema } from '../validators/gig.validator.js';
+import { createGigSchema, updateGigSchema, listGigsQuerySchema } from '../validators/gig.validator.js';
 
 const router = Router();
 
 router.post('/', requireAuth, requireRole('business'), validate(createGigSchema), createGig);
-router.get('/', listGigs);
+router.get('/', validateQuery(listGigsQuerySchema), listGigs);
 router.get('/mine', requireAuth, requireRole('business'), getMyGigs);
 router.get('/:id', getGig);
 router.put('/:id', requireAuth, requireRole('business'), validate(updateGigSchema), updateGig);
