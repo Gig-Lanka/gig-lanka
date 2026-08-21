@@ -178,9 +178,10 @@ export default function GigDetailScreen({ onSignIn }) {
   } else if (!user) {
     primaryAction = { label: 'Apply for this gig', onPress: () => onSignIn?.() };
   } else if (isSeeker) {
-    // GL-123's apply screen hasn't merged yet - present but deliberately
-    // left unwired rather than pointed at any other screen.
-    primaryAction = { label: 'Apply for this gig' };
+    primaryAction = {
+      label: 'Apply for this gig',
+      onPress: () => navigation.navigate('Apply', { gigId }),
+    };
   }
 
   const detailRows = [
