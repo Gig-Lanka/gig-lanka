@@ -5,6 +5,7 @@ import {
   getApplication,
   withdrawApplication,
   completeApplication,
+  getApplicationsForMyGigs,
 } from '../controllers/application.controller.js';
 import { validate } from '../middleware/validate.middleware.js';
 import { requireAuth, requireRole } from '../middleware/auth.middleware.js';
@@ -26,6 +27,16 @@ router.post(
 // GL-183. /mine is seeker-only — a business doesn't submit applications, it
 // receives them. Declared before /:id so "mine" is never swallowed as an id.
 router.get('/applications/mine', requireAuth, requireRole('seeker'), getMyApplications);
+
+// GL-252. The mirror of /mine for the business side — every application
+// across all of the caller's gigs. Also declared before /:id so
+// "for-my-gigs" is never swallowed as an id.
+router.get(
+  '/applications/for-my-gigs',
+  requireAuth,
+  requireRole('business'),
+  getApplicationsForMyGigs,
+);
 
 // Either party (the applicant or the business that posted the gig) may read
 // one application; ownership is checked in the service, after existence, so
