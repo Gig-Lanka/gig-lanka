@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Animated, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 
 import applicationApi from '../../api/applicationApi';
 import Avatar from '../../components/ui/Avatar';
@@ -9,11 +9,14 @@ import EmptyState from '../../components/ui/EmptyState';
 import EntryCard from '../../components/profile/EntryCard';
 import HeroHeader, { HeroSheet, HeroStickyBar } from '../../components/ui/HeroHeader';
 import Loader from '../../components/ui/Loader';
+import Notice from '../../components/ui/Notice';
 import ScreenHeader from '../../components/ui/ScreenHeader';
 import SectionLabel from '../../components/ui/SectionLabel';
 import useHeroScroll from '../../hooks/useHeroScroll';
 import { APPLICATION_STATUSES, REJECTION_REASONS } from '../../constants/enums';
 import { formatDateRange, formatShortDate } from '../../utils/format';
+
+const STATUS = { LOADING: 'loading', READY: 'ready', ERROR: 'error' };
 
 const LOAD_ERROR_MESSAGE = 'Could not load this applicant. Check your connection and try again.';
 
@@ -33,10 +36,8 @@ function formatRating(rating) {
   return `★ ${averageRating.toFixed(1)} (${reviewCount})`;
 }
 
-// Pushed from a row on ApplicantsScreen. Opening this also sets Viewed and
-// shows the notice saying so - that transition and its UI is GL-259, fired
-// on top of the fetch this screen already does. The pinned Reject/Hire bar
-// the mockup frame draws is GL-221's ("...from applicant detail"), not built
+// Pushed from a row on ApplicantsScreen. The pinned Reject/Hire bar the
+// mockup frame draws is GL-221's ("...from applicant detail"), not built
 // here.
 export default function ApplicantDetailScreen() {
   const navigation = useNavigation();
@@ -45,50 +46,80 @@ export default function ApplicantDetailScreen() {
   const hero = useHeroScroll();
 
   const [application, setApplication] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [status, setStatus] = useState(STATUS.LOADING);
+  const [reloadToken, setReloadToken] = useState(0);
+  const hasFiredViewRef = useRef(false);
 
+  // Refetches on every focus, not just mount - same pattern as the seeker's
+  // ApplicationDetailScreen/GigDetailScreen - and doubles as the retry
+  // mechanism via reloadToken.
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+
+      async function loadApplication() {
+        try {
+          const data = await applicationApi.getApplication(applicationId);
+          if (!cancelled) {
+            setApplication(data.application);
+            setStatus(STATUS.READY);
+          }
+        } catch {
+          if (!cancelled) setStatus(STATUS.ERROR);
+        }
+      }
+
+      loadApplication();
+
+      return () => {
+        cancelled = true;
+      };
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [applicationId, reloadToken]),
+  );
+
+  // Fires once per mount, not on every focus, and never blocks rendering -
+  // the screen already has the application from the fetch above; this PATCH
+  // is a side effect of looking at it (GL-220's technical note). A 409 means
+  // the application was already past `applied` (§11.3) - not an error, so
+  // it's swallowed the same as any other failure here: a business must never
+  // be shown a failure for opening something twice.
   useEffect(() => {
-    let cancelled = false;
-
-    applicationApi
-      .getApplication(applicationId)
-      .then((data) => {
-        if (!cancelled) setApplication(data.application);
-      })
-      .catch(() => {
-        if (!cancelled) setError(LOAD_ERROR_MESSAGE);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
+    if (hasFiredViewRef.current) return;
+    hasFiredViewRef.current = true;
+    applicationApi.viewApplication(applicationId).catch(() => {});
   }, [applicationId]);
 
   const handleBack = () => navigation.goBack();
 
-  if (loading) {
+  if (status === STATUS.LOADING) {
     return <Loader fullScreen />;
   }
 
-  if (error || !application) {
+  if (status === STATUS.ERROR) {
     return (
       <SafeAreaView className="flex-1 bg-paper" edges={['top', 'bottom']}>
         <ScreenHeader title="Applicant" small onBack={handleBack} />
         <EmptyState
-          message={error ?? LOAD_ERROR_MESSAGE}
-          actionLabel="Go back"
-          onAction={handleBack}
+          message={LOAD_ERROR_MESSAGE}
+          actionLabel="Retry"
+          onAction={() => {
+            setStatus(STATUS.LOADING);
+            setReloadToken((token) => token + 1);
+          }}
         />
       </SafeAreaView>
     );
   }
 
-  const { profileSnapshot, status, appliedAt, rejectionReasonCode, rejectionNote } = application;
-  const isRejected = status === 'rejected';
+  const {
+    profileSnapshot,
+    status: applicationStatus,
+    appliedAt,
+    rejectionReasonCode,
+    rejectionNote,
+  } = application;
+  const isRejected = applicationStatus === 'rejected';
   const experience = profileSnapshot?.experience ?? [];
   const education = profileSnapshot?.education ?? [];
 
@@ -107,7 +138,9 @@ export default function ApplicantDetailScreen() {
             </Text>
             <View className="mt-3 flex-row items-center justify-center gap-[9px]">
               <View className="rounded-full border border-white/[0.14] bg-white/10 px-2.5 py-1">
-                <Text className="text-[11px] font-semibold text-paper">{statusLabel(status)}</Text>
+                <Text className="text-[11px] font-semibold text-paper">
+                  {statusLabel(applicationStatus)}
+                </Text>
               </View>
               <Text className="text-[13.5px] font-medium text-muted-dark">
                 {formatRating(profileSnapshot?.rating)}
@@ -117,6 +150,11 @@ export default function ApplicantDetailScreen() {
         </View>
 
         <HeroSheet className="px-[22px] pb-8 pt-[22px]">
+          <Notice className="mb-5">
+            Opening this marked the application Viewed. The applicant can see that, and it
+            can&apos;t be undone.
+          </Notice>
+
           {isRejected ? (
             <View className="mb-5">
               <SectionLabel>Reason given</SectionLabel>

@@ -1,6 +1,6 @@
-import { useNavigation, useRoute } from '@react-navigation/native';
-import { useEffect, useMemo, useState } from 'react';
-import { FlatList, Text } from 'react-native';
+import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
+import { useCallback, useMemo, useRef, useState } from 'react';
+import { FlatList } from 'react-native';
 
 import applicationApi from '../../api/applicationApi';
 import gigApi from '../../api/gigApi';
@@ -8,6 +8,7 @@ import ApplicantRow from '../../components/application/ApplicantRow';
 import ApplicantStatusFilter, {
   applicantSegment,
 } from '../../components/application/ApplicantStatusFilter';
+import EmptyState from '../../components/ui/EmptyState';
 import Loader from '../../components/ui/Loader';
 import Notice from '../../components/ui/Notice';
 import Screen from '../../components/ui/Screen';
@@ -20,11 +21,6 @@ const LOAD_ERROR_MESSAGE = 'Could not load applicants. Check your connection and
 // /api/gigs/:gigId/applications) - GL-257 gives that pushed entry its own
 // route name so the tab can't inherit a stale param, but this component just
 // reads whatever gigId it was mounted with.
-//
-// Loading/error/refresh polish (a loader that doesn't flash on refocus, pull
-// to refresh, retry, an empty-gig empty state) is GL-259's own stated scope
-// ("Add the list and detail states...") - this only fetches once and shows a
-// bare loader/error so the list itself is testable.
 export default function ApplicantsScreen() {
   const navigation = useNavigation();
   const { params } = useRoute();
@@ -35,39 +31,69 @@ export default function ApplicantsScreen() {
   const [gig, setGig] = useState(null);
   const [segment, setSegment] = useState('all');
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
+  const hasLoadedRef = useRef(false);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    async function load() {
-      try {
-        if (gigId) {
-          const [{ applications: fetched }, { gig: fetchedGig }] = await Promise.all([
-            applicationApi.getGigApplications(gigId),
-            gigApi.getGig(gigId),
-          ]);
-          if (!cancelled) {
-            setApplications(fetched);
-            setGig(fetchedGig);
-          }
-        } else {
-          const { applications: fetched } = await applicationApi.getApplicationsForMyGigs();
-          if (!cancelled) setApplications(fetched);
-        }
-      } catch {
-        if (!cancelled) setError(LOAD_ERROR_MESSAGE);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
+  const fetchApplicants = useCallback(async () => {
+    if (gigId) {
+      const [{ applications: fetched }, { gig: fetchedGig }] = await Promise.all([
+        applicationApi.getGigApplications(gigId),
+        gigApi.getGig(gigId),
+      ]);
+      setApplications(fetched);
+      setGig(fetchedGig);
+    } else {
+      const { applications: fetched } = await applicationApi.getApplicationsForMyGigs();
+      setApplications(fetched);
     }
-
-    load();
-
-    return () => {
-      cancelled = true;
-    };
+    hasLoadedRef.current = true;
   }, [gigId]);
+
+  // Refetches on every focus, not just mount, so returning here after a
+  // status changes elsewhere (e.g. a decision made from the detail screen)
+  // shows the update without a manual refresh. Only the first-ever load
+  // blocks the screen with a loader - later focuses refetch silently so
+  // re-entering the tab, or coming back from a pushed applicant, doesn't
+  // flash it.
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      const isFirstLoad = !hasLoadedRef.current;
+
+      if (isFirstLoad) {
+        setLoading(true);
+        setError(null);
+      }
+
+      fetchApplicants()
+        .catch(() => {
+          if (!cancelled && isFirstLoad) setError(LOAD_ERROR_MESSAGE);
+        })
+        .finally(() => {
+          if (!cancelled && isFirstLoad) setLoading(false);
+        });
+
+      return () => {
+        cancelled = true;
+      };
+    }, [fetchApplicants]),
+  );
+
+  const handleRetry = useCallback(() => {
+    setLoading(true);
+    setError(null);
+    fetchApplicants()
+      .catch(() => setError(LOAD_ERROR_MESSAGE))
+      .finally(() => setLoading(false));
+  }, [fetchApplicants]);
+
+  const handleRefresh = useCallback(() => {
+    setRefreshing(true);
+    fetchApplicants()
+      .catch(() => setError(LOAD_ERROR_MESSAGE))
+      .finally(() => setRefreshing(false));
+  }, [fetchApplicants]);
 
   const filteredApplications = useMemo(() => {
     if (segment === 'all') return applications;
@@ -87,7 +113,7 @@ export default function ApplicantsScreen() {
       />
 
       {error ? (
-        <Text className="px-1 text-[13px] text-danger-ink">{error}</Text>
+        <EmptyState message={error} actionLabel="Retry" onAction={handleRetry} />
       ) : (
         <>
           {isScoped && gig ? (
@@ -116,6 +142,21 @@ export default function ApplicantsScreen() {
               />
             )}
             contentContainerClassName="flex-grow pb-6"
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            ListEmptyComponent={
+              applications.length === 0 ? (
+                <EmptyState
+                  message={
+                    isScoped
+                      ? 'This gig has no applicants yet.'
+                      : 'No applicants across your gigs yet.'
+                  }
+                />
+              ) : (
+                <EmptyState message="No applicants with this status." />
+              )
+            }
           />
         </>
       )}
