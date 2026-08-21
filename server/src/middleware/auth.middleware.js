@@ -42,6 +42,34 @@ export const requireAuth = asyncHandler(async (req, res, next) => {
   next();
 });
 
+// GL-213: for the handful of endpoints that must stay public but still want
+// to know who's asking. Never throws - a missing header, a malformed one, an
+// expired or invalid token, or a token whose user no longer exists all fall
+// through to the guest case (`req.user` left unset) rather than a 401.
+// requireAuth stays the one that rejects; this one only ever adds
+// information, never removes access.
+export const optionalAuth = asyncHandler(async (req, res, next) => {
+  const header = req.headers.authorization;
+
+  if (!header || !header.startsWith('Bearer ') || !header.slice(7).trim()) {
+    return next();
+  }
+
+  let decoded;
+  try {
+    decoded = jwt.verify(header.slice(7), env.jwtAccessSecret);
+  } catch {
+    return next();
+  }
+
+  const user = await User.findById(decoded.id);
+  if (user) {
+    req.user = user;
+  }
+
+  next();
+});
+
 export const requireRole =
   (...roles) =>
   (req, res, next) => {
