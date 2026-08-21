@@ -1255,7 +1255,7 @@ Only the owner. Permanently deletes the gig. There is no soft delete and no undo
 
 ## 11. Application model & status transitions (Sprint 1)
 
-`server/src/models/application.model.js`, `server/src/services/application.service.js`, `server/src/routes/application.routes.js`, `server/src/controllers/application.controller.js`, `server/src/validators/application.validator.js`. The four endpoints (§11.6–§11.9) are GL-110; the shape and transition rules below are also what GL-111's review gate and GL-124's tracker are built against.
+`server/src/models/application.model.js`, `server/src/services/application.service.js`, `server/src/routes/application.routes.js`, `server/src/controllers/application.controller.js`, `server/src/validators/application.validator.js`. The four endpoints (§11.6–§11.9) are GL-110; the shape and transition rules below are also what GL-111's review gate and GL-124's tracker are built against. Sprint 2's business-side endpoints (§11.12–§11.17, GL-219) reuse this same shape and the same `transitionApplicationStatus` — GL-252 built the two lists, GL-253 the four transitions, GL-254 (this section) documents both. §11.12 also touches `server/src/routes/gig.routes.js`, the one endpoint in this section nested under a gig rather than declared here.
 
 ### 11.1 Application shape
 
@@ -1365,7 +1365,7 @@ The live set is `applied`, `viewed`, `shortlisted`, `hired` and `completed` (§1
 
 ### 11.6 Gig summary shape
 
-Returned under `data.applications[].gig` (§11.7) and `data.application.gig` (§11.8, §11.9) — never the full gig (§10.1), just enough to recognise which posting an application belongs to:
+Returned under `data.applications[].gig` (§11.7) and `data.application.gig` (§11.8, §11.9) — never the full gig (§10.1), just enough to recognise which posting an application belongs to. Sprint 2's `data.applications[].gig` on §11.13 (for-my-gigs) uses the same shape; §11.12 (a single gig's applications) omits it, since the caller already supplied the gig id.
 
 ```json
 {
@@ -1546,16 +1546,190 @@ Calling it twice returns this same `409` the second time, naming `completed` as 
 
 **A known limitation, recorded rather than solved.** Because only the business can mark completion, a business that never marks it leaves both sides unable to review once GL-223 moves the review gate to `completed`. Nobody gains an advantage — each loses their review — but the seeker is the one who did the work. Accepted for Sprint 2 and carried in `ROADMAP.md`; disputes are the Sprint 4 admin story.
 
-### 11.12 Error codes for these endpoints
+### 11.12 List applications for a gig — `GET /api/gigs/:gigId/applications`
+
+Only the business that posted the gig (GL-252). Nested under the gig it belongs to — declared in `server/src/routes/gig.routes.js`, not `application.routes.js`, unlike every other endpoint in this section.
+
+**Request query — optional `status`** — one or more values from §6.7, as repeated params (`status=viewed&status=shortlisted`) or a comma-separated list (`status=viewed,shortlisted`). An unrecognised value is `400 VALIDATION_ERROR`. Omitted entirely, applications at every status are returned.
+
+**Success — `200 OK`**
+
+```json
+{
+  "success": true,
+  "data": {
+    "applications": [
+      { /* §11.1, no `gig` field — the caller already knows which gig this is */ }
+    ]
+  }
+}
+```
+
+Every application to this gig, newest first (`createdAt` descending, `_id` descending tiebreak). Each row is the full §11.1 shape — `profileSnapshot`, `status`, `appliedAt`, `viewedAt`, `decidedAt`, and the rejection reason/note once decided — **never the applicant's live profile**: an application records what was true when it was submitted.
+
+**Failure — `401 Unauthorized`** (guest) — as in §8.6.
+
+**Failure — `404 Not Found`** (the gig doesn't exist, or the id is malformed) — checked **before** ownership, matching `findOwnedGig` (§10.9):
+
+```json
+{ "success": false, "error": { "code": "NOT_FOUND", "message": "Gig not found." } }
+```
+
+**Failure — `403 Forbidden`** (a seeker token, or a business token belonging to a different business):
+
+```json
+{
+  "success": false,
+  "error": { "code": "FORBIDDEN", "message": "You do not have permission to perform this action." }
+}
+```
+
+Existence is always checked first, so a non-owning business gets the same `403` whether the gig belongs to someone else or the caller mistyped an id that exists — the ordering, not the response body, is what stops a refusal being used to probe which gig ids exist.
+
+**Failure — `400 Bad Request`** (an unrecognised `status` value):
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Request validation failed.",
+    "errors": [{ "field": "status", "message": "\"unknown\" is not a valid application status" }]
+  }
+}
+```
+
+### 11.13 List applications across my gigs — `GET /api/applications/for-my-gigs`
+
+Business only (GL-252). Every application across every gig the caller has posted, in one list — the unfiltered source GL-220's Applicants tab and GL-223's business-side completed list both read from.
+
+**Request query — optional `status`** — same rules as §11.12.
+
+**Success — `200 OK`**
+
+```json
+{
+  "success": true,
+  "data": {
+    "applications": [
+      { /* §11.1, `gig` replaced with the §11.6 summary so the caller can tell which posting each row belongs to */ }
+    ]
+  }
+}
+```
+
+Newest first (`createdAt` descending, `_id` descending tiebreak). Found by the caller's own gigs (`postedBy`), then applications by gig `$in` — a business id is never stored on the application itself, so the two can't fall out of step. No pagination, matching `GET /api/gigs/mine` (§10.6) and `GET /api/applications/mine` (§11.8): a business's own applicant list is expected to return in full.
+
+**Failure — `401 Unauthorized`** (guest) — as in §8.6.
+
+**Failure — `403 Forbidden`** (a seeker token) — as in §11.12.
+
+**Failure — `400 Bad Request`** (an unrecognised `status` value) — as in §11.12.
+
+### 11.14 View an application — `PATCH /api/applications/:id/view`
+
+Only the business that posted the gig (GL-253). Moves the application from `applied` to `viewed` (§11.3), **through `transitionApplicationStatus`** — no route, controller or service here writes `status` directly.
+
+**Request body:** none.
+
+**Success — `200 OK`** — same shape as §11.9, with `status: "viewed"` and `viewedAt` now set.
+
+**Failure — `401 Unauthorized`** (guest) — as in §8.6.
+
+**Failure — `403 Forbidden`** (a seeker token, or a business token belonging to a different business) — `FORBIDDEN`, as in §11.9.
+
+**Failure — `404 Not Found`** (no application with that id, or a malformed id) — as in §11.9.
+
+**Failure — `409 Conflict`** (the application isn't `applied` — most commonly already `viewed` or later):
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "INVALID_APPLICATION_TRANSITION",
+    "message": "Cannot move an application from \"viewed\" to \"viewed\"."
+  }
+}
+```
+
+GL-220 calls this every time a business opens an applicant, including a second time — **the client is expected to swallow this `409` quietly**; opening an applicant twice is not an error a business should ever see.
+
+### 11.15 Shortlist an application — `PATCH /api/applications/:id/shortlist`
+
+Only the business that posted the gig (GL-253). Moves the application from `viewed` to `shortlisted` (§11.3), through `transitionApplicationStatus`.
+
+**Request body:** none.
+
+**Success — `200 OK`** — same shape as §11.9, with `status: "shortlisted"`.
+
+**Failure — `401`, `403`, `404`** — as in §11.14.
+
+**Failure — `409 Conflict`** (the application isn't `viewed` — most commonly still `applied`, naming both statuses) — as in §11.14.
+
+### 11.16 Hire an application — `PATCH /api/applications/:id/hire`
+
+Only the business that posted the gig (GL-253). Moves the application from `shortlisted` to `hired` (§11.3), through `transitionApplicationStatus`. `applied -> hired` and `viewed -> hired` are both absent from §11.3's table and stay refused — hiring always requires shortlisting first.
+
+**Request body:** none.
+
+**Success — `200 OK`** — same shape as §11.9, with `status: "hired"` and `decidedAt` now set.
+
+**Failure — `401`, `403`, `404`** — as in §11.14.
+
+**Failure — `409 Conflict`** (the application isn't `shortlisted`) — as in §11.14.
+
+### 11.17 Reject an application — `PATCH /api/applications/:id/reject`
+
+Only the business that posted the gig (GL-253). Moves the application from `applied`, `viewed` or `shortlisted` to `rejected` (§11.3), through `transitionApplicationStatus`.
+
+**Request body**
+
+```json
+{
+  "reasonCode": "schedule_mismatch",
+  "note": "We ended up needing someone for Tuesday mornings specifically."
+}
+```
+
+| Field | Rule |
+|---|---|
+| `reasonCode` | Required. One of the seven business-selectable codes in §6.8; `positions_filled` and any value outside the eight are refused (§11.4). |
+| `note` | Optional, up to 300 characters, stored on `rejectionNote` exactly as written — not trimmed, not sanitised (§11.1), since the applicant reads it verbatim. |
+
+**Success — `200 OK`** — same shape as §11.9, with `status: "rejected"`, `decidedAt` now set, and `rejectionReasonCode`/`rejectionNote` (once given) present.
+
+**Failure — `401 Unauthorized`** (guest) — as in §8.6.
+
+**Failure — `403 Forbidden`** (a seeker token, or a business token belonging to a different business) — as in §11.9.
+
+**Failure — `404 Not Found`** (no application with that id, or a malformed id) — as in §11.9.
+
+**Failure — `409 Conflict`** (the application isn't `applied`, `viewed` or `shortlisted` — most commonly already `rejected`, `withdrawn` or `hired`) — as in §11.14.
+
+**Failure — `400 Bad Request`** (any of the four rules in §11.4 — a missing `reasonCode`, `positions_filled` or a value outside the eight codes, or a Skill Trial code on a gig that carried no trial):
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "A rejection reason code is required.",
+    "errors": [{ "field": "reasonCode", "message": "reasonCode is required when rejecting an application" }]
+  }
+}
+```
+
+### 11.18 Error codes for these endpoints
 
 | Status | Code | When |
 |---|---|---|
+| `400` | `VALIDATION_ERROR` | §11.12/§11.13 for an unrecognised `status` filter value. §11.17 for a missing, non-selectable, unrecognised, or Skill-Trial-without-a-trial rejection reason code (§11.4). |
 | `401` | `AUTH_HEADER_MISSING` / `AUTH_HEADER_MALFORMED` / `TOKEN_EXPIRED` / `TOKEN_INVALID` | No/malformed/expired/invalid token — every endpoint in this section requires one. |
-| `403` | `FORBIDDEN` | A business token on §11.7 or §11.8; a seeker or business token that isn't a party to the application on §11.9; a business token or the wrong seeker on §11.10; any seeker token, or a business that didn't post the gig, on §11.11. |
-| `404` | `NOT_FOUND` | §11.7 for a gig that doesn't exist or has a malformed id. §11.9/§11.10/§11.11 for an application that doesn't exist or has a malformed id, checked before the party/ownership check above. |
+| `403` | `FORBIDDEN` | A business token on §11.7 or §11.8; a seeker or business token that isn't a party to the application on §11.9; a business token or the wrong seeker on §11.10; any seeker token, or a business that didn't post the gig, on §11.11, §11.12, §11.13, §11.14, §11.15, §11.16 or §11.17. |
+| `404` | `NOT_FOUND` | §11.7 or §11.12 for a gig that doesn't exist or has a malformed id. §11.9/§11.10/§11.11/§11.14/§11.15/§11.16/§11.17 for an application that doesn't exist or has a malformed id, checked before the party/ownership check above. |
 | `409` | `GIG_CLOSED` | §11.7 for a gig that exists but isn't `open`. |
 | `409` | `APPLICATION_ALREADY_EXISTS` | §11.7 for a `(gig, applicant)` pair that already has an application, live, withdrawn or rejected. |
-| `409` | `INVALID_APPLICATION_TRANSITION` | §11.10 for an application that isn't `applied`, `viewed` or `shortlisted` — most commonly `hired` or already `withdrawn`. §11.11 for an application that isn't `hired`. |
+| `409` | `INVALID_APPLICATION_TRANSITION` | §11.10 for an application that isn't `applied`, `viewed` or `shortlisted`. §11.11 for an application that isn't `hired`. §11.14 for an application that isn't `applied`. §11.15 for an application that isn't `viewed`. §11.16 for an application that isn't `shortlisted`. §11.17 for an application that isn't `applied`, `viewed` or `shortlisted`. |
 
 ---
 
