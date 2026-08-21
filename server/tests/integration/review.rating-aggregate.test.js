@@ -141,4 +141,27 @@ describe('rating aggregate computed from reviews', () => {
     expect(profileRes.body.data.profile.ratingSummary.averageRating).toBe(4.3);
     expect(profileRes.body.data.profile.ratingSummary.reviewCount).toBe(4);
   });
+
+  it('distributes one review into each star bucket, summing to the count', async () => {
+    const business = await registerBusiness('distribution-business@example.com');
+
+    // One seeker per star value, 1 through 5, so every bucket is hit exactly
+    // once — the shape that proves the five counts sum to reviewCount rather
+    // than five independently-plausible numbers.
+    const ratings = [1, 2, 3, 4, 5];
+    for (const [index, rating] of ratings.entries()) {
+      const seeker = await registerSeeker(`distribution-seeker-${index}@example.com`);
+      const application = await createHiredApplication(business.userId, seeker.userId);
+
+      const res = await postReview(application.id, seeker.accessToken, { rating });
+      expect(res.status).toBe(201);
+    }
+
+    const profileRes = await getProfile(business.userId, business.accessToken);
+    const { reviewCount, distribution } = profileRes.body.data.profile.ratingSummary;
+
+    expect(distribution).toEqual({ 1: 1, 2: 1, 3: 1, 4: 1, 5: 1 });
+    expect(reviewCount).toBe(5);
+    expect(Object.values(distribution).reduce((sum, count) => sum + count, 0)).toBe(reviewCount);
+  });
 });
