@@ -13,7 +13,7 @@ export default function Loader({ fullScreen = false, size = 'large', className, 
         .join(' ')}
       {...props}
     >
-      <ActivityIndicator size={size} color="#5b4bff" />
+      <ActivityIndicator size={size} className="text-signal" />
     </View>
   );
 }
