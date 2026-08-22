@@ -100,7 +100,7 @@ Every error response — regardless of cause — returns the same outer shape:
 | `GIG_CLOSED` | Attempted to apply to or save a gig whose status isn't `open`. Always `409`. |
 | `APPLICATION_ALREADY_EXISTS` | `POST /api/gigs/:gigId/applications` for a `(gig, applicant)` pair that already has an application (§11.7). Always `409`; the duplicate-key error from the unique index (§11.1) is translated here rather than surfacing as `500` — the same trap GL-15 hit with duplicate emails. Holds whether the earlier application is live, withdrawn or rejected. |
 | `INVALID_APPLICATION_TRANSITION` | Attempted to move an application to a status not reachable from its current status (§11.3). Always `409`, and the message names both the current and the attempted status. Withdrawing a `hired` application (§11.10) surfaces through this same code — Hired's only outgoing move is to `completed`, so a withdraw is refused by the transition table itself, not by a withdraw-specific check. Marking anything other than a `hired` application complete (§11.11) is refused the same way. |
-| `APPLICATION_NOT_HIRED` | `POST /api/applications/:applicationId/reviews` on an application whose status isn't `hired` (§12.3). Always `409` — a review requires a completed hire. |
+| `APPLICATION_NOT_COMPLETED` | `POST /api/applications/:applicationId/reviews` on an application whose status isn't `completed` (§12.3). Always `409` — a review requires a completed gig. |
 | `REVIEW_ALREADY_EXISTS` | `POST /api/applications/:applicationId/reviews` for an `(application, direction)` pair that already has a review (§12.3). Always `409`; the duplicate-key error from the unique index (§7) is translated here rather than surfacing as `500`. |
 
 New codes may be added for later sprints' resources; existing codes are never repurposed for a different meaning.
@@ -498,7 +498,7 @@ The summary that lands on a profile once reviews exist for it: an average, a cou
 }
 ```
 
-- `application` — the application this review came from. A review can only exist because that application reached `hired` (§6.7); it points at the application, not directly at a user.
+- `application` — the application this review came from. A review can only exist because that application reached `completed` (§6.7); it points at the application, not directly at a user.
 - `author`, `subject` — always derived from the application and the authenticated user, never accepted from a request body. Reference ids only — no author name or photo is copied onto the review, so a profile edit is reflected on every past review instead of being frozen into it. The opposite of the application's frozen snapshot, and for the opposite reason: an application records what was true then, a review shows who someone is now. Author and subject are never the same user.
 - `direction` — one of exactly two values: `seeker_to_business` or `business_to_seeker`. There is no third kind of review.
 - `rating` — a whole number, 1 to 5. No half stars, no zero, no decimals.
@@ -1735,7 +1735,7 @@ Only the business that posted the gig (GL-253). Moves the application from `appl
 
 ## 12. Review endpoints (Sprint 1)
 
-`server/src/routes/review.routes.js`, `review.controller.js`, `review.validator.js`, `review.service.js`. A rating is only worth reading if the platform can prove the two people actually worked together — that's why creation takes an application id, not a user id, and why it's gated on that application having reached `hired` (§6.7). Hiring doesn't exist in the product until Sprint 2, so both endpoints below are verified against the hire seeded by `npm run seed` (`scripts/seed.js` prints its id).
+`server/src/routes/review.routes.js`, `review.controller.js`, `review.validator.js`, `review.service.js`. A rating is only worth reading if the platform can prove the two people actually worked together — that's why creation takes an application id, not a user id, and why it's gated on that application having reached `completed` (§6.7). Hiring doesn't exist in the product until Sprint 2, so both endpoints below are verified against the hire seeded by `npm run seed` (`scripts/seed.js` prints its id).
 
 ### 12.1 Create a review — `POST /api/applications/:applicationId/reviews`
 
@@ -1785,14 +1785,14 @@ Either party to the application — the applicant or the business that posted th
 }
 ```
 
-**Failure — `409 Conflict`** (application exists, caller is a party, but its status isn't `hired`):
+**Failure — `409 Conflict`** (application exists, caller is a party, but its status isn't `completed`):
 
 ```json
 {
   "success": false,
   "error": {
-    "code": "APPLICATION_NOT_HIRED",
-    "message": "A review requires a completed hire — this application has not reached Hired."
+    "code": "APPLICATION_NOT_COMPLETED",
+    "message": "A review requires a completed gig — this application has not reached Completed."
   }
 }
 ```
@@ -1880,7 +1880,7 @@ No other failure modes — a well-formed id with no reviews is still `200` with 
 | `401` | `AUTH_HEADER_MISSING` / `AUTH_HEADER_MALFORMED` / `TOKEN_EXPIRED` / `TOKEN_INVALID` | No/malformed/expired/invalid token on either endpoint — both require one. |
 | `403` | `FORBIDDEN` | `POST` by a signed-in user who is neither the applicant nor the business that posted the gig. Not returned by `GET` — any signed-in caller may read. |
 | `404` | `NOT_FOUND` | `POST` for an application that doesn't exist or has a malformed id (checked before the 403 party check above). `GET` for a `:userId` that isn't a syntactically valid id. |
-| `409` | `APPLICATION_NOT_HIRED` | `POST` where the application exists and the caller is a party to it, but its status isn't `hired`. |
+| `409` | `APPLICATION_NOT_COMPLETED` | `POST` where the application exists and the caller is a party to it, but its status isn't `completed`. |
 | `409` | `REVIEW_ALREADY_EXISTS` | `POST` for an `(application, direction)` pair that already has a review. |
 
 ---
