@@ -6,6 +6,7 @@ export const APPLICATION_STATUSES = [
   'viewed',
   'shortlisted',
   'hired',
+  'completed',
   'rejected',
   'withdrawn',
   'closed_filled',
@@ -94,6 +95,14 @@ const applicationSchema = new mongoose.Schema(
       default: null,
     },
     decidedAt: {
+      type: Date,
+      default: null,
+    },
+    // The moment the business marked the work finished. `decidedAt` cannot
+    // carry it — that one is already occupied by the hire and guarded against
+    // being overwritten — so completion needs a stamp of its own. Set once,
+    // the first time `completed` is reached, and never cleared afterwards.
+    completedAt: {
       type: Date,
       default: null,
     },

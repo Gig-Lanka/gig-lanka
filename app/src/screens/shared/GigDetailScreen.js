@@ -40,6 +40,26 @@ function labelFor(list, value) {
   return list.find((entry) => entry.value === value)?.label ?? value;
 }
 
+// GL-246: primary-action copy for a seeker who already has an application
+// against this gig, keyed by status. Applied, viewed and shortlisted share
+// one label - none of them carry news yet, so there's nothing to
+// distinguish. Hired and completed each read as their own milestone.
+// Rejected still just offers to view the application: the reason and note
+// are GL-124's to show, verbatim, on the application detail screen - this
+// button never turns the decision itself into a headline. Withdrawn is the
+// only one that isn't an invitation to view progress - it tells the seeker
+// they left and that the permanent (gig, applicant) index means there's no
+// applying again.
+const ALREADY_APPLIED_LABEL_BY_STATUS = {
+  applied: 'View your application',
+  viewed: 'View your application',
+  shortlisted: 'View your application',
+  hired: "You're hired — view application",
+  completed: 'Gig complete — view application',
+  rejected: 'View your application',
+  withdrawn: "You withdrew — you can't apply to this gig again",
+};
+
 export default function GigDetailScreen({ onSignIn }) {
   const navigation = useNavigation();
   const { params } = useRoute();
@@ -49,6 +69,7 @@ export default function GigDetailScreen({ onSignIn }) {
 
   const [gig, setGig] = useState(null);
   const [business, setBusiness] = useState(null);
+  const [viewerApplication, setViewerApplication] = useState(null);
   const [status, setStatus] = useState(STATUS.LOADING);
   const [reloadToken, setReloadToken] = useState(0);
 
@@ -67,6 +88,7 @@ export default function GigDetailScreen({ onSignIn }) {
           if (!cancelled) {
             setGig(data.gig);
             setBusiness(data.business);
+            setViewerApplication(data.viewerApplication ?? null);
             setStatus(STATUS.READY);
           }
         } catch (error) {
@@ -153,16 +175,23 @@ export default function GigDetailScreen({ onSignIn }) {
     ? () => navigation.navigate('PublicProfile', { userId: business.id })
     : undefined;
 
-  // Four states, checked in this order because each overrides the ones
+  // Five states, checked in this order because each overrides the ones
   // below it - an owner sees their edit route no matter the gig's status,
   // and a closed gig reads the same to a guest as to a seeker:
   //  1. The owning business - apply is never offered, editing is.
-  //  2. Any other viewer, gig not open - "Applications closed", disabled,
+  //  2. GL-246: a seeker who already has an application against this gig -
+  //     status-dependent copy, always routing to the application, never
+  //     offering Apply again. Deliberately above "not open": a seeker whose
+  //     gig has since closed still needs a route to their application, not
+  //     "Applications closed".
+  //  3. Any other viewer, gig not open - "Applications closed", disabled,
   //     never hidden.
-  //  3. A guest, gig open - routes to sign-in; reading is public, applying
+  //  4. A guest, gig open - routes to sign-in; reading is public, applying
   //     is not.
-  //  4. A signed-in seeker, gig open - routes to GL-123's apply screen.
-  // Display-only: the server is what actually enforces who may apply.
+  //  5. A signed-in seeker, gig open, no application yet - routes to
+  //     GL-123's apply screen.
+  // Display-only: the server is what actually enforces who may apply -
+  // viewerApplication itself is server-derived (GL-245), never inferred here.
   const isOwner = user?.role === 'business' && business?.id === user?.id;
   const isSeeker = user?.role === 'seeker';
   const isOpen = gigStatus === 'open';
@@ -173,14 +202,22 @@ export default function GigDetailScreen({ onSignIn }) {
       label: 'Edit this gig',
       onPress: () => navigation.navigate('EditGig', { gigId }),
     };
+  } else if (viewerApplication) {
+    primaryAction = {
+      label:
+        ALREADY_APPLIED_LABEL_BY_STATUS[viewerApplication.status] ?? 'View your application',
+      onPress: () =>
+        navigation.navigate('ApplicationDetail', { applicationId: viewerApplication.id }),
+    };
   } else if (!isOpen) {
     primaryAction = { label: 'Applications closed', disabled: true };
   } else if (!user) {
     primaryAction = { label: 'Apply for this gig', onPress: () => onSignIn?.() };
   } else if (isSeeker) {
-    // GL-123's apply screen hasn't merged yet - present but deliberately
-    // left unwired rather than pointed at any other screen.
-    primaryAction = { label: 'Apply for this gig' };
+    primaryAction = {
+      label: 'Apply for this gig',
+      onPress: () => navigation.navigate('Apply', { gigId }),
+    };
   }
 
   const detailRows = [

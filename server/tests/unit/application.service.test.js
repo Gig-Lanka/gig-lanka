@@ -70,6 +70,7 @@ describe('transitionApplicationStatus', () => {
       ['viewed', 'closed_filled', () => null],
       ['shortlisted', 'hired', () => businessActor],
       ['shortlisted', 'withdrawn', () => applicantActor],
+      ['hired', 'completed', () => businessActor],
     ];
 
     it.each(cases)('allows %s -> %s for the right actor', async (from, to, actorFn) => {
@@ -132,6 +133,31 @@ describe('transitionApplicationStatus', () => {
 
       await expect(
         transitionApplicationStatus(application, 'withdrawn', otherSeeker),
+      ).rejects.toMatchObject({ status: 403, code: 'FORBIDDEN' });
+    });
+
+    it('refuses the applicant marking their own hired application Completed', async () => {
+      const application = await seedApplication('hired', { decidedAt: new Date() });
+
+      await expect(
+        transitionApplicationStatus(application, 'completed', applicantActor),
+      ).rejects.toMatchObject({ status: 403, code: 'FORBIDDEN' });
+    });
+
+    it('refuses a business that does not own the gig marking it Completed', async () => {
+      const otherBusiness = { id: new mongoose.Types.ObjectId().toString(), role: 'business' };
+      const application = await seedApplication('hired', { decidedAt: new Date() });
+
+      await expect(
+        transitionApplicationStatus(application, 'completed', otherBusiness),
+      ).rejects.toMatchObject({ status: 403, code: 'FORBIDDEN' });
+    });
+
+    it('refuses a system-triggered call (no actor) marking an application Completed', async () => {
+      const application = await seedApplication('hired', { decidedAt: new Date() });
+
+      await expect(
+        transitionApplicationStatus(application, 'completed', null),
       ).rejects.toMatchObject({ status: 403, code: 'FORBIDDEN' });
     });
 
@@ -212,10 +238,41 @@ describe('transitionApplicationStatus', () => {
       expect(result.viewedAt.getTime()).toBe(earlier.getTime());
     });
 
-    it('sets decidedAt the first time a terminal status is reached', async () => {
+    it('sets decidedAt the first time a decided status is reached', async () => {
       const application = await seedApplication('shortlisted');
 
       const result = await transitionApplicationStatus(application, 'hired', businessActor);
+
+      expect(result.decidedAt).toBeInstanceOf(Date);
+    });
+
+    // The trap GL-218 exists to stop: `hired` staying in DECIDED_STATUSES is
+    // what keeps decidedAt stamped at the moment of hire, now that Hired has
+    // an outgoing move. Drop it from the list and this test goes null.
+    it('stamps decidedAt at the moment of hire and completion does not move it', async () => {
+      const application = await seedApplication('shortlisted');
+
+      const hired = await transitionApplicationStatus(application, 'hired', businessActor);
+      const decidedAtHire = hired.decidedAt;
+      expect(decidedAtHire).toBeInstanceOf(Date);
+
+      const completed = await transitionApplicationStatus(hired, 'completed', businessActor);
+
+      expect(completed.status).toBe('completed');
+      expect(completed.decidedAt.getTime()).toBe(decidedAtHire.getTime());
+      expect(completed.completedAt).toBeInstanceOf(Date);
+
+      const reloaded = await Application.findById(application._id);
+      expect(reloaded.decidedAt.getTime()).toBe(decidedAtHire.getTime());
+    });
+
+    // Completing an application that somehow never had decidedAt stamped still
+    // gets one, because `completed` is in the list too — the seeker's tracker
+    // never renders a decided application against a null date.
+    it('stamps decidedAt on completion when the hire left it unset', async () => {
+      const application = await seedApplication('hired', { decidedAt: null });
+
+      const result = await transitionApplicationStatus(application, 'completed', businessActor);
 
       expect(result.decidedAt).toBeInstanceOf(Date);
     });
@@ -228,6 +285,34 @@ describe('transitionApplicationStatus', () => {
 
       expect(result.decidedAt.getTime()).toBe(earlier.getTime());
     });
+
+    it('leaves completedAt null until Completed is reached', async () => {
+      const application = await seedApplication('shortlisted');
+
+      const result = await transitionApplicationStatus(application, 'hired', businessActor);
+
+      expect(result.completedAt).toBeNull();
+    });
+
+    it('sets completedAt the first time Completed is reached', async () => {
+      const application = await seedApplication('hired', { decidedAt: new Date() });
+
+      const result = await transitionApplicationStatus(application, 'completed', businessActor);
+
+      expect(result.completedAt).toBeInstanceOf(Date);
+    });
+
+    it('never overwrites an already-set completedAt', async () => {
+      const earlier = new Date('2026-01-01T00:00:00.000Z');
+      const application = await seedApplication('hired', {
+        decidedAt: new Date(),
+        completedAt: earlier,
+      });
+
+      const result = await transitionApplicationStatus(application, 'completed', businessActor);
+
+      expect(result.completedAt.getTime()).toBe(earlier.getTime());
+    });
   });
 
   describe('structurally forbidden moves (unaffected by actor rules)', () => {
@@ -239,7 +324,9 @@ describe('transitionApplicationStatus', () => {
       ['viewed', 'applied'],
       ['shortlisted', 'viewed'],
       ['shortlisted', 'applied'],
-      // The four terminal statuses can never be reopened by any transition.
+      // Terminal statuses can never be reopened by any transition. Hired's
+      // only outgoing move is to Completed; everything else out of it stays
+      // refused.
       ['hired', 'viewed'],
       ['hired', 'rejected'],
       ['rejected', 'applied'],
@@ -248,6 +335,20 @@ describe('transitionApplicationStatus', () => {
       ['withdrawn', 'viewed'],
       ['closed_filled', 'applied'],
       ['closed_filled', 'viewed'],
+      // Completing is reachable from Hired and from nowhere else — a business
+      // cannot skip the chain by marking an undecided application finished.
+      ['applied', 'completed'],
+      ['viewed', 'completed'],
+      ['shortlisted', 'completed'],
+      ['rejected', 'completed'],
+      ['withdrawn', 'completed'],
+      ['closed_filled', 'completed'],
+      ['completed', 'completed'],
+      // And Completed itself is the end of the line.
+      ['completed', 'viewed'],
+      ['completed', 'hired'],
+      ['completed', 'rejected'],
+      ['completed', 'withdrawn'],
     ];
 
     it.each(forbidden)('rejects %s -> %s with 409 naming both statuses', async (from, to) => {
@@ -304,6 +405,7 @@ describe('transitionApplicationStatus', () => {
       ['applied', 'viewed', () => businessActor],
       ['viewed', 'shortlisted', () => businessActor],
       ['shortlisted', 'hired', () => businessActor],
+      ['hired', 'completed', () => businessActor],
     ];
 
     it.each(staysLive)(

@@ -1,10 +1,12 @@
 import Joi from 'joi';
 
+export const PASSWORD_MIN_LENGTH = 8;
+
 export const registerSchema = Joi.object({
   email: Joi.string()
     .email({ tlds: { allow: false } })
     .required(),
-  password: Joi.string().min(8).required(),
+  password: Joi.string().min(PASSWORD_MIN_LENGTH).required(),
   role: Joi.string().valid('seeker', 'business').required(),
 });
 
@@ -21,4 +23,9 @@ export const refreshSchema = Joi.object({
 
 export const logoutSchema = Joi.object({
   refreshToken: Joi.string().required(),
+});
+
+export const changePasswordSchema = Joi.object({
+  currentPassword: Joi.string().required(),
+  newPassword: Joi.string().min(PASSWORD_MIN_LENGTH).required(),
 });

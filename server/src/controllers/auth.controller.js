@@ -1,6 +1,12 @@
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { sendSuccess } from '../utils/response.js';
-import { registerUser, loginUser, refreshTokens, logoutUser } from '../services/auth.service.js';
+import {
+  registerUser,
+  loginUser,
+  refreshTokens,
+  logoutUser,
+  changeUserPassword,
+} from '../services/auth.service.js';
 
 export const register = asyncHandler(async (req, res) => {
   const { user, accessToken, refreshToken } = await registerUser(req.body);
@@ -28,4 +34,10 @@ export const logout = asyncHandler(async (req, res) => {
 
 export const me = asyncHandler(async (req, res) => {
   sendSuccess(res, { user: req.user }, 200);
+});
+
+export const changePassword = asyncHandler(async (req, res) => {
+  const { accessToken, refreshToken } = await changeUserPassword(req.user, req.body);
+
+  sendSuccess(res, { accessToken, refreshToken }, 200);
 });

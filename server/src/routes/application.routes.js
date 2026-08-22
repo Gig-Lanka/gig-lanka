@@ -4,10 +4,16 @@ import {
   getMyApplications,
   getApplication,
   withdrawApplication,
+  completeApplication,
+  getApplicationsForMyGigs,
+  viewApplication,
+  shortlistApplication,
+  hireApplication,
+  rejectApplication,
 } from '../controllers/application.controller.js';
 import { validate } from '../middleware/validate.middleware.js';
 import { requireAuth, requireRole } from '../middleware/auth.middleware.js';
-import { applyToGigSchema } from '../validators/application.validator.js';
+import { applyToGigSchema, rejectApplicationSchema } from '../validators/application.validator.js';
 
 const router = Router();
 
@@ -26,6 +32,16 @@ router.post(
 // receives them. Declared before /:id so "mine" is never swallowed as an id.
 router.get('/applications/mine', requireAuth, requireRole('seeker'), getMyApplications);
 
+// GL-252. The mirror of /mine for the business side — every application
+// across all of the caller's gigs. Also declared before /:id so
+// "for-my-gigs" is never swallowed as an id.
+router.get(
+  '/applications/for-my-gigs',
+  requireAuth,
+  requireRole('business'),
+  getApplicationsForMyGigs,
+);
+
 // Either party (the applicant or the business that posted the gig) may read
 // one application; ownership is checked in the service, after existence, so
 // a missing id 404s before a wrong party ever sees a 403.
@@ -36,5 +52,41 @@ router.get('/applications/:id', requireAuth, getApplication);
 // transitionApplicationStatus, the same layering gig.routes.js uses for
 // close/delete (role gate at the route, ownership in the service).
 router.patch('/applications/:id/withdraw', requireAuth, requireRole('seeker'), withdrawApplication);
+
+// GL-248. The mirror of withdraw, and the same layering: requireRole gates
+// the kind of actor, and which specific business owns the gig is checked
+// inside transitionApplicationStatus. Business-only — a seeker never marks
+// their own work complete, including the applicant themselves. No validate()
+// and no body: completion takes no reason.
+router.patch(
+  '/applications/:id/complete',
+  requireAuth,
+  requireRole('business'),
+  completeApplication,
+);
+
+// GL-253. Same layering as withdraw/complete: requireRole gates the kind of
+// actor, and which specific business owns the gig is checked inside
+// transitionApplicationStatus. No validate() and no body — view, shortlist
+// and hire take none.
+router.patch('/applications/:id/view', requireAuth, requireRole('business'), viewApplication);
+router.patch(
+  '/applications/:id/shortlist',
+  requireAuth,
+  requireRole('business'),
+  shortlistApplication,
+);
+router.patch('/applications/:id/hire', requireAuth, requireRole('business'), hireApplication);
+
+// GL-253. reject takes { reasonCode, note } — validate() only shapes the
+// body (strips unknown fields); the four rejection rules themselves live in
+// assertValidRejection (application.service.js), not here.
+router.patch(
+  '/applications/:id/reject',
+  requireAuth,
+  requireRole('business'),
+  validate(rejectApplicationSchema),
+  rejectApplication,
+);
 
 export default router;

@@ -12,14 +12,12 @@ import HeroHeader, { HeroSheet, HeroStickyBar } from '../../components/ui/HeroHe
 import Loader from '../../components/ui/Loader';
 import ProfileSectionHeader from '../../components/profile/ProfileSectionHeader';
 import RatingSummary from '../../components/review/RatingSummary';
-import useAuth from '../../hooks/useAuth';
 import useHeroScroll from '../../hooks/useHeroScroll';
 
 const STATUS = { LOADING: 'loading', READY: 'ready', ERROR: 'error' };
 
 export default function ProfileScreen() {
   const navigation = useNavigation();
-  const { logout } = useAuth();
   const hero = useHeroScroll();
 
   const [profile, setProfile] = useState(null);
@@ -122,13 +120,13 @@ export default function ProfileScreen() {
             </View>
           ) : null}
 
-          {/*
-            TEMP - testing only, not part of GL-147. Account Settings
-            (Sprint 2, unticketed) is where Log Out actually belongs per the
-            mockup index; remove this once that screen exists.
-          */}
-          <Button variant="small" fullWidth={false} onPress={logout} className="mt-8 self-center">
-            Log Out
+          <Button
+            variant="small"
+            fullWidth={false}
+            onPress={() => navigation.navigate('AccountSettings')}
+            className="mt-8 self-center"
+          >
+            Account settings
           </Button>
         </HeroSheet>
       </Animated.ScrollView>

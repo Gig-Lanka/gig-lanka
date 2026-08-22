@@ -1,7 +1,12 @@
-// Real auth client - GL-74. Same five function signatures as
-// ./mock/authApi.js so index.js can swap between them with no other code
-// change. Errors propagate as-is: axios rejections already carry
-// `error.response.data.error` in the same shape the mock fakes.
+// Real auth client - GL-74. Same function signatures as ./mock/authApi.js so
+// index.js can swap between them with no other code change. Errors
+// propagate as-is: axios rejections already carry `error.response.data.error`
+// in the same shape the mock fakes.
+//
+// changePassword takes an `accessToken` field too (unused here - the
+// request interceptor in ./client.js attaches it) purely so the same call
+// site works against ./mock/authApi.js, which has no interceptor to do that
+// for it.
 
 import client from './client';
 
@@ -30,10 +35,16 @@ async function getCurrentUser() {
   return response.data.data;
 }
 
+async function changePassword({ currentPassword, newPassword }) {
+  const response = await client.post('/auth/change-password', { currentPassword, newPassword });
+  return response.data.data;
+}
+
 export default {
   register,
   login,
   refresh,
   logout,
   getCurrentUser,
+  changePassword,
 };

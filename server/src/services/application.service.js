@@ -1,17 +1,22 @@
 import mongoose from 'mongoose';
 import { ApiError } from '../utils/ApiError.js';
 import { Gig } from '../models/gig.model.js';
-import { Application, REJECTION_REASON_CODES } from '../models/application.model.js';
-import { assertGigIsOpen } from './gig.service.js';
+import {
+  Application,
+  APPLICATION_STATUSES,
+  REJECTION_REASON_CODES,
+} from '../models/application.model.js';
+import { assertGigIsOpen, findOwnedGig } from './gig.service.js';
 import { getMyProfile } from './profile.service.js';
 
 // Source status -> target status -> which kind of actor may trigger that
 // move. Modeled as data, not a chain of conditionals, so Sprint 2's hiring
-// flow and Sprint 3's auto-close rule can extend it safely. Terminal
-// statuses (Hired, Rejected, Withdrawn, Closed – position filled) have no
-// entry here, so any move out of one of them falls straight through to the
-// 409 below — nothing reopens a terminal application, and status never
-// moves backwards.
+// flow and Sprint 3's auto-close rule can extend it safely. A status with
+// no entry here has no way out of it, so any move out of one falls straight
+// through to the 409 below — nothing reopens a finished application, and
+// status never moves backwards. Rejected, Withdrawn and Closed – position
+// filled are the three that end there; Hired's single outgoing move is to
+// Completed, added by GL-218 so the work itself can be marked finished.
 //
 // 'business' means the business that posted the gig, specifically — not
 // any business. 'applicant' means the seeker who owns the application.
@@ -36,10 +41,34 @@ const TRANSITION_RULES = {
     rejected: 'business',
     withdrawn: 'applicant',
   },
+  // The only way out of Hired, and only for the business that posted the
+  // gig. Nothing else is added here: `applied -> hired` and `viewed -> hired`
+  // stay refused, so hiring still requires shortlisting first — that chain is
+  // what the seeker's tracker exists to show.
+  hired: {
+    completed: 'business',
+  },
 };
 
-const TERMINAL_STATUSES = ['hired', 'rejected', 'withdrawn', 'closed_filled'];
-const LIVE_STATUSES = ['applied', 'viewed', 'shortlisted', 'hired'];
+// The statuses that mean a decision has been made about the application, and
+// the only thing this list does is stamp `decidedAt` when one is reached. It
+// is *not* what stops an application being reopened, which is exactly what its
+// old name — TERMINAL_STATUSES — led readers to believe:
+//
+// The transition table alone governs reachability; the constant governs `decidedAt`.
+//
+// `hired` stays in the list even though it now has an outgoing move to
+// `completed`. Striking it off is the obvious "correction" once Hired stops
+// looking terminal, and it is wrong: it would silently stop `decidedAt` being
+// stamped at the moment of hire, and ApplicationTracker would render "Hired"
+// against a null date. `completed` joins it and is harmless — `decidedAt` is
+// guarded by `!application.decidedAt`, so it keeps the moment of hire and is
+// never overwritten by the completion, which has `completedAt` of its own.
+const DECIDED_STATUSES = ['hired', 'completed', 'rejected', 'withdrawn', 'closed_filled'];
+// Completed is live: finishing the work is not leaving the process, so the
+// gig's applicantCount must not fall when hire -> complete happens. A count
+// that drops when a job is done reads as a bug.
+const LIVE_STATUSES = ['applied', 'viewed', 'shortlisted', 'hired', 'completed'];
 
 // The two Skill Trial reason codes only make sense once a gig can carry a
 // trial, which arrives in Sprint 3. `gig.skillTrial` does not exist on the
@@ -56,8 +85,10 @@ const FORBIDDEN_ERROR = () =>
 
 // The applicant count lives on the gig — declared and defaulted to zero by
 // GL-158 — but is maintained here, not by the marketplace. It counts live
-// applications only (Applied, Viewed, Shortlisted, Hired); Withdrawn and
-// Rejected applications drop out of it. Every write to it goes through this
+// applications only (Applied, Viewed, Shortlisted, Hired, Completed);
+// Rejected, Withdrawn and Closed – position filled applications drop out of
+// it — the count falls when someone leaves the process, not when the work
+// gets finished. Every write to it goes through this
 // helper, in the same operation as the status change that caused it, never
 // a separate call a client can forget to make — a count that drifts from
 // reality is worse than no count. GL-110 calls this directly with +1 when
@@ -230,17 +261,21 @@ export const transitionApplicationStatus = async (application, targetStatus, act
     application.viewedAt = new Date();
   }
 
-  if (TERMINAL_STATUSES.includes(targetStatus) && !application.decidedAt) {
+  if (targetStatus === 'completed' && !application.completedAt) {
+    application.completedAt = new Date();
+  }
+
+  if (DECIDED_STATUSES.includes(targetStatus) && !application.decidedAt) {
     application.decidedAt = new Date();
   }
 
   await application.save();
 
   // Every transition this function permits either stays within the live
-  // set (Applied -> Viewed -> Shortlisted -> Hired) or leaves it for good —
-  // terminal statuses have no outgoing moves, so this only ever fires once
-  // per application, adjusting the gig in the same operation as the status
-  // change that caused it.
+  // set (Applied -> Viewed -> Shortlisted -> Hired -> Completed) or leaves it
+  // for good — the three statuses it can leave for have no outgoing moves at
+  // all, so this only ever fires once per application, adjusting the gig in
+  // the same operation as the status change that caused it.
   if (wasLive && !isLive) {
     await adjustGigApplicantCount(application.gig, -1);
   }
@@ -292,6 +327,30 @@ const toGigSummary = (gig) => {
   };
 };
 
+// GL-245: the read behind gig detail's `viewerApplication` field, composed
+// into that response by gig.controller.js rather than imported into
+// gig.service.js — the reverse edge would close an import cycle, since this
+// service already imports gig.service.js for assertGigIsOpen. Only a
+// signed-in seeker can own an application, so a guest or a business gets
+// null without a query. Looked up by (gig, applicant) - the same pair the
+// unique index enforces - at any status, since a withdrawn or rejected
+// application is exactly the case gig detail needs to surface. Kept to
+// { id, status }: the snapshot, the rejection reason and timestamps belong
+// to the application detail screen, not this E3 response.
+export const getViewerApplication = async (gigId, user) => {
+  if (!user || user.role !== 'seeker') {
+    return null;
+  }
+
+  const application = await Application.findOne({ gig: gigId, applicant: user.id });
+
+  if (!application) {
+    return null;
+  }
+
+  return { id: application.id, status: application.status };
+};
+
 // GL-183: the signed-in seeker's own applications, newest first, each with
 // a summary of the gig it belongs to. Scoped to `applicant: userId` only —
 // there is no parameter that reaches another seeker's applications.
@@ -341,9 +400,10 @@ export const getApplicationById = async (id, actor) => {
 // (GL-179) — never a direct status write. That function already enforces
 // "only the applicant" (403 for anyone else, including the business or a
 // different seeker) and "only from Applied, Viewed or Shortlisted" (a Hired
-// application has no outgoing move in TRANSITION_RULES, so it falls through
-// to 409 INVALID_APPLICATION_TRANSITION — the same guard every other
-// terminal status gets, not a withdraw-specific check). It also decrements
+// application has no `withdrawn` target in TRANSITION_RULES — its one outgoing
+// move is to Completed — so it falls through to 409
+// INVALID_APPLICATION_TRANSITION, the same guard every other decided status
+// gets, not a withdraw-specific check). It also decrements
 // the applicant count in the same operation, since Withdrawn leaves the live
 // set. The application is never deleted or hidden — it stays visible to the
 // business exactly where it was, just with a new status.
@@ -355,5 +415,159 @@ export const withdrawApplication = async (id, actor) => {
 
   return {
     application: { ...updated.toJSON(), gig: toGigSummary(gig) },
+  };
+};
+
+// GL-248: moves a hired application to Completed through
+// transitionApplicationStatus — the same single entry point withdrawing uses,
+// and there is no second path that writes the status, not even for testing.
+// That function enforces "only the business that posted the gig" by ownership
+// (403 for a seeker, including the applicant themselves, and for a business
+// that owns a different gig) and "only from Hired" (any other source status
+// has no `completed` target in TRANSITION_RULES, so it falls through to 409
+// INVALID_APPLICATION_TRANSITION naming both statuses). It also stamps
+// completedAt once. No reason is passed: completion takes none, and must not
+// acquire one — reasons belong to rejections. The applicant count is
+// untouched, since Completed is in the live set.
+export const completeApplication = async (id, actor) => {
+  const { application } = await getApplicationWithParties(id);
+
+  const updated = await transitionApplicationStatus(application, 'completed', actor);
+  const gig = await Gig.findById(updated.gig);
+
+  return {
+    application: { ...updated.toJSON(), gig: toGigSummary(gig) },
+  };
+};
+
+// GL-253: moves an application from Applied to Viewed through
+// transitionApplicationStatus — only the business that posted the gig
+// (403 for anyone else, after the existence check in
+// getApplicationWithParties). GL-220 calls this every time a business opens
+// an applicant, including a second time: an application already past
+// Applied has no `viewed` target in TRANSITION_RULES, so it falls through
+// to the same 409 INVALID_APPLICATION_TRANSITION any other refused move
+// gets, and the client is expected to swallow that quietly — opening an
+// applicant twice is not an error a business should ever see.
+export const viewApplication = async (id, actor) => {
+  const { application } = await getApplicationWithParties(id);
+
+  const updated = await transitionApplicationStatus(application, 'viewed', actor);
+  const gig = await Gig.findById(updated.gig);
+
+  return {
+    application: { ...updated.toJSON(), gig: toGigSummary(gig) },
+  };
+};
+
+// GL-253: moves a viewed application to Shortlisted through
+// transitionApplicationStatus. Only from Viewed (§11.3) — Applied has no
+// `shortlisted` target, so an application must be opened first.
+export const shortlistApplication = async (id, actor) => {
+  const { application } = await getApplicationWithParties(id);
+
+  const updated = await transitionApplicationStatus(application, 'shortlisted', actor);
+  const gig = await Gig.findById(updated.gig);
+
+  return {
+    application: { ...updated.toJSON(), gig: toGigSummary(gig) },
+  };
+};
+
+// GL-253: moves a shortlisted application to Hired through
+// transitionApplicationStatus. Only from Shortlisted — `applied -> hired`
+// and `viewed -> hired` are absent from TRANSITION_RULES and stay refused,
+// so hiring still requires shortlisting first, the same chain the seeker's
+// tracker shows.
+export const hireApplication = async (id, actor) => {
+  const { application } = await getApplicationWithParties(id);
+
+  const updated = await transitionApplicationStatus(application, 'hired', actor);
+  const gig = await Gig.findById(updated.gig);
+
+  return {
+    application: { ...updated.toJSON(), gig: toGigSummary(gig) },
+  };
+};
+
+// GL-253: moves an application to Rejected through
+// transitionApplicationStatus, from Applied, Viewed or Shortlisted. `body`
+// is passed straight through as `reason` — assertValidRejection, inside
+// transitionApplicationStatus, is the only place `{ code, note }` is
+// inspected, so all four rejection rules (a missing code, a code that
+// isn't business-selectable, an unrecognised code, and a trial code on a
+// gig with no trial) fire from that single check, never a second copy
+// here. `note` is stored exactly as given — not trimmed, not sanitised.
+export const rejectApplication = async (id, actor, body) => {
+  const { application } = await getApplicationWithParties(id);
+
+  const reason = { code: body?.reasonCode, note: body?.note };
+  const updated = await transitionApplicationStatus(application, 'rejected', actor, reason);
+  const gig = await Gig.findById(updated.gig);
+
+  return {
+    application: { ...updated.toJSON(), gig: toGigSummary(gig) },
+  };
+};
+
+// Shared by both GL-252 lists: `status` may be one value or several
+// (repeated query params or a comma-separated string), validated against
+// §6.7 rather than left to Mongo to silently match nothing. Absent
+// entirely, no filter is applied.
+const parseStatusFilter = (query) => {
+  const raw = query?.status;
+  if (raw === undefined) return undefined;
+
+  const values = Array.isArray(raw) ? raw : raw.split(',');
+  const invalid = values.find((value) => !APPLICATION_STATUSES.includes(value));
+
+  if (invalid) {
+    throw new ApiError(400, 'VALIDATION_ERROR', 'Request validation failed.', [
+      { field: 'status', message: `"${invalid}" is not a valid application status` },
+    ]);
+  }
+
+  return values;
+};
+
+// GL-252: every application to one gig, to the business that posted it
+// only. findOwnedGig (gig.service.js) checks existence before ownership —
+// 404 for a gig that doesn't exist, 403 for one owned by someone else — so
+// a non-owning business can't tell the two apart, the same guarantee
+// close/update/delete already give a gig's owner.
+export const listApplicationsForGig = async (gigId, userId, query) => {
+  await findOwnedGig(gigId, userId);
+
+  const statusFilter = parseStatusFilter(query);
+  const filter = { gig: gigId };
+  if (statusFilter) filter.status = { $in: statusFilter };
+
+  const applications = await Application.find(filter).sort({ createdAt: -1, _id: -1 });
+
+  return { applications: applications.map((application) => application.toJSON()) };
+};
+
+// GL-252: every application across all of the signed-in business's gigs,
+// each with a gig summary so the caller can tell which posting it belongs
+// to. Ownership runs through the gig — found by `postedBy`, then
+// applications by gig `$in` — never a business id denormalised onto the
+// application itself.
+export const listApplicationsForMyGigs = async (userId, query) => {
+  const statusFilter = parseStatusFilter(query);
+
+  const gigs = await Gig.find({ postedBy: userId });
+  const gigIds = gigs.map((gig) => gig._id);
+  const gigById = new Map(gigs.map((gig) => [gig.id, gig]));
+
+  const filter = { gig: { $in: gigIds } };
+  if (statusFilter) filter.status = { $in: statusFilter };
+
+  const applications = await Application.find(filter).sort({ createdAt: -1, _id: -1 });
+
+  return {
+    applications: applications.map((application) => ({
+      ...application.toJSON(),
+      gig: toGigSummary(gigById.get(application.gig.toString())),
+    })),
   };
 };

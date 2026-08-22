@@ -83,6 +83,16 @@ export function AuthProvider({ children }) {
     return result.user;
   }, []);
 
+  const changePassword = useCallback(async ({ currentPassword, newPassword }) => {
+    const { accessToken } = await secureStorage.getTokens();
+    const result = await authApi.changePassword({ accessToken, currentPassword, newPassword });
+    await secureStorage.setTokens({
+      accessToken: result.accessToken,
+      refreshToken: result.refreshToken,
+    });
+    return result;
+  }, []);
+
   const logout = useCallback(async () => {
     const { accessToken, refreshToken } = await secureStorage.getTokens();
     try {
@@ -95,8 +105,8 @@ export function AuthProvider({ children }) {
   }, []);
 
   const value = useMemo(
-    () => ({ user, status, register, login, logout }),
-    [user, status, register, login, logout]
+    () => ({ user, status, register, login, logout, changePassword }),
+    [user, status, register, login, logout, changePassword]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

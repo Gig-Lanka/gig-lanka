@@ -3,8 +3,9 @@ import mongoose from 'mongoose';
 const DIRECTIONS = ['seeker_to_business', 'business_to_seeker'];
 
 // Rating aggregate shape that lands on a profile (GL-141 declares the field;
-// this story fixes its shape). Flat by design — an average, a count, and a
-// short list of common categories, nothing here needs a histogram in Sprint 1.
+// GL-222 fixes its shape). An average, a count, a short list of common
+// categories, and a star-by-star histogram (GL-264) — keyed 1 to 5, each
+// count defaulting to zero so RatingBars never renders against a missing key.
 //
 // Ownership boundary, stated in both directions so neither epic computes the
 // other's number: this component owns the aggregate and is the only writer
@@ -14,6 +15,13 @@ export const RATING_AGGREGATE_SHAPE = {
   averageRating: { type: Number, default: 0 },
   reviewCount: { type: Number, default: 0 },
   topCategories: { type: [String], default: [] },
+  distribution: {
+    1: { type: Number, default: 0 },
+    2: { type: Number, default: 0 },
+    3: { type: Number, default: 0 },
+    4: { type: Number, default: 0 },
+    5: { type: Number, default: 0 },
+  },
 };
 
 const reviewSchema = new mongoose.Schema(

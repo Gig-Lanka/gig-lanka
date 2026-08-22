@@ -83,6 +83,8 @@ Every error response — regardless of cause — returns the same outer shape:
 |---|---|
 | `VALIDATION_ERROR` | Request body/params/query failed schema validation. |
 | `INVALID_CREDENTIALS` | Login email/password combination doesn't match. |
+| `INVALID_CURRENT_PASSWORD` | `POST /api/auth/change-password` called with a `currentPassword` that doesn't match the stored hash. Always `401`, distinguishable from `TOKEN_EXPIRED`/`TOKEN_INVALID` so the client shows a field error instead of re-authenticating. |
+| `PASSWORD_UNCHANGED` | `POST /api/auth/change-password` called with a `newPassword` identical to the current password. Always `400`. |
 | `EMAIL_ALREADY_EXISTS` | Register called with an email already in the database. |
 | `UNAUTHENTICATED` | Reached a role check with no authenticated user. |
 | `AUTH_HEADER_MISSING` | No `Authorization` header on a request that requires one. |
@@ -99,7 +101,7 @@ Every error response — regardless of cause — returns the same outer shape:
 | `STORAGE_UNAVAILABLE` | The storage backend (Supabase) failed or was unreachable. Always `502`. |
 | `GIG_CLOSED` | Attempted to apply to or save a gig whose status isn't `open`. Always `409`. |
 | `APPLICATION_ALREADY_EXISTS` | `POST /api/gigs/:gigId/applications` for a `(gig, applicant)` pair that already has an application (§11.7). Always `409`; the duplicate-key error from the unique index (§11.1) is translated here rather than surfacing as `500` — the same trap GL-15 hit with duplicate emails. Holds whether the earlier application is live, withdrawn or rejected. |
-| `INVALID_APPLICATION_TRANSITION` | Attempted to move an application to a status not reachable from its current status (§11.3). Always `409`, and the message names both the current and the attempted status. Withdrawing a `hired` application (§11.10) surfaces through this same code — hiring has no outgoing move in the transition table, so it's refused the same way any other terminal status is, not by a withdraw-specific check. |
+| `INVALID_APPLICATION_TRANSITION` | Attempted to move an application to a status not reachable from its current status (§11.3). Always `409`, and the message names both the current and the attempted status. Withdrawing a `hired` application (§11.10) surfaces through this same code — Hired's only outgoing move is to `completed`, so a withdraw is refused by the transition table itself, not by a withdraw-specific check. Marking anything other than a `hired` application complete (§11.11) is refused the same way. |
 | `APPLICATION_NOT_HIRED` | `POST /api/applications/:applicationId/reviews` on an application whose status isn't `hired` (§12.3). Always `409` — a review requires a completed hire. |
 | `REVIEW_ALREADY_EXISTS` | `POST /api/applications/:applicationId/reviews` for an `(application, direction)` pair that already has a review (§12.3). Always `409`; the duplicate-key error from the unique index (§7) is translated here rather than surfacing as `500`. |
 
@@ -334,6 +336,74 @@ Returns the authenticated user. Requires `Authorization: Bearer <accessToken>`.
 }
 ```
 
+### 5.6 Change password — `POST /api/auth/change-password`
+
+Changes the authenticated user's password. Requires `Authorization: Bearer <accessToken>`.
+
+On success, every refresh token belonging to the user is revoked and a fresh access/refresh pair is issued — the caller stays signed in on this device with the returned pair; every other device is signed out at its next `/api/auth/refresh` call.
+
+**Request body**
+
+```json
+{
+  "currentPassword": "Password123!",
+  "newPassword": "NewPassword456!"
+}
+```
+
+**Success — `200 OK`**
+
+```json
+{
+  "success": true,
+  "data": {
+    "accessToken": "eyJhbGciOi...",
+    "refreshToken": "3a5f8c1d9b2e04f6..."
+  }
+}
+```
+
+**Failure — `401 Unauthorized`** (no/invalid/expired access token — same codes as §5.5)
+
+**Failure — `401 Unauthorized`** (`currentPassword` doesn't match the stored hash)
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "INVALID_CURRENT_PASSWORD",
+    "message": "Current password is incorrect."
+  }
+}
+```
+
+**Failure — `400 Bad Request`** (`newPassword` shorter than the minimum registration enforces)
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Request validation failed.",
+    "errors": [
+      { "field": "newPassword", "message": "must be at least 8 characters" }
+    ]
+  }
+}
+```
+
+**Failure — `400 Bad Request`** (`newPassword` identical to `currentPassword`)
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "PASSWORD_UNCHANGED",
+    "message": "New password must be different from your current password."
+  }
+}
+```
+
 **Failure — `401 Unauthorized`** (no/invalid/expired access token)
 
 ```json
@@ -417,6 +487,7 @@ These are the closed vocabularies used throughout the product. "Closed" means no
 | `viewed` | Viewed |
 | `shortlisted` | Shortlisted |
 | `hired` | Hired |
+| `completed` | Completed |
 | `rejected` | Rejected |
 | `withdrawn` | Withdrawn |
 | `closed_filled` | Closed – position filled |
@@ -462,15 +533,18 @@ Youth worker set (rated by the business):
 
 ### 6.10 Rating aggregate shape
 
-The summary that lands on a profile once reviews exist for it. Flat by design — an average, a count, and a short list of common categories, nothing here needs a histogram in Sprint 1.
+The summary that lands on a profile once reviews exist for it: an average, a count, a short list of common categories, and a star-by-star histogram.
 
 ```json
 {
   "averageRating": 4.6,
   "reviewCount": 12,
-  "topCategories": ["communication", "punctuality"]
+  "topCategories": ["communication", "punctuality"],
+  "distribution": { "1": 0, "2": 0, "3": 1, "4": 3, "5": 8 }
 }
 ```
+
+- `distribution` — the count of reviews at each star value, keyed `"1"` through `"5"`. Always all five keys, each defaulting to `0`. The five counts sum to `reviewCount`.
 
 **Ownership boundary**, stated in both directions so neither epic computes the other's number: the Review component (this contract's `6.9`) owns the aggregate and is the only thing that writes it, computed from the reviews collection starting in Sprint 2. User & Profile stores the aggregate on the profile document and displays it, and never writes it.
 
@@ -550,7 +624,8 @@ Returned by `GET /api/profiles/me` and `PUT /api/profiles/me`, under `data.profi
   "ratingSummary": {
     "averageRating": 0,
     "reviewCount": 0,
-    "topCategories": []
+    "topCategories": [],
+    "distribution": { "1": 0, "2": 0, "3": 0, "4": 0, "5": 0 }
   },
   "skillTrialResults": [],
   "createdAt": "2026-08-12T22:31:14.195Z",
@@ -608,7 +683,8 @@ Returned by `GET /api/profiles/:userId`, under `data.profile`. Built from an exp
   "ratingSummary": {
     "averageRating": 0,
     "reviewCount": 0,
-    "topCategories": []
+    "topCategories": [],
+    "distribution": { "1": 0, "2": 0, "3": 0, "4": 0, "5": 0 }
   }
 }
 ```
@@ -626,7 +702,8 @@ Returned by `GET /api/profiles/:userId`, under `data.profile`. Built from an exp
   "ratingSummary": {
     "averageRating": 0,
     "reviewCount": 0,
-    "topCategories": []
+    "topCategories": [],
+    "distribution": { "1": 0, "2": 0, "3": 0, "4": 0, "5": 0 }
   }
 }
 ```
@@ -656,7 +733,7 @@ Returns the signed-in user's full profile, creating it first if it does not exis
       "workExperience": [],
       "education": [],
       "skillTrialResults": [],
-      "ratingSummary": { "averageRating": 0, "reviewCount": 0, "topCategories": [] },
+      "ratingSummary": { "averageRating": 0, "reviewCount": 0, "topCategories": [], "distribution": { "1": 0, "2": 0, "3": 0, "4": 0, "5": 0 } },
       "createdAt": "2026-08-12T22:31:14.195Z",
       "updatedAt": "2026-08-12T22:31:14.195Z"
     }
@@ -1075,9 +1152,56 @@ Businesses only.
 
 ### 10.4 List gigs — `GET /api/gigs`
 
-Public — no `Authorization` header required. Returns only `open` gigs, newest first (`createdAt` descending), ten per page.
+Public — no `Authorization` header required. With no parameters: `status: 'open'` gigs, newest first (`createdAt` descending), ten per page — unchanged from Sprint 1. `page`, plus the search, filter and sort parameters below, narrow and reorder that same base set.
 
 **Request:** `?page=<n>` — optional, defaults to `1`. Malformed or missing values fall back to `1`.
+
+**Search, filter and sort parameters.** All are optional.
+
+| Parameter | Type | Matches |
+|---|---|---|
+| `q` | string, max 200 characters | Case-insensitive substring, against `title` **or** `description`. Not full-text, not fuzzy, not ranked. |
+| `category` | one or more of §6.1 | A gig whose `category` is any of the given values. |
+| `schedule` | one or more of §6.3 | A gig whose `schedule` array contains any of the given tags. |
+| `payType` | one or more of §6.2 | A gig whose `payType` is any of the given values. |
+| `commitment` | one or more of §6.4 | A gig whose `commitment` is any of the given values. |
+| `remote` | boolean (`true` / `false`) | Exact match. |
+| `city` | string, max 120 characters | Case-insensitive **exact** match — not a substring. |
+| `minPay` | number, `>= 0` | `payAmount >= minPay`. See the limitation below. |
+| `sort` | one of §6.6 | Reorders the result; see below. Defaults to `newest`. |
+
+**Combination rules:** every parameter ANDs with every other — a gig must satisfy `q` **and** `category` **and** `remote`, etc., all at once. Within `category`, `schedule`, `payType` and `commitment`, multiple values OR — a gig matching *any one* of the values given for that parameter satisfies it. `status: 'open'` is applied unconditionally underneath all of this; no combination of parameters can surface a `closed`, `filled` or `draft` gig.
+
+**Multi-value wire format:** `category`, `schedule`, `payType` and `commitment` each take a **comma-separated** list of values from their closed vocabulary — e.g. `?category=tech,creative`. A single value needs no comma. This is the one shape both this endpoint and its client (GL-216) build to; repeated keys (`category=tech&category=creative`) are not accepted.
+
+An item outside the vocabulary fails the whole request with `400 VALIDATION_ERROR` naming that field — it is never dropped silently, which would otherwise be indistinguishable from "no gigs match". Empty items from a stray comma (`?category=tech,`) are ignored; an entirely empty value (`?category=` or `?category=,`) still 400s, since it names no value at all.
+
+**`minPay`'s known limitation:** it compares the raw `payAmount` regardless of `payType`, so `minPay=1000` matches a Rs 1,000-per-hour gig and a Rs 1,000 fixed-price gig identically. This is deliberate, not an oversight — normalising per-hour against fixed-price would require an assumed number of hours that a gig does not carry. Do not "fix" this into a guessed conversion.
+
+**`sort` — one of `newest` (default), `highest_pay`, `starting_soon`:**
+
+| Value | Orders by | Tiebreak |
+|---|---|---|
+| `newest` | `createdAt` descending | `_id` descending |
+| `highest_pay` | `payAmount` descending | `_id` descending |
+| `starting_soon` | `startDate` ascending, gigs with **no** `startDate` sorted last | `_id` ascending |
+
+Every sort carries a secondary `_id` tiebreak in the same direction as the primary key, so a paginated scroll never repeats or drops a row between pages. `startDate` is optional; without the explicit "no date sorts last" rule, `starting_soon` would put every undated gig first, since Mongo orders a missing field before every value ascending.
+
+**Failure — `400 Bad Request`** (an unrecognised value on a closed-vocabulary parameter):
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Request validation failed.",
+    "errors": [
+      { "field": "category", "message": "category must only contain: tutoring, delivery, event_help, retail, hospitality, admin_data_entry, creative, tech, other" }
+    ]
+  }
+}
+```
 
 **Success — `200 OK`**
 
@@ -1093,13 +1217,17 @@ Public — no `Authorization` header required. Returns only `open` gigs, newest 
 }
 ```
 
-`total` is the count of every `open` gig matching the (currently unfiltered) query, not just the page returned — the client uses it to render "23 gigs" or to compute the last page. A closed or filled gig never appears here, even to the business that posted it.
+`total` is the count of every `open` gig matching the request's filters, not just the page returned — computed after filtering, so the number on screen and the list always agree. The client uses it to render "23 gigs" or to compute the last page. A closed, filled or draft gig never appears here, even to the business that posted it, and no parameter can change that.
 
-No failure modes — an empty result set is still `200` with `"gigs": []`.
+`gigs`, `page` and `limit` (`10`) are unchanged in shape from Sprint 1. `sort`, `page` and every filter compose freely — pagination and sorting are always applied on top of the filtered set, never the other way round.
+
+No failure modes beyond the `400` above — an empty result set is still `200` with `"gigs": []`.
 
 ### 10.5 Read a gig — `GET /api/gigs/:id`
 
-Public — no `Authorization` header required. Returns one gig **at any status** to anyone, so a link to a since-closed gig still resolves.
+Public — no `Authorization` header required, and none of the behaviour below changes that. Returns one gig **at any status** to anyone, so a link to a since-closed gig still resolves.
+
+An `Authorization` header is read if present (optional authentication), purely to compute `viewerApplication`. A missing header, a malformed one, or an expired or invalid token all fall through to exactly the same response a guest gets — this endpoint never 401s.
 
 **Success — `200 OK`**
 
@@ -1108,10 +1236,13 @@ Public — no `Authorization` header required. Returns one gig **at any status**
   "success": true,
   "data": {
     "gig": { /* 10.1 */ },
-    "business": { /* 10.2 */ }
+    "business": { /* 10.2 */ },
+    "viewerApplication": { "id": "...", "status": "shortlisted" }
   }
 }
 ```
+
+`viewerApplication` is `{ id, status }` for a signed-in seeker who has an application against this gig, **at any status** — applied, viewed, shortlisted, hired, completed, rejected or withdrawn all carry it. It is `null` in every other case: a guest, a signed-in business, or a signed-in seeker who has never applied to this gig. A seeker whose access token has expired is treated as a guest here and also gets `null`. Nothing beyond `id` and `status` is included — the profile snapshot, the rejection reason and every timestamp live on `GET /api/applications/:id` (§11.9), not here.
 
 **Failure — `404 Not Found`** (no gig with that id, or the id isn't a valid Mongo id — both answer identically):
 
@@ -1194,7 +1325,7 @@ Only the owner. Permanently deletes the gig. There is no soft delete and no undo
 
 ## 11. Application model & status transitions (Sprint 1)
 
-`server/src/models/application.model.js`, `server/src/services/application.service.js`, `server/src/routes/application.routes.js`, `server/src/controllers/application.controller.js`, `server/src/validators/application.validator.js`. The four endpoints (§11.6–§11.9) are GL-110; the shape and transition rules below are also what GL-111's review gate and GL-124's tracker are built against.
+`server/src/models/application.model.js`, `server/src/services/application.service.js`, `server/src/routes/application.routes.js`, `server/src/controllers/application.controller.js`, `server/src/validators/application.validator.js`. The four endpoints (§11.6–§11.9) are GL-110; the shape and transition rules below are also what GL-111's review gate and GL-124's tracker are built against. Sprint 2's business-side endpoints (§11.12–§11.17, GL-219) reuse this same shape and the same `transitionApplicationStatus` — GL-252 built the two lists, GL-253 the four transitions, GL-254 (this section) documents both. §11.12 also touches `server/src/routes/gig.routes.js`, the one endpoint in this section nested under a gig rather than declared here.
 
 ### 11.1 Application shape
 
@@ -1224,12 +1355,13 @@ Only the owner. Permanently deletes the gig. There is no soft delete and no undo
         "endDate": "2027-12-01"
       }
     ],
-    "rating": { "averageRating": 4.6, "reviewCount": 12, "topCategories": ["communication"] }
+    "rating": { "averageRating": 4.6, "reviewCount": 12, "topCategories": ["communication"], "distribution": { "1": 0, "2": 0, "3": 1, "4": 3, "5": 8 } }
   },
   "status": "applied",
   "appliedAt": "2026-08-04T09:15:00.000Z",
   "viewedAt": null,
   "decidedAt": null,
+  "completedAt": null,
   "createdAt": "2026-08-04T09:15:00.000Z",
   "updatedAt": "2026-08-04T09:15:00.000Z"
 }
@@ -1237,16 +1369,21 @@ Only the owner. Permanently deletes the gig. There is no soft delete and no undo
 
 - `gig`, `applicant` — reference ids. `gig` is indexed, `applicant` is indexed, and the pair is uniquely indexed together: one application per seeker per gig, permanently. Withdrawing does not free the slot — a withdrawn application still occupies that unique pair.
 - `profileSnapshot` — an embedded copy of the applicant's profile (`name`, `headline` from the profile's `bio`, `experience` from `workExperience`, `education`, `rating` from `ratingSummary`), taken once at submission. Not a reference: a later edit to the applicant's live profile (§8) never changes an existing application. What was submitted is what gets judged.
-- `status` — one of the seven values in §11.2. Defaults to `applied` and is never accepted from a request body; see §11.3 for how it changes.
+- `status` — one of the eight values in §11.2. Defaults to `applied` and is never accepted from a request body; see §11.3 for how it changes.
 - `appliedAt` — set once, at creation.
-- `viewedAt`, `decidedAt` — `null` until set by a transition (§11.3), never cleared or overwritten afterwards. Present as `null` rather than omitted, unlike the optional-field convention elsewhere in this document (§8.1) — these are always-present timestamps that happen to start empty, not optional data.
+- `viewedAt`, `decidedAt`, `completedAt` — `null` until set by a transition (§11.3), never cleared or overwritten afterwards. Present as `null` rather than omitted, unlike the optional-field convention elsewhere in this document (§8.1) — these are always-present timestamps that happen to start empty, not optional data.
+- `completedAt` — the moment the business marked the work finished, set the first time `completed` is reached. Separate from `decidedAt`, which is already occupied by the hire and guarded against being overwritten: one application carries both, and they are different moments.
 - `rejectionReasonCode`, `rejectionNote` — absent until the application is rejected. `rejectionReasonCode` is one of §11.4's codes. `rejectionNote` is free text up to 300 characters, stored exactly as written, shown to the applicant verbatim.
 
 ### 11.2 Status vocabulary
 
-The seven values are §6.7. Four are terminal — `hired`, `rejected`, `withdrawn`, `closed_filled` — and can never be reopened by any transition, by anyone, including the system. The other three — `applied`, `viewed`, `shortlisted` — are non-terminal.
+The eight values are §6.7. **Reachability is governed by the transition table in §11.3 and by nothing else** — a status can be moved out of exactly when §11.3 gives it an outgoing row.
 
-"Live" applications are `applied`, `viewed`, `shortlisted` and `hired` — the four that count toward a gig's `applicantCount` (§10.1, §11.5). `withdrawn` and `rejected` are not live.
+Four of the eight have no outgoing row and end the line: `completed`, `rejected`, `withdrawn` and `closed_filled` can never be reopened by any transition, by anyone, including the system. `hired` has exactly one outgoing move, to `completed` — a hire is a decision, but the work still has to be finished. The remaining three — `applied`, `viewed`, `shortlisted` — are the ones still in progress.
+
+Separately from reachability, five statuses are **decided** — `hired`, `completed`, `rejected`, `withdrawn` and `closed_filled` — meaning a decision has been made about the application. That is the set that stamps `decidedAt` (§11.3), and the only thing that set does. `hired` remains in it now that it has an outgoing move: dropping it would stop `decidedAt` being stamped at the moment of hire.
+
+"Live" applications are `applied`, `viewed`, `shortlisted`, `hired` and `completed` — the five that count toward a gig's `applicantCount` (§10.1, §11.5). `rejected`, `withdrawn` and `closed_filled` are not live. Finishing the work is not leaving the process, which is why `completed` is live.
 
 ### 11.3 Status transitions
 
@@ -1265,12 +1402,17 @@ The seven values are §6.7. Four are terminal — `hired`, `rejected`, `withdraw
 | `shortlisted` | `hired` | The business that posted the gig |
 | `shortlisted` | `rejected` | The business that posted the gig, with a reason code (§11.4) |
 | `shortlisted` | `withdrawn` | The applicant |
+| `hired` | `completed` | The business that posted the gig |
 
-Every move not in this table — including any move out of a terminal status, and any move backwards (a `shortlisted` application can never return to `viewed`) — is rejected with `409 INVALID_APPLICATION_TRANSITION`, naming the current and attempted status.
+`hired -> completed` is the **only** outgoing move Hired has, and the only way into `completed`. Hiring still requires shortlisting first: `applied -> hired` and `viewed -> hired` are absent from this table and stay refused, so the chain a seeker sees in the tracker is real.
+
+Every move not in this table — including any move out of a status that has no outgoing row, and any move backwards (a `shortlisted` application can never return to `viewed`) — is rejected with `409 INVALID_APPLICATION_TRANSITION`, naming the current and attempted status.
 
 "The business that posted the gig" is checked by ownership, not just role: a business token belonging to a different business gets `403 FORBIDDEN`, the same as a seeker token. "The applicant" is checked the same way: a seeker token that isn't the one who submitted the application gets `403 FORBIDDEN`. "System only" means no HTTP-authenticated actor at all — a request from a business (or anyone else) attempting `closed_filled` gets `403 FORBIDDEN`; only an internal call with no `actor` succeeds.
 
-`viewedAt` is set the first time `viewed` is reached and never cleared or overwritten by any later transition. `decidedAt` is set the first time any terminal status is reached and never changes afterwards.
+`viewedAt` is set the first time `viewed` is reached and never cleared or overwritten by any later transition. `decidedAt` is set the first time any **decided** status (§11.2) is reached and never changes afterwards — on a hired application that is the moment of hire, and completing it later does not move it. `completedAt` is set the first time `completed` is reached and is likewise never overwritten; completion needs a stamp of its own precisely because `decidedAt` is already occupied by the hire.
+
+Marking an application complete takes **no reason** — `reason` is inspected only when rejecting.
 
 ### 11.4 Rejection reason codes
 
@@ -1289,11 +1431,11 @@ A gig's `applicantCount` (§10.1) is maintained by this component, not by the ma
 - `+1` when an application is created (`applied` is a live status) — called by GL-110's apply endpoint.
 - `-1` the moment an application leaves the live set for `rejected`, `withdrawn` or `closed_filled` — called automatically by `transitionApplicationStatus` in the same operation as the status change, never as a separate call a client can forget to make.
 
-A move that stays within the live set (`applied -> viewed`, `viewed -> shortlisted`, `shortlisted -> hired`) never touches the count.
+The live set is `applied`, `viewed`, `shortlisted`, `hired` and `completed` (§11.2). A move that stays within it (`applied -> viewed`, `viewed -> shortlisted`, `shortlisted -> hired`, `hired -> completed`) never touches the count. `completed` is deliberately in the set: a count that falls the moment the work is finished reads as a bug, and the count should only fall when someone leaves the process.
 
 ### 11.6 Gig summary shape
 
-Returned under `data.applications[].gig` (§11.7) and `data.application.gig` (§11.8, §11.9) — never the full gig (§10.1), just enough to recognise which posting an application belongs to:
+Returned under `data.applications[].gig` (§11.7) and `data.application.gig` (§11.8, §11.9) — never the full gig (§10.1), just enough to recognise which posting an application belongs to. Sprint 2's `data.applications[].gig` on §11.13 (for-my-gigs) uses the same shape; §11.12 (a single gig's applications) omits it, since the caller already supplied the gig id.
 
 ```json
 {
@@ -1444,16 +1586,220 @@ Combined with the permanent unique index (§11.1), withdrawal is one-way: the se
 }
 ```
 
-### 11.11 Error codes for these endpoints
+### 11.11 Mark an application complete — `PATCH /api/applications/:id/complete`
+
+**The business that posted the gig marks the work finished, and nobody else.** Only from `hired` (§11.3). Moves the application to `completed` **through `transitionApplicationStatus`** (§11.3) — no route, controller or service here writes `status` directly, and there is no second path that does, not even for testing.
+
+**Request body:** none. Completion takes no reason (§11.3) — a body sent with the request is ignored, not stored.
+
+**Success — `200 OK`** — same shape as §11.9, with `status: "completed"` and `completedAt` now set. `decidedAt` keeps the moment of hire and does not move (§11.3). The gig's applicant count is **unchanged**: `completed` is a live status (§11.2, §11.5), because finishing the work is not leaving the process.
+
+**Failure — `401 Unauthorized`** (guest) — as in §8.6.
+
+**Failure — `403 Forbidden`** — `FORBIDDEN`. A seeker token, **including the applicant's own**, and a business token belonging to a business that did not post the gig. Ownership is checked exactly as every other business transition checks it (§11.3), not by role alone.
+
+**Failure — `404 Not Found`** (no application with that id, or a malformed id) — as in §11.9.
+
+**Failure — `409 Conflict`** (the application is at any status other than `hired`):
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "INVALID_APPLICATION_TRANSITION",
+    "message": "Cannot move an application from \"shortlisted\" to \"completed\"."
+  }
+}
+```
+
+Calling it twice returns this same `409` the second time, naming `completed` as the current status — `completed` has no outgoing row in §11.3, and `completedAt` is not moved by the refused call.
+
+**A known limitation, recorded rather than solved.** Because only the business can mark completion, a business that never marks it leaves both sides unable to review once GL-223 moves the review gate to `completed`. Nobody gains an advantage — each loses their review — but the seeker is the one who did the work. Accepted for Sprint 2 and carried in `ROADMAP.md`; disputes are the Sprint 4 admin story.
+
+### 11.12 List applications for a gig — `GET /api/gigs/:gigId/applications`
+
+Only the business that posted the gig (GL-252). Nested under the gig it belongs to — declared in `server/src/routes/gig.routes.js`, not `application.routes.js`, unlike every other endpoint in this section.
+
+**Request query — optional `status`** — one or more values from §6.7, as repeated params (`status=viewed&status=shortlisted`) or a comma-separated list (`status=viewed,shortlisted`). An unrecognised value is `400 VALIDATION_ERROR`. Omitted entirely, applications at every status are returned.
+
+**Success — `200 OK`**
+
+```json
+{
+  "success": true,
+  "data": {
+    "applications": [
+      { /* §11.1, no `gig` field — the caller already knows which gig this is */ }
+    ]
+  }
+}
+```
+
+Every application to this gig, newest first (`createdAt` descending, `_id` descending tiebreak). Each row is the full §11.1 shape — `profileSnapshot`, `status`, `appliedAt`, `viewedAt`, `decidedAt`, and the rejection reason/note once decided — **never the applicant's live profile**: an application records what was true when it was submitted.
+
+**Failure — `401 Unauthorized`** (guest) — as in §8.6.
+
+**Failure — `404 Not Found`** (the gig doesn't exist, or the id is malformed) — checked **before** ownership, matching `findOwnedGig` (§10.9):
+
+```json
+{ "success": false, "error": { "code": "NOT_FOUND", "message": "Gig not found." } }
+```
+
+**Failure — `403 Forbidden`** (a seeker token, or a business token belonging to a different business):
+
+```json
+{
+  "success": false,
+  "error": { "code": "FORBIDDEN", "message": "You do not have permission to perform this action." }
+}
+```
+
+Existence is always checked first, so a non-owning business gets the same `403` whether the gig belongs to someone else or the caller mistyped an id that exists — the ordering, not the response body, is what stops a refusal being used to probe which gig ids exist.
+
+**Failure — `400 Bad Request`** (an unrecognised `status` value):
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Request validation failed.",
+    "errors": [{ "field": "status", "message": "\"unknown\" is not a valid application status" }]
+  }
+}
+```
+
+### 11.13 List applications across my gigs — `GET /api/applications/for-my-gigs`
+
+Business only (GL-252). Every application across every gig the caller has posted, in one list — the unfiltered source GL-220's Applicants tab and GL-223's business-side completed list both read from.
+
+**Request query — optional `status`** — same rules as §11.12.
+
+**Success — `200 OK`**
+
+```json
+{
+  "success": true,
+  "data": {
+    "applications": [
+      { /* §11.1, `gig` replaced with the §11.6 summary so the caller can tell which posting each row belongs to */ }
+    ]
+  }
+}
+```
+
+Newest first (`createdAt` descending, `_id` descending tiebreak). Found by the caller's own gigs (`postedBy`), then applications by gig `$in` — a business id is never stored on the application itself, so the two can't fall out of step. No pagination, matching `GET /api/gigs/mine` (§10.6) and `GET /api/applications/mine` (§11.8): a business's own applicant list is expected to return in full.
+
+**Failure — `401 Unauthorized`** (guest) — as in §8.6.
+
+**Failure — `403 Forbidden`** (a seeker token) — as in §11.12.
+
+**Failure — `400 Bad Request`** (an unrecognised `status` value) — as in §11.12.
+
+### 11.14 View an application — `PATCH /api/applications/:id/view`
+
+Only the business that posted the gig (GL-253). Moves the application from `applied` to `viewed` (§11.3), **through `transitionApplicationStatus`** — no route, controller or service here writes `status` directly.
+
+**Request body:** none.
+
+**Success — `200 OK`** — same shape as §11.9, with `status: "viewed"` and `viewedAt` now set.
+
+**Failure — `401 Unauthorized`** (guest) — as in §8.6.
+
+**Failure — `403 Forbidden`** (a seeker token, or a business token belonging to a different business) — `FORBIDDEN`, as in §11.9.
+
+**Failure — `404 Not Found`** (no application with that id, or a malformed id) — as in §11.9.
+
+**Failure — `409 Conflict`** (the application isn't `applied` — most commonly already `viewed` or later):
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "INVALID_APPLICATION_TRANSITION",
+    "message": "Cannot move an application from \"viewed\" to \"viewed\"."
+  }
+}
+```
+
+GL-220 calls this every time a business opens an applicant, including a second time — **the client is expected to swallow this `409` quietly**; opening an applicant twice is not an error a business should ever see.
+
+### 11.15 Shortlist an application — `PATCH /api/applications/:id/shortlist`
+
+Only the business that posted the gig (GL-253). Moves the application from `viewed` to `shortlisted` (§11.3), through `transitionApplicationStatus`.
+
+**Request body:** none.
+
+**Success — `200 OK`** — same shape as §11.9, with `status: "shortlisted"`.
+
+**Failure — `401`, `403`, `404`** — as in §11.14.
+
+**Failure — `409 Conflict`** (the application isn't `viewed` — most commonly still `applied`, naming both statuses) — as in §11.14.
+
+### 11.16 Hire an application — `PATCH /api/applications/:id/hire`
+
+Only the business that posted the gig (GL-253). Moves the application from `shortlisted` to `hired` (§11.3), through `transitionApplicationStatus`. `applied -> hired` and `viewed -> hired` are both absent from §11.3's table and stay refused — hiring always requires shortlisting first.
+
+**Request body:** none.
+
+**Success — `200 OK`** — same shape as §11.9, with `status: "hired"` and `decidedAt` now set.
+
+**Failure — `401`, `403`, `404`** — as in §11.14.
+
+**Failure — `409 Conflict`** (the application isn't `shortlisted`) — as in §11.14.
+
+### 11.17 Reject an application — `PATCH /api/applications/:id/reject`
+
+Only the business that posted the gig (GL-253). Moves the application from `applied`, `viewed` or `shortlisted` to `rejected` (§11.3), through `transitionApplicationStatus`.
+
+**Request body**
+
+```json
+{
+  "reasonCode": "schedule_mismatch",
+  "note": "We ended up needing someone for Tuesday mornings specifically."
+}
+```
+
+| Field | Rule |
+|---|---|
+| `reasonCode` | Required. One of the seven business-selectable codes in §6.8; `positions_filled` and any value outside the eight are refused (§11.4). |
+| `note` | Optional, up to 300 characters, stored on `rejectionNote` exactly as written — not trimmed, not sanitised (§11.1), since the applicant reads it verbatim. |
+
+**Success — `200 OK`** — same shape as §11.9, with `status: "rejected"`, `decidedAt` now set, and `rejectionReasonCode`/`rejectionNote` (once given) present.
+
+**Failure — `401 Unauthorized`** (guest) — as in §8.6.
+
+**Failure — `403 Forbidden`** (a seeker token, or a business token belonging to a different business) — as in §11.9.
+
+**Failure — `404 Not Found`** (no application with that id, or a malformed id) — as in §11.9.
+
+**Failure — `409 Conflict`** (the application isn't `applied`, `viewed` or `shortlisted` — most commonly already `rejected`, `withdrawn` or `hired`) — as in §11.14.
+
+**Failure — `400 Bad Request`** (any of the four rules in §11.4 — a missing `reasonCode`, `positions_filled` or a value outside the eight codes, or a Skill Trial code on a gig that carried no trial):
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "A rejection reason code is required.",
+    "errors": [{ "field": "reasonCode", "message": "reasonCode is required when rejecting an application" }]
+  }
+}
+```
+
+### 11.18 Error codes for these endpoints
 
 | Status | Code | When |
 |---|---|---|
+| `400` | `VALIDATION_ERROR` | §11.12/§11.13 for an unrecognised `status` filter value. §11.17 for a missing, non-selectable, unrecognised, or Skill-Trial-without-a-trial rejection reason code (§11.4). |
 | `401` | `AUTH_HEADER_MISSING` / `AUTH_HEADER_MALFORMED` / `TOKEN_EXPIRED` / `TOKEN_INVALID` | No/malformed/expired/invalid token — every endpoint in this section requires one. |
-| `403` | `FORBIDDEN` | A business token on §11.7 or §11.8; a seeker or business token that isn't a party to the application on §11.9; a business token or the wrong seeker on §11.10. |
-| `404` | `NOT_FOUND` | §11.7 for a gig that doesn't exist or has a malformed id. §11.9/§11.10 for an application that doesn't exist or has a malformed id, checked before the party/ownership check above. |
+| `403` | `FORBIDDEN` | A business token on §11.7 or §11.8; a seeker or business token that isn't a party to the application on §11.9; a business token or the wrong seeker on §11.10; any seeker token, or a business that didn't post the gig, on §11.11, §11.12, §11.13, §11.14, §11.15, §11.16 or §11.17. |
+| `404` | `NOT_FOUND` | §11.7 or §11.12 for a gig that doesn't exist or has a malformed id. §11.9/§11.10/§11.11/§11.14/§11.15/§11.16/§11.17 for an application that doesn't exist or has a malformed id, checked before the party/ownership check above. |
 | `409` | `GIG_CLOSED` | §11.7 for a gig that exists but isn't `open`. |
 | `409` | `APPLICATION_ALREADY_EXISTS` | §11.7 for a `(gig, applicant)` pair that already has an application, live, withdrawn or rejected. |
-| `409` | `INVALID_APPLICATION_TRANSITION` | §11.10 for an application that isn't `applied`, `viewed` or `shortlisted` — most commonly `hired` or already `withdrawn`. |
+| `409` | `INVALID_APPLICATION_TRANSITION` | §11.10 for an application that isn't `applied`, `viewed` or `shortlisted`. §11.11 for an application that isn't `hired`. §11.14 for an application that isn't `applied`. §11.15 for an application that isn't `viewed`. §11.16 for an application that isn't `shortlisted`. §11.17 for an application that isn't `applied`, `viewed` or `shortlisted`. |
 
 ---
 

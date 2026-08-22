@@ -72,6 +72,12 @@ module.exports = {
         // named token of its own upstream. Added here so TextInput's
         // placeholder can still be styled by class name instead of a raw hex.
         placeholder: '#A3A4AE',
+
+        // GL-229 — the mockup's `.sbar-med` (medium password strength bar)
+        // is a literal #E8A33D, not one of the `:root` custom properties;
+        // its label text reuses `--warning-text` (already `warning-ink`
+        // below), but the bar fill itself has no named token upstream.
+        'strength-medium': '#E8A33D',
       },
       spacing: {
         1: '0.25rem',
