@@ -29,10 +29,20 @@
           "android": {
             "datePicker": {
               "colorAccent": {
-                "light": "#FF4A1C"
+                "light": "#FF4A1C",
+                "dark": "#FF4A1C"
               },
               "colorControlActivated": {
-                "light": "#FF4A1C"
+                "light": "#FF4A1C",
+                "dark": "#FF4A1C"
+              },
+              "textColorPrimary": {
+                "light": "#101114",
+                "dark": "#101114"
+              },
+              "windowBackground": {
+                "light": "#FFFFFF",
+                "dark": "#FFFFFF"
               }
             }
           }
