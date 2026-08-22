@@ -202,10 +202,63 @@ async function getCurrentUser({ accessToken }) {
   return { user: toPublicUser(user) };
 }
 
+// GL-230's deliberate call: stubbed, but only meaningfully testable for the
+// single running session. Every Map here is per-process, in-memory state -
+// a second "device" in dev is a second Expo process with its own Maps, so
+// the cross-device revocation this endpoint exists for can never be
+// observed against the mock, however this function is written. It's still
+// worth stubbing so the default (mock) dev config exercises the in-progress
+// state, field-level error, and success paths instead of throwing on
+// `authApi.changePassword is not a function`. Verifying GL-228's actual
+// revoke-on-change-password behaviour needs EXPO_PUBLIC_USE_MOCK=false
+// against the real server (see docs/api-contract.md §5.6).
+async function changePassword({ accessToken, currentPassword, newPassword }) {
+  await delay();
+
+  const userId = requireValidAccessToken(accessToken);
+  const user = users.find((candidate) => candidate.id === userId);
+  if (!user) {
+    throw apiError(401, 'UNAUTHENTICATED', 'You must be logged in to do this.');
+  }
+
+  if (user.password !== currentPassword) {
+    throw apiError(401, 'INVALID_CURRENT_PASSWORD', 'Current password is incorrect.');
+  }
+
+  if (!newPassword || newPassword.length < 8) {
+    throw apiError(400, 'VALIDATION_ERROR', 'Request validation failed.', [
+      { field: 'newPassword', message: 'must be at least 8 characters' },
+    ]);
+  }
+
+  if (newPassword === currentPassword) {
+    throw apiError(
+      400,
+      'PASSWORD_UNCHANGED',
+      'New password must be different from your current password.',
+    );
+  }
+
+  user.password = newPassword;
+
+  // Mirrors the real endpoint (GL-228): revoke every token this user holds,
+  // then issue a fresh pair - within this one process's Maps only.
+  for (const [token, record] of refreshTokens.entries()) {
+    if (record.userId === user.id) refreshTokens.delete(token);
+  }
+  for (const [token, record] of accessTokens.entries()) {
+    if (record.userId === user.id) accessTokens.delete(token);
+  }
+
+  const session = issueSession(user);
+  return { accessToken: session.accessToken, refreshToken: session.refreshToken };
+}
+
 export default {
   register,
   login,
   refresh,
   logout,
   getCurrentUser,
+  changePassword,
 };

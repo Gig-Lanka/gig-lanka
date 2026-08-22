@@ -84,7 +84,8 @@ export function AuthProvider({ children }) {
   }, []);
 
   const changePassword = useCallback(async ({ currentPassword, newPassword }) => {
-    const result = await authApi.changePassword({ currentPassword, newPassword });
+    const { accessToken } = await secureStorage.getTokens();
+    const result = await authApi.changePassword({ accessToken, currentPassword, newPassword });
     await secureStorage.setTokens({
       accessToken: result.accessToken,
       refreshToken: result.refreshToken,

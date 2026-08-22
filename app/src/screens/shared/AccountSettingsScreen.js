@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 
 import { authApi } from '../../api';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import EmptyState from '../../components/ui/EmptyState';
 import Loader from '../../components/ui/Loader';
+import Notice from '../../components/ui/Notice';
 import ScreenHeader from '../../components/ui/ScreenHeader';
 import SectionLabel from '../../components/ui/SectionLabel';
 import useAuth from '../../hooks/useAuth';
@@ -46,6 +47,7 @@ function NavRow({ label, onPress }) {
 
 export default function AccountSettingsScreen() {
   const navigation = useNavigation();
+  const route = useRoute();
   const { user, logout } = useAuth();
   const isSeeker = user?.role === 'seeker';
 
@@ -57,6 +59,32 @@ export default function AccountSettingsScreen() {
   const [status, setStatus] = useState(user?.createdAt ? STATUS.READY : STATUS.LOADING);
   const [reloadToken, setReloadToken] = useState(0);
   const [logoutConfirmVisible, setLogoutConfirmVisible] = useState(false);
+
+  // ChangePasswordScreen (GL-230) navigates back here with this param
+  // instead of a plain goBack() so there's somewhere to hand the
+  // confirmation. Latched into state during render (same "adjust state from
+  // a prop/param change" pattern RootNavigator.js uses) rather than in an
+  // effect, so it stays true even once the effect below clears the param -
+  // otherwise the notice would flash and vanish on the very next render.
+  const [passwordChangedNotice, setPasswordChangedNotice] = useState(false);
+  const [seenPasswordChangedParam, setSeenPasswordChangedParam] = useState(
+    route.params?.passwordChanged,
+  );
+  if (route.params?.passwordChanged !== seenPasswordChangedParam) {
+    setSeenPasswordChangedParam(route.params?.passwordChanged);
+    if (route.params?.passwordChanged) {
+      setPasswordChangedNotice(true);
+    }
+  }
+
+  // Clearing the param is a real sync-with-navigation's-own-state effect
+  // (unlike the local notice flag above), so it stays here rather than
+  // moving into the render body too.
+  useEffect(() => {
+    if (route.params?.passwordChanged) {
+      navigation.setParams({ passwordChanged: undefined });
+    }
+  }, [route.params?.passwordChanged, navigation]);
 
   useEffect(() => {
     if (user?.createdAt) return undefined;
@@ -105,6 +133,10 @@ export default function AccountSettingsScreen() {
       <ScreenHeader title="Account" small onBack={() => navigation.goBack()} />
 
       <ScrollView className="flex-1" contentContainerClassName="px-[22px] pb-6">
+        {passwordChangedNotice ? (
+          <Notice className="mb-4">Your password was changed.</Notice>
+        ) : null}
+
         <SectionLabel>Account details</SectionLabel>
         <View className="mt-2">
           <FactRow label="Email" value={user?.email} />
