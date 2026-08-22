@@ -41,14 +41,14 @@ const registerSeeker = async (email) => {
   return { accessToken: res.body.data.accessToken, userId: res.body.data.user.id };
 };
 
-const createHiredApplication = async (businessId, seekerId) => {
+const createCompletedApplication = async (businessId, seekerId) => {
   const gig = await Gig.create({ ...validGigPayload, postedBy: businessId });
 
   return Application.create({
     gig: gig._id,
     applicant: seekerId,
     profileSnapshot: buildSnapshot(),
-    status: 'hired',
+    status: 'completed',
   });
 };
 
@@ -59,7 +59,7 @@ const createHiredApplication = async (businessId, seekerId) => {
 const seedHire = async (businessEmail, seekerEmail) => {
   const business = await registerBusiness(businessEmail);
   const seeker = await registerSeeker(seekerEmail);
-  const application = await createHiredApplication(business.userId, seeker.userId);
+  const application = await createCompletedApplication(business.userId, seeker.userId);
 
   return { business, seeker, application };
 };
@@ -130,7 +130,7 @@ describe('rating aggregate computed from reviews', () => {
     const ratings = [4, 4, 4, 5];
     for (const [index, rating] of ratings.entries()) {
       const seeker = await registerSeeker(`rounding-seeker-${index}@example.com`);
-      const application = await createHiredApplication(business.userId, seeker.userId);
+      const application = await createCompletedApplication(business.userId, seeker.userId);
 
       const res = await postReview(application.id, seeker.accessToken, { rating });
       expect(res.status).toBe(201);
@@ -151,7 +151,7 @@ describe('rating aggregate computed from reviews', () => {
     const ratings = [1, 2, 3, 4, 5];
     for (const [index, rating] of ratings.entries()) {
       const seeker = await registerSeeker(`distribution-seeker-${index}@example.com`);
-      const application = await createHiredApplication(business.userId, seeker.userId);
+      const application = await createCompletedApplication(business.userId, seeker.userId);
 
       const res = await postReview(application.id, seeker.accessToken, { rating });
       expect(res.status).toBe(201);
@@ -182,7 +182,7 @@ describe('rating aggregate computed from reviews', () => {
 
     for (const [index, categories] of reviewCategories.entries()) {
       const seeker = await registerSeeker(`tie-break-seeker-${index}@example.com`);
-      const application = await createHiredApplication(business.userId, seeker.userId);
+      const application = await createCompletedApplication(business.userId, seeker.userId);
 
       const res = await postReview(application.id, seeker.accessToken, { rating: 4, categories });
       expect(res.status).toBe(201);
