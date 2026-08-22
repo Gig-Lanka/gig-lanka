@@ -250,7 +250,7 @@ export default function BrowseGigsScreen() {
   const handleCloseFilters = useCallback(() => setFiltersVisible(false), []);
 
   return (
-    <Screen>
+    <Screen edges={['top']}>
       <ScreenHeader title="Find a gig" />
 
       <TextInput
