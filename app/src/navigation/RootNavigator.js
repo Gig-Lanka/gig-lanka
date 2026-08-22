@@ -19,6 +19,7 @@ import ExperienceFormScreen from '../screens/seeker/ExperienceFormScreen';
 import ManageEducationScreen from '../screens/seeker/ManageEducationScreen';
 import ManageExperienceScreen from '../screens/seeker/ManageExperienceScreen';
 import PostGigScreen from '../screens/business/PostGigScreen';
+import CompletedGigsScreen from '../screens/shared/CompletedGigsScreen';
 import GigDetailScreen from '../screens/shared/GigDetailScreen';
 import RateFlowNavigator from '../screens/shared/rate/RateFlowNavigator';
 import PublicProfileScreen from '../screens/shared/PublicProfileScreen';
@@ -40,6 +41,9 @@ function AppStack({ role }) {
       {/* Either role can be the one rating (GL-203), so this is registered
           once here rather than duplicated under both branches below. */}
       <Stack.Screen name="RateFlow" component={RateFlowNavigator} />
+      {/* Both roles read it (GL-271) - a seeker from My Applications, a
+          business from My Gigs - so it's registered once here too. */}
+      <Stack.Screen name="CompletedGigs" component={CompletedGigsScreen} />
       <Stack.Screen name="PublicProfile" component={PublicProfileScreen} />
       {role === 'business' ? (
         <>
