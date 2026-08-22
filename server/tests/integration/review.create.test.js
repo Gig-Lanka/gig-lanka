@@ -96,10 +96,10 @@ describe('POST /api/applications/:applicationId/reviews', () => {
     expect(res.status).toBe(403);
   });
 
-  it('returns 409 naming the gate when the application has not reached Hired', async () => {
-    const business = await registerBusiness('not-hired-business@example.com');
-    const seeker = await registerSeeker('not-hired-seeker@example.com');
-    const { application } = await createApplication(business.userId, seeker.userId, 'shortlisted');
+  it('returns 409 naming the gate when the application has not reached Completed', async () => {
+    const business = await registerBusiness('not-completed-business@example.com');
+    const seeker = await registerSeeker('not-completed-seeker@example.com');
+    const { application } = await createApplication(business.userId, seeker.userId, 'hired');
 
     const res = await request(app)
       .post(`/api/applications/${application.id}/reviews`)
@@ -107,14 +107,14 @@ describe('POST /api/applications/:applicationId/reviews', () => {
       .send(validReviewPayload());
 
     expect(res.status).toBe(409);
-    expect(res.body.error.code).toBe('APPLICATION_NOT_HIRED');
-    expect(res.body.error.message.toLowerCase()).toContain('hire');
+    expect(res.body.error.code).toBe('APPLICATION_NOT_COMPLETED');
+    expect(res.body.error.message.toLowerCase()).toContain('completed');
   });
 
   it('creates a seeker-authored review of the business, deriving direction/author/subject server-side', async () => {
     const business = await registerBusiness('seeker-review-business@example.com');
     const seeker = await registerSeeker('seeker-review-seeker@example.com');
-    const { application } = await createApplication(business.userId, seeker.userId, 'hired');
+    const { application } = await createApplication(business.userId, seeker.userId, 'completed');
 
     const res = await request(app)
       .post(`/api/applications/${application.id}/reviews`)
