@@ -1,6 +1,6 @@
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { FlatList, Pressable } from 'react-native';
+import { FlatList, Pressable, Text } from 'react-native';
 
 import applicationApi from '../../api/applicationApi';
 import ApplicationCard from '../../components/application/ApplicationCard';
@@ -82,13 +82,20 @@ export default function MyApplicationsScreen() {
 
   const goBrowse = () => navigation.navigate('Browse');
 
+  // GL-272 - the seeker-side entry point into the rating flow (GL-271).
+  const completedAction = (
+    <Pressable onPress={() => navigation.navigate('CompletedGigs')}>
+      <Text className="text-[14px] font-bold text-signal">Completed</Text>
+    </Pressable>
+  );
+
   if (loading) {
     return <Loader fullScreen />;
   }
 
   return (
     <Screen>
-      <ScreenHeader title="Applications" />
+      <ScreenHeader title="Applications" rightSlot={completedAction} />
 
       {error ? (
         <EmptyState message={error} actionLabel="Retry" onAction={handleRetry} />
