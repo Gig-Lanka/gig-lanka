@@ -112,7 +112,7 @@ const assertCategoriesMatchDirection = (categories, direction) => {
 };
 
 // The single gate that makes a rating worth reading: a review can only be
-// created against an application that reached Hired, by one of the two
+// created against an application that reached Completed, by one of the two
 // people who were actually party to it. Direction, author and subject are
 // all derived here from the application and the caller — never accepted
 // from the request body — so nobody can attach a review to a gig they
@@ -127,7 +127,7 @@ export const createReview = async (applicationId, actor, body) => {
     throw new ApiError(403, 'FORBIDDEN', 'You do not have permission to perform this action.');
   }
 
-  if (application.status !== 'hired') {
+  if (application.status !== 'completed') {
     throw new ApiError(
       409,
       'APPLICATION_NOT_HIRED',
