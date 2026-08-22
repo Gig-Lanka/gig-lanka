@@ -136,7 +136,7 @@ describe('GET /api/users/:userId/reviews', () => {
     const caller = await registerSeeker('page-caller@example.com');
 
     for (let i = 0; i < 12; i += 1) {
-      const application = await createHiredApplication(business.userId, seeker.userId);
+      const application = await createCompletedApplication(business.userId, seeker.userId);
       await Review.create({
         application: application._id,
         author: business.userId,
@@ -170,7 +170,7 @@ describe('GET /api/users/:userId/reviews', () => {
     const business = await registerBusiness('deactivated-business@example.com');
     const seeker = await registerSeeker('deactivated-seeker@example.com');
     const caller = await registerSeeker('deactivated-caller@example.com');
-    const application = await createHiredApplication(business.userId, seeker.userId);
+    const application = await createCompletedApplication(business.userId, seeker.userId);
 
     await Review.create({
       application: application._id,
