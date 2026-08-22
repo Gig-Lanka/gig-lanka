@@ -11,6 +11,7 @@ import ApplyScreen from '../screens/seeker/ApplyScreen';
 import AccountSettingsScreen from '../screens/shared/AccountSettingsScreen';
 import ApplicantDetailScreen from '../screens/business/ApplicantDetailScreen';
 import ApplicantsScreen from '../screens/business/ApplicantsScreen';
+import ChangePasswordScreen from '../screens/shared/ChangePasswordScreen';
 import EditGigScreen from '../screens/business/EditGigScreen';
 import EditProfileScreen from '../screens/shared/EditProfileScreen';
 import EducationFormScreen from '../screens/seeker/EducationFormScreen';
@@ -33,6 +34,7 @@ function AppStack({ role }) {
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="Main" component={RoleTabs} />
       <Stack.Screen name="AccountSettings" component={AccountSettingsScreen} />
+      <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} />
       <Stack.Screen name="EditProfile" component={EditProfileScreen} />
       <Stack.Screen name="GigDetail" component={GigDetailScreen} />
       {/* Either role can be the one rating (GL-203), so this is registered

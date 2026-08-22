@@ -9,6 +9,31 @@ export function isValidPassword(password) {
   return typeof password === 'string' && password.length >= MIN_PASSWORD_LENGTH;
 }
 
+// Presentational only (GL-229/GL-211) - the server rule is length, full
+// stop, so this never feeds back into isValidPassword or any request body.
+// Labels say what to do, not just what's wrong, and the three levels match
+// the three bars drawn in docs/mockups/gig-lanka-user-profile-v3.html
+// (#change-password): 1 filled = weak, 2 = medium, 3 = strong.
+export function getPasswordStrength(password) {
+  const value = password || '';
+  if (!value) return null;
+
+  if (value.length < MIN_PASSWORD_LENGTH) {
+    return {
+      level: 'weak',
+      filledBars: 1,
+      label: `Weak — use at least ${MIN_PASSWORD_LENGTH} characters`,
+    };
+  }
+
+  const hasNumberOrSymbol = /[0-9]/.test(value) || /[^A-Za-z0-9]/.test(value);
+  if (!hasNumberOrSymbol) {
+    return { level: 'medium', filledBars: 2, label: 'Medium — add a number or symbol' };
+  }
+
+  return { level: 'strong', filledBars: 3, label: 'Strong password' };
+}
+
 export function validateSignUpForm({ email, password, confirmPassword }) {
   const errors = {};
 
