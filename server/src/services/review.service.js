@@ -130,8 +130,8 @@ export const createReview = async (applicationId, actor, body) => {
   if (application.status !== 'completed') {
     throw new ApiError(
       409,
-      'APPLICATION_NOT_HIRED',
-      'A review requires a completed hire — this application has not reached Hired.',
+      'APPLICATION_NOT_COMPLETED',
+      'A review requires a completed gig — this application has not reached Completed.',
     );
   }
 
