@@ -23,6 +23,19 @@ async function submitReview(applicationId, { rating, categories, text }) {
   return response.data.data;
 }
 
+/**
+ * `GET /api/reviews/mine` (§12) - the reviews the signed-in caller has
+ * written, each carrying its `application` id. Lets a screen answer "have I
+ * already rated this application?" in one request instead of one per card;
+ * a review the other party wrote back never appears here, since this is
+ * filtered on authorship, not on the application.
+ */
+async function getMyReviews() {
+  const response = await client.get('/reviews/mine');
+  return response.data.data;
+}
+
 export default {
   submitReview,
+  getMyReviews,
 };
