@@ -266,7 +266,12 @@ export default function BrowseGigsScreen() {
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        className="mb-4 flex-grow-0"
+        // ScrollView defaults to flexShrink: 1 (see RN's own
+        // baseHorizontal style) - without pinning it to 0, this row is
+        // still compressible by its sibling FlatList competing for the
+        // same vertical space, which is what was cutting the chips off
+        // (GL-280) even though flex-grow-0 alone looked like enough.
+        className="mb-4 flex-shrink-0 flex-grow-0"
         contentContainerClassName="items-center gap-2 pr-4"
       >
         <Pressable
