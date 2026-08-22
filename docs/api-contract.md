@@ -1785,14 +1785,14 @@ Either party to the application — the applicant or the business that posted th
 }
 ```
 
-**Failure — `409 Conflict`** (application exists, caller is a party, but its status isn't `hired`):
+**Failure — `409 Conflict`** (application exists, caller is a party, but its status isn't `completed`):
 
 ```json
 {
   "success": false,
   "error": {
-    "code": "APPLICATION_NOT_HIRED",
-    "message": "A review requires a completed hire — this application has not reached Hired."
+    "code": "APPLICATION_NOT_COMPLETED",
+    "message": "A review requires a completed gig — this application has not reached Completed."
   }
 }
 ```
