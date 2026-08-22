@@ -23,7 +23,21 @@
     "plugins": [
       "expo-secure-store",
       "expo-font",
-      "@react-native-community/datetimepicker",
+      [
+        "@react-native-community/datetimepicker",
+        {
+          "android": {
+            "datePicker": {
+              "colorAccent": {
+                "light": "#FF4A1C"
+              },
+              "colorControlActivated": {
+                "light": "#FF4A1C"
+              }
+            }
+          }
+        }
+      ],
       [
         "expo-image-picker",
         {
