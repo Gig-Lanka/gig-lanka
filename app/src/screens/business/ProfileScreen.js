@@ -137,7 +137,7 @@ export default function ProfileScreen() {
         className="absolute left-0 right-0 top-0"
       >
         <SafeAreaView edges={['top']} className="bg-paper">
-          <HeroStickyBar title={name} visible />
+          <HeroStickyBar title={name} photo={photo} avatarSquare visible />
         </SafeAreaView>
       </Animated.View>
     </View>
