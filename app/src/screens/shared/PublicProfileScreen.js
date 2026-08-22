@@ -119,7 +119,20 @@ export default function PublicProfileScreen() {
       <Animated.ScrollView
         onScroll={hero.onScroll}
         scrollEventThrottle={hero.scrollEventThrottle}
-        contentContainerClassName="grow"
+        // Rubber-band overscroll past the bottom of the (now full-height)
+        // HeroSheet would otherwise expose this View's own bg-ink for a
+        // moment - bounce is only useful here for the pull-down-at-top
+        // gesture over the hero, so it's turned off rather than partially
+        // reworked, since RN has no per-edge bounce control.
+        bounces={false}
+        overScrollMode="never"
+        // NativeWind's cssInterop only wires up contentContainerClassName
+        // on the plain ScrollView export, not Animated.ScrollView (a
+        // distinct component reference) - "grow" was silently inert here,
+        // so HeroSheet's flex-1 had nothing to grow into and short
+        // profiles showed bare bg-ink below the sheet (GL-282). The raw
+        // style prop always works regardless of that registration gap.
+        contentContainerStyle={{ flexGrow: 1 }}
       >
         <View onLayout={hero.onHeroLayout}>
           <HeroHeader onBack={handleBack}>
@@ -142,8 +155,6 @@ export default function PublicProfileScreen() {
         </View>
 
         <HeroSheet className="px-[22px] pb-8 pt-[22px]">
-          <RatingSummary rating={ratingSummary} className="mb-5" />
-
           {bio ? <Text className="text-desc leading-[21px] text-muted">{bio}</Text> : null}
 
           {/*
@@ -155,14 +166,18 @@ export default function PublicProfileScreen() {
           */}
 
           {isBusinessSubject ? (
-            category ? (
-              <View className="mt-5">
-                <ProfileSectionHeader title="Category" />
-                <View className="mt-[10px]">
-                  <Chip size="sm">{category}</Chip>
+            <>
+              {category ? (
+                <View className="mt-5">
+                  <ProfileSectionHeader title="Category" />
+                  <View className="mt-[10px]">
+                    <Chip size="sm">{category}</Chip>
+                  </View>
                 </View>
-              </View>
-            ) : null
+              ) : null}
+
+              <RatingSummary rating={ratingSummary} className="mt-5" />
+            </>
           ) : (
             <>
               {skills.length > 0 ? (
@@ -205,6 +220,8 @@ export default function PublicProfileScreen() {
                   </View>
                 </View>
               ) : null}
+
+              <RatingSummary rating={ratingSummary} className="mt-5" />
             </>
           )}
         </HeroSheet>
