@@ -14,6 +14,8 @@ const CATEGORIES_BY_DIRECTION = {
 };
 
 const PAGE_SIZE = 10;
+const RATING_WINDOW_DAYS = 14;
+const RATING_WINDOW_MS = RATING_WINDOW_DAYS * 24 * 60 * 60 * 1000;
 const STAR_VALUES = [1, 2, 3, 4, 5];
 const TOP_CATEGORIES_LIMIT = 3;
 const zeroedDistribution = () =>
@@ -132,6 +134,20 @@ export const createReview = async (applicationId, actor, body) => {
       409,
       'APPLICATION_NOT_COMPLETED',
       'A review requires a completed gig — this application has not reached Completed.',
+    );
+  }
+
+  // A window creates urgency to review, and review volume is what the whole
+  // reputation system runs on — a rating nobody gets round to writing is a
+  // profile nobody can trust. Measured from completedAt, never decidedAt:
+  // decidedAt holds the moment of hire, not the moment the work finished.
+  // Checked after the status gate above, so an application that never
+  // completed is told that, not that its (nonexistent) window has closed.
+  if (Date.now() - application.completedAt.getTime() > RATING_WINDOW_MS) {
+    throw new ApiError(
+      409,
+      'REVIEW_WINDOW_EXPIRED',
+      `The ${RATING_WINDOW_DAYS}-day window to review this gig has closed.`,
     );
   }
 

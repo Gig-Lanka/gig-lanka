@@ -51,6 +51,10 @@ const createApplication = async (businessId, seekerId, status, overrides = {}) =
     applicant: seekerId,
     profileSnapshot: buildSnapshot(),
     status,
+    // A real 'completed' application always carries completedAt, stamped by
+    // the transition service (GL-218) this fixture bypasses — set it here so
+    // a fresh completed fixture starts inside the 14-day window by default.
+    ...(status === 'completed' ? { completedAt: new Date() } : {}),
     ...overrides,
   });
 
@@ -100,7 +104,12 @@ describe('POST /api/applications/:applicationId/reviews', () => {
   it('returns 409 naming the gate when the application has not reached Completed', async () => {
     const business = await registerBusiness('not-completed-business@example.com');
     const seeker = await registerSeeker('not-completed-seeker@example.com');
-    const { application } = await createApplication(business.userId, seeker.userId, 'hired');
+    // Backdated completedAt on a non-completed application proves the status
+    // gate wins over the window check even when a window-expiry timestamp is
+    // present — status is checked first, so this must not 409 as the window.
+    const { application } = await createApplication(business.userId, seeker.userId, 'hired', {
+      completedAt: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000),
+    });
 
     const res = await request(app)
       .post(`/api/applications/${application.id}/reviews`)
@@ -110,6 +119,38 @@ describe('POST /api/applications/:applicationId/reviews', () => {
     expect(res.status).toBe(409);
     expect(res.body.error.code).toBe('APPLICATION_NOT_COMPLETED');
     expect(res.body.error.message.toLowerCase()).toContain('complete');
+  });
+
+  it('creates a review when submitted inside the 14-day window', async () => {
+    const business = await registerBusiness('inside-window-business@example.com');
+    const seeker = await registerSeeker('inside-window-seeker@example.com');
+    const { application } = await createApplication(business.userId, seeker.userId, 'completed', {
+      completedAt: new Date(Date.now() - 13 * 24 * 60 * 60 * 1000),
+    });
+
+    const res = await request(app)
+      .post(`/api/applications/${application.id}/reviews`)
+      .set('Authorization', `Bearer ${seeker.accessToken}`)
+      .send(validReviewPayload());
+
+    expect(res.status).toBe(201);
+  });
+
+  it('returns REVIEW_WINDOW_EXPIRED, not APPLICATION_NOT_COMPLETED, more than 14 days after completedAt', async () => {
+    const business = await registerBusiness('expired-window-business@example.com');
+    const seeker = await registerSeeker('expired-window-seeker@example.com');
+    const { application } = await createApplication(business.userId, seeker.userId, 'completed', {
+      completedAt: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000),
+    });
+
+    const res = await request(app)
+      .post(`/api/applications/${application.id}/reviews`)
+      .set('Authorization', `Bearer ${seeker.accessToken}`)
+      .send(validReviewPayload());
+
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe('REVIEW_WINDOW_EXPIRED');
+    expect(res.body.error.code).not.toBe('APPLICATION_NOT_COMPLETED');
   });
 
   it('creates a seeker-authored review of the business, deriving direction/author/subject server-side', async () => {
