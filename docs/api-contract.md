@@ -102,9 +102,9 @@ Every error response — regardless of cause — returns the same outer shape:
 | `GIG_CLOSED` | Attempted to apply to or save a gig whose status isn't `open`. Always `409`. |
 | `APPLICATION_ALREADY_EXISTS` | `POST /api/gigs/:gigId/applications` for a `(gig, applicant)` pair that already has an application (§11.7). Always `409`; the duplicate-key error from the unique index (§11.1) is translated here rather than surfacing as `500` — the same trap GL-15 hit with duplicate emails. Holds whether the earlier application is live, withdrawn or rejected. |
 | `INVALID_APPLICATION_TRANSITION` | Attempted to move an application to a status not reachable from its current status (§11.3). Always `409`, and the message names both the current and the attempted status. Withdrawing a `hired` application (§11.10) surfaces through this same code — Hired's only outgoing move is to `completed`, so a withdraw is refused by the transition table itself, not by a withdraw-specific check. Marking anything other than a `hired` application complete (§11.11) is refused the same way. |
-| `APPLICATION_NOT_COMPLETED` | `POST /api/applications/:applicationId/reviews` on an application whose status isn't `completed` (§12.3). Always `409` — a review requires a completed gig. |
-| `REVIEW_WINDOW_EXPIRED` | `POST /api/applications/:applicationId/reviews` more than 14 days after the application's `completedAt` (§12.1, §12.3). Always `409`, and distinct from `APPLICATION_NOT_COMPLETED` — the two 409s name different problems and the client shows different copy for each. Checked only once the application is confirmed `completed`, so a wrong-status application is never told its window has closed. |
-| `REVIEW_ALREADY_EXISTS` | `POST /api/applications/:applicationId/reviews` for an `(application, direction)` pair that already has a review (§12.3). Always `409`; the duplicate-key error from the unique index (§7) is translated here rather than surfacing as `500`. |
+| `APPLICATION_NOT_COMPLETED` | `POST /api/applications/:applicationId/reviews` on an application whose status isn't `completed` (§12.4). Always `409` — a review requires a completed gig. |
+| `REVIEW_WINDOW_EXPIRED` | `POST /api/applications/:applicationId/reviews` more than 14 days after the application's `completedAt` (§12.1, §12.4). Always `409`, and distinct from `APPLICATION_NOT_COMPLETED` — the two 409s name different problems and the client shows different copy for each. Checked only once the application is confirmed `completed`, so a wrong-status application is never told its window has closed. |
+| `REVIEW_ALREADY_EXISTS` | `POST /api/applications/:applicationId/reviews` for an `(application, direction)` pair that already has a review (§12.4). Always `409`; the duplicate-key error from the unique index (§7) is translated here rather than surfacing as `500`. |
 
 New codes may be added for later sprints' resources; existing codes are never repurposed for a different meaning.
 
@@ -1957,14 +1957,49 @@ The reviews written about `:userId`, newest first (`createdAt` descending), ten 
 
 No other failure modes — a well-formed id with no reviews is still `200` with `"reviews": []` and `"total": 0`.
 
-### 12.3 Error codes for these endpoints
+### 12.3 My reviews — `GET /api/reviews/mine`
+
+The reviews the signed-in caller has written — never anyone else's, and no parameter reaches another user's reviews. Requires `Authorization: Bearer <accessToken>`; either role may call it, matching §12.1's parties.
+
+This exists for the completed-gigs screen's "have I already rated this?" question. Rating is decided per direction, not per application: a seeker rating a business does not mark the business's own rating of that seeker as done. Because a review's `author` is always the caller and the unique index (§7) is on `(application, direction)`, the caller's own review of a given application is exactly the right answer to "have I rated this?" — filtering on `author` here, never on `subject` or on the application's parties generally, is what keeps that true. No pagination, matching `GET /api/gigs/mine` (§10.6) and `GET /api/applications/mine` (§11.8): a caller's own review list is expected to return in full.
+
+**Success — `200 OK`**
+
+```json
+{
+  "success": true,
+  "data": {
+    "reviews": [
+      {
+        "id": "64f1a2b3c4d5e6f7a8b9c0d2",
+        "application": "64f1a2b3c4d5e6f7a8b9c0d3",
+        "author": "64f1a2b3c4d5e6f7a8b9c0d1",
+        "subject": "64f1a2b3c4d5e6f7a8b9c0d4",
+        "direction": "business_to_seeker",
+        "rating": 5,
+        "categories": ["work_quality", "punctuality"],
+        "text": "Reliable, on time every shift, great with customers.",
+        "createdAt": "2026-08-12T09:15:00.000Z"
+      }
+    ]
+  }
+}
+```
+
+Newest first (`createdAt` descending, `_id` descending tiebreak). `author` and `subject` are bare reference ids here, unlike §12.2 — `author` is always the caller, so there's nothing to populate, and this endpoint has no reason to look up the subject's profile. Every review carries its `application` id, which is the field this endpoint exists to expose: a client cross-references it against its own completed-applications list to sort cards into "awaiting" and "already rated" without a request per card.
+
+**Failure — `401 Unauthorized`** (guest) — as in §8.6.
+
+No other failure modes — a caller who has written no reviews still gets `200` with `"reviews": []`.
+
+### 12.4 Error codes for these endpoints
 
 | Status | Code | When |
 |---|---|---|
 | `400` | `VALIDATION_ERROR` | `rating`/`text` failed schema validation (§12.1), or `categories` contains a value from the wrong direction's set. Always carries `errors`. |
-| `401` | `AUTH_HEADER_MISSING` / `AUTH_HEADER_MALFORMED` / `TOKEN_EXPIRED` / `TOKEN_INVALID` | No/malformed/expired/invalid token on either endpoint — both require one. |
-| `403` | `FORBIDDEN` | `POST` by a signed-in user who is neither the applicant nor the business that posted the gig. Not returned by `GET` — any signed-in caller may read. |
-| `404` | `NOT_FOUND` | `POST` for an application that doesn't exist or has a malformed id (checked before the 403 party check above). `GET` for a `:userId` that isn't a syntactically valid id. |
+| `401` | `AUTH_HEADER_MISSING` / `AUTH_HEADER_MALFORMED` / `TOKEN_EXPIRED` / `TOKEN_INVALID` | No/malformed/expired/invalid token on any of these endpoints — all three require one. |
+| `403` | `FORBIDDEN` | `POST` by a signed-in user who is neither the applicant nor the business that posted the gig. Not returned by either `GET` — any signed-in caller may read §12.2, and §12.3 only ever reads the caller's own reviews. |
+| `404` | `NOT_FOUND` | `POST` for an application that doesn't exist or has a malformed id (checked before the 403 party check above). `GET /users/:userId/reviews` for a `:userId` that isn't a syntactically valid id. |
 | `409` | `APPLICATION_NOT_COMPLETED` | `POST` where the application exists and the caller is a party to it, but its status isn't `completed`. |
 | `409` | `REVIEW_WINDOW_EXPIRED` | `POST` where the application is `completed`, but more than 14 days have passed since its `completedAt`. Checked only after `APPLICATION_NOT_COMPLETED` above, and always its own distinct code. |
 | `409` | `REVIEW_ALREADY_EXISTS` | `POST` for an `(application, direction)` pair that already has a review. |
