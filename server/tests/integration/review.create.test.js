@@ -87,7 +87,7 @@ describe('POST /api/applications/:applicationId/reviews', () => {
     const business = await registerBusiness('party-business@example.com');
     const seeker = await registerSeeker('party-seeker@example.com');
     const stranger = await registerSeeker('party-stranger@example.com');
-    const { application } = await createApplication(business.userId, seeker.userId, 'hired');
+    const { application } = await createApplication(business.userId, seeker.userId, 'completed');
 
     const res = await request(app)
       .post(`/api/applications/${application.id}/reviews`)
@@ -97,10 +97,10 @@ describe('POST /api/applications/:applicationId/reviews', () => {
     expect(res.status).toBe(403);
   });
 
-  it('returns 409 naming the gate when the application has not reached Hired', async () => {
-    const business = await registerBusiness('not-hired-business@example.com');
-    const seeker = await registerSeeker('not-hired-seeker@example.com');
-    const { application } = await createApplication(business.userId, seeker.userId, 'shortlisted');
+  it('returns 409 naming the gate when the application has not reached Completed', async () => {
+    const business = await registerBusiness('not-completed-business@example.com');
+    const seeker = await registerSeeker('not-completed-seeker@example.com');
+    const { application } = await createApplication(business.userId, seeker.userId, 'hired');
 
     const res = await request(app)
       .post(`/api/applications/${application.id}/reviews`)
@@ -108,14 +108,14 @@ describe('POST /api/applications/:applicationId/reviews', () => {
       .send(validReviewPayload());
 
     expect(res.status).toBe(409);
-    expect(res.body.error.code).toBe('APPLICATION_NOT_HIRED');
-    expect(res.body.error.message.toLowerCase()).toContain('hire');
+    expect(res.body.error.code).toBe('APPLICATION_NOT_COMPLETED');
+    expect(res.body.error.message.toLowerCase()).toContain('complete');
   });
 
   it('creates a seeker-authored review of the business, deriving direction/author/subject server-side', async () => {
     const business = await registerBusiness('seeker-review-business@example.com');
     const seeker = await registerSeeker('seeker-review-seeker@example.com');
-    const { application } = await createApplication(business.userId, seeker.userId, 'hired');
+    const { application } = await createApplication(business.userId, seeker.userId, 'completed');
 
     const res = await request(app)
       .post(`/api/applications/${application.id}/reviews`)
@@ -140,7 +140,7 @@ describe('POST /api/applications/:applicationId/reviews', () => {
   it('creates a business-authored review of the seeker', async () => {
     const business = await registerBusiness('business-review-business@example.com');
     const seeker = await registerSeeker('business-review-seeker@example.com');
-    const { application } = await createApplication(business.userId, seeker.userId, 'hired');
+    const { application } = await createApplication(business.userId, seeker.userId, 'completed');
 
     const res = await request(app)
       .post(`/api/applications/${application.id}/reviews`)
@@ -156,7 +156,7 @@ describe('POST /api/applications/:applicationId/reviews', () => {
   it('returns 400 naming the field when a category belongs to the other direction', async () => {
     const business = await registerBusiness('mismatch-business@example.com');
     const seeker = await registerSeeker('mismatch-seeker@example.com');
-    const { application } = await createApplication(business.userId, seeker.userId, 'hired');
+    const { application } = await createApplication(business.userId, seeker.userId, 'completed');
 
     const res = await request(app)
       .post(`/api/applications/${application.id}/reviews`)
@@ -170,7 +170,7 @@ describe('POST /api/applications/:applicationId/reviews', () => {
   it('returns 409, not a duplicate document, for a second review in the same direction', async () => {
     const business = await registerBusiness('dup-business@example.com');
     const seeker = await registerSeeker('dup-seeker@example.com');
-    const { application } = await createApplication(business.userId, seeker.userId, 'hired');
+    const { application } = await createApplication(business.userId, seeker.userId, 'completed');
 
     const first = await request(app)
       .post(`/api/applications/${application.id}/reviews`)
@@ -190,7 +190,7 @@ describe('POST /api/applications/:applicationId/reviews', () => {
   it('rejects a rating outside 1-5 with 400', async () => {
     const business = await registerBusiness('rating-business@example.com');
     const seeker = await registerSeeker('rating-seeker@example.com');
-    const { application } = await createApplication(business.userId, seeker.userId, 'hired');
+    const { application } = await createApplication(business.userId, seeker.userId, 'completed');
 
     const res = await request(app)
       .post(`/api/applications/${application.id}/reviews`)
@@ -203,7 +203,7 @@ describe('POST /api/applications/:applicationId/reviews', () => {
   it('rejects whitespace-only text with 400', async () => {
     const business = await registerBusiness('whitespace-business@example.com');
     const seeker = await registerSeeker('whitespace-seeker@example.com');
-    const { application } = await createApplication(business.userId, seeker.userId, 'hired');
+    const { application } = await createApplication(business.userId, seeker.userId, 'completed');
 
     const res = await request(app)
       .post(`/api/applications/${application.id}/reviews`)
@@ -216,7 +216,7 @@ describe('POST /api/applications/:applicationId/reviews', () => {
   it("recomputes the subject's profile aggregate through the profile service", async () => {
     const business = await registerBusiness('aggregate-business@example.com');
     const seeker = await registerSeeker('aggregate-seeker@example.com');
-    const { application } = await createApplication(business.userId, seeker.userId, 'hired');
+    const { application } = await createApplication(business.userId, seeker.userId, 'completed');
 
     const res = await request(app)
       .post(`/api/applications/${application.id}/reviews`)
@@ -240,7 +240,7 @@ describe('POST /api/applications/:applicationId/reviews', () => {
   it('leaves the review intact when writing the aggregate onto the profile fails', async () => {
     const business = await registerBusiness('write-failure-business@example.com');
     const seeker = await registerSeeker('write-failure-seeker@example.com');
-    const { application } = await createApplication(business.userId, seeker.userId, 'hired');
+    const { application } = await createApplication(business.userId, seeker.userId, 'completed');
 
     // Forces a genuine save() failure inside setRatingSummary, without
     // mocking: a profile document written straight through the driver,
