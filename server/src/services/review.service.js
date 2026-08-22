@@ -14,6 +14,8 @@ const CATEGORIES_BY_DIRECTION = {
 };
 
 const PAGE_SIZE = 10;
+const RATING_WINDOW_DAYS = 14;
+const RATING_WINDOW_MS = RATING_WINDOW_DAYS * 24 * 60 * 60 * 1000;
 const STAR_VALUES = [1, 2, 3, 4, 5];
 const TOP_CATEGORIES_LIMIT = 3;
 const zeroedDistribution = () =>
@@ -112,7 +114,7 @@ const assertCategoriesMatchDirection = (categories, direction) => {
 };
 
 // The single gate that makes a rating worth reading: a review can only be
-// created against an application that reached Hired, by one of the two
+// created against an application that reached Completed, by one of the two
 // people who were actually party to it. Direction, author and subject are
 // all derived here from the application and the caller — never accepted
 // from the request body — so nobody can attach a review to a gig they
@@ -127,11 +129,25 @@ export const createReview = async (applicationId, actor, body) => {
     throw new ApiError(403, 'FORBIDDEN', 'You do not have permission to perform this action.');
   }
 
-  if (application.status !== 'hired') {
+  if (application.status !== 'completed') {
     throw new ApiError(
       409,
-      'APPLICATION_NOT_HIRED',
-      'A review requires a completed hire — this application has not reached Hired.',
+      'APPLICATION_NOT_COMPLETED',
+      'A review requires a completed gig — this application has not reached Completed.',
+    );
+  }
+
+  // A window creates urgency to review, and review volume is what the whole
+  // reputation system runs on — a rating nobody gets round to writing is a
+  // profile nobody can trust. Measured from completedAt, never decidedAt:
+  // decidedAt holds the moment of hire, not the moment the work finished.
+  // Checked after the status gate above, so an application that never
+  // completed is told that, not that its (nonexistent) window has closed.
+  if (Date.now() - application.completedAt.getTime() > RATING_WINDOW_MS) {
+    throw new ApiError(
+      409,
+      'REVIEW_WINDOW_EXPIRED',
+      `The ${RATING_WINDOW_DAYS}-day window to review this gig has closed.`,
     );
   }
 
@@ -166,6 +182,20 @@ export const createReview = async (applicationId, actor, body) => {
     }
     throw err;
   }
+};
+
+// The reviews the caller themself wrote, newest first, each carrying its
+// application id — the answer to "have I already rated this application?"
+// for the completed-gigs screen, in one request instead of one per card.
+// Filtered on `author`, never `subject`: rating is per direction (the
+// unique index is on (application, direction)), so a seeker's own review of
+// a business on an application says nothing about whether the business has
+// rated the seeker back on that same application — each side's "already
+// rated" is decided only by its own authored reviews.
+export const listMyReviews = async (callerId) => {
+  const reviews = await Review.find({ author: callerId }).sort({ createdAt: -1, _id: -1 });
+
+  return { reviews: reviews.map((review) => review.toJSON()) };
 };
 
 // The reviews written about a user, newest first. Deliberately doesn't check

@@ -169,7 +169,7 @@ an HTTP path. `viewed`, `shortlisted`, `hired`, `rejected` and `closed_filled` a
 |---|---|---|
 | Review model | ✅ | Unique index on `(application, direction)`. `author ≠ subject` enforced by a schema validator. `createdAt` only — **no `updatedAt`, no edit, no delete, no respond path anywhere**. Reviews are permanent; correcting one is a Sprint 4 dispute. |
 | Rating aggregate schema | ✅ | `RATING_AGGREGATE_SHAPE` is exported from `review.model.js` and imported by `profile.model.js` and `application.model.js`, so the ownership boundary is expressed in code: Reviews owns the shape, Profile stores and displays it, neither computes the other's number. |
-| Create review | ✅ | `POST /applications/:applicationId/reviews`. Gated in order: application exists (404) → caller is a party (403) → status is `hired` (409 `APPLICATION_NOT_HIRED`) → categories match the derived direction (400) → not a duplicate (409 `REVIEW_ALREADY_EXISTS`). `direction`, `author` and `subject` are all derived server-side and never accepted from the body. |
+| Create review | ✅ | `POST /applications/:applicationId/reviews`. Gated in order: application exists (404) → caller is a party (403) → status is `completed` (409 `APPLICATION_NOT_COMPLETED`) → categories match the derived direction (400) → not a duplicate (409 `REVIEW_ALREADY_EXISTS`). `direction`, `author` and `subject` are all derived server-side and never accepted from the body. |
 | Read reviews | ✅ (server only) | `GET /users/:userId/reviews`, paged 10/page, newest first, author name/photo populated **live from the profile** at read time — the opposite of the application's frozen snapshot, and deliberately so. **No client consumes it.** |
 | Rating components | ✅ | `StarRating` (read + interactive), `CategoryChipGroup`, `RatingSummary`, `RatingBars`. `ReviewCard` is built and only referenced by the dev component gallery. |
 | Rating summary on profiles | ✅ | Rendered on the seeker profile, business profile and public profile. Shows a "New to Gig Lanka" empty state whenever `reviewCount === 0` — which is **always**, since nothing computes the aggregate yet. Its "See all N reviews" button is intentionally disabled until Sprint 2's list screen. |
@@ -338,7 +338,8 @@ one test in `app/`. Every screen, the state machine's client mirror, `format.js`
 **Still Sprint 4.** Sprint 2 adds no client-side test infrastructure; GL-212 covers the two
 untested *server* components only.
 
-### 7.5 Two server components ship with no integration tests
+### 7.5 Two server components ship with no integration tests — closed by GL-212
+
 14 suites / 143 tests cover auth, gigs, applications and reviews. There are **no tests for the
 profile endpoints and none for uploads** — including the public-profile whitelist and the
 role-field rejection rules, which are the two places a privacy regression would be most costly.
@@ -346,6 +347,16 @@ role-field rejection rules, which are the two places a privacy regression would 
 **Sprint 2: GL-212.** It asserts the public profile against its *complete* expected key set rather
 than against a list of fields that should be absent — the only form of the test that catches a
 field added in a later sprint, which is exactly what Sprint 3 does to this document.
+
+**Closed, 22 August 2026 (GL-231/232/233).** Three new suites: `profile.me.test.js` (own-profile
+read/update, full-replace semantics, the four system-owned-field rejections, role-field enforcement
+both directions), `profile.public.test.js` (the public shape asserted against its complete expected
+key set, `PUT /profiles/:userId` always 403 including for the owner, the Sprint-3 deactivation guard
+pinned ahead of the field existing), and `upload.create.test.js` (401, the 5MB limit, the closed
+folder allow-list, the MIME/extension mismatch in both directions, a stubbed storage failure
+surfacing as `502 STORAGE_UNAVAILABLE`, and the stored object key shape). Storage is stubbed at the
+`@supabase/supabase-js` boundary via `jest.unstable_mockModule` — CI never reaches a real bucket.
+New counts in §9.
 
 ### 7.6 `GET /users/:userId/reviews` has no client, and `ReviewCard` has no caller
 The read-reviews endpoint is built, documented and tested; `reviewApi.js` only exposes
@@ -458,3 +469,10 @@ story of the sprint.
 - Every screen, navigator, component, API module and utility in `app/src` read.
 - Endpoint behaviour cross-checked against `docs/api-contract.md` §5–§12; no divergence found
   between the contract and the server. The one contract/client divergence is §7.7.
+
+**Re-verified 22 August 2026 (GL-231/232/233, closing §7.5):** `npm test` in `server/` —
+**22 suites, 295 tests, all passing** (`--runInBand`; the default parallel run hits concurrent
+`mongodb-memory-server` startup contention across suites, environmental, not a defect). Most of the
+growth from the Sprint 1 count of 14 suites came from unrelated Sprint 2 tickets landed in between;
+the three suites that close this section's gap specifically are `profile.me.test.js`,
+`profile.public.test.js` and `upload.create.test.js` (7 tests), added by GL-231/232/233.

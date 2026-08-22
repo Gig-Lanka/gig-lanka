@@ -86,13 +86,23 @@ export default function MyGigsScreen() {
     </Pressable>
   );
 
+  // GL-272 - the business-side entry point into the rating flow (GL-271).
+  const headerActions = (
+    <View className="flex-row items-center gap-4">
+      <Pressable onPress={() => navigation.navigate('CompletedGigs')}>
+        <Text className="text-[14px] font-bold text-signal">Completed</Text>
+      </Pressable>
+      {postAction}
+    </View>
+  );
+
   if (loading) {
     return <Loader fullScreen />;
   }
 
   return (
     <Screen>
-      <ScreenHeader title="My Gigs" rightSlot={postAction} />
+      <ScreenHeader title="My Gigs" rightSlot={headerActions} />
 
       {error ? (
         <EmptyState message={error} actionLabel="Retry" onAction={handleRetry} />
