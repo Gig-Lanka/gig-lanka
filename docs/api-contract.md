@@ -1735,7 +1735,7 @@ Only the business that posted the gig (GL-253). Moves the application from `appl
 
 ## 12. Review endpoints (Sprint 1)
 
-`server/src/routes/review.routes.js`, `review.controller.js`, `review.validator.js`, `review.service.js`. A rating is only worth reading if the platform can prove the two people actually worked together — that's why creation takes an application id, not a user id, and why it's gated on that application having reached `hired` (§6.7). Hiring doesn't exist in the product until Sprint 2, so both endpoints below are verified against the hire seeded by `npm run seed` (`scripts/seed.js` prints its id).
+`server/src/routes/review.routes.js`, `review.controller.js`, `review.validator.js`, `review.service.js`. A rating is only worth reading if the platform can prove the two people actually did the work together — that's why creation takes an application id, not a user id, and why it's gated on that application having reached `completed` (§6.7). Both endpoints below are verified against the completed application seeded by `npm run seed` (`scripts/seed.js` prints its id).
 
 ### 12.1 Create a review — `POST /api/applications/:applicationId/reviews`
 
