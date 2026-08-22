@@ -53,14 +53,14 @@ const setProfile = async (accessToken, { name, photo }) => {
   }
 };
 
-const createHiredApplication = async (businessId, seekerId) => {
+const createCompletedApplication = async (businessId, seekerId) => {
   const gig = await Gig.create({ ...validGigPayload, postedBy: businessId });
 
   return Application.create({
     gig: gig._id,
     applicant: seekerId,
     profileSnapshot: buildSnapshot(),
-    status: 'hired',
+    status: 'completed',
   });
 };
 
@@ -91,8 +91,8 @@ describe('GET /api/users/:userId/reviews', () => {
 
     await setProfile(seeker.accessToken, { name: 'Original Name', photo: 'https://cdn.test/old.jpg' });
 
-    const applicationOne = await createHiredApplication(business.userId, seeker.userId);
-    const applicationTwo = await createHiredApplication(business.userId, otherSeeker.userId);
+    const applicationOne = await createCompletedApplication(business.userId, seeker.userId);
+    const applicationTwo = await createCompletedApplication(business.userId, otherSeeker.userId);
 
     // Business reviews seeker (subject = seeker) on applicationOne.
     await request(app)
@@ -136,7 +136,7 @@ describe('GET /api/users/:userId/reviews', () => {
     const caller = await registerSeeker('page-caller@example.com');
 
     for (let i = 0; i < 12; i += 1) {
-      const application = await createHiredApplication(business.userId, seeker.userId);
+      const application = await createCompletedApplication(business.userId, seeker.userId);
       await Review.create({
         application: application._id,
         author: business.userId,
@@ -170,7 +170,7 @@ describe('GET /api/users/:userId/reviews', () => {
     const business = await registerBusiness('deactivated-business@example.com');
     const seeker = await registerSeeker('deactivated-seeker@example.com');
     const caller = await registerSeeker('deactivated-caller@example.com');
-    const application = await createHiredApplication(business.userId, seeker.userId);
+    const application = await createCompletedApplication(business.userId, seeker.userId);
 
     await Review.create({
       application: application._id,
