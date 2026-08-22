@@ -184,6 +184,20 @@ export const createReview = async (applicationId, actor, body) => {
   }
 };
 
+// The reviews the caller themself wrote, newest first, each carrying its
+// application id — the answer to "have I already rated this application?"
+// for the completed-gigs screen, in one request instead of one per card.
+// Filtered on `author`, never `subject`: rating is per direction (the
+// unique index is on (application, direction)), so a seeker's own review of
+// a business on an application says nothing about whether the business has
+// rated the seeker back on that same application — each side's "already
+// rated" is decided only by its own authored reviews.
+export const listMyReviews = async (callerId) => {
+  const reviews = await Review.find({ author: callerId }).sort({ createdAt: -1, _id: -1 });
+
+  return { reviews: reviews.map((review) => review.toJSON()) };
+};
+
 // The reviews written about a user, newest first. Deliberately doesn't check
 // that the user still exists or is active — a deactivated user's reviews are
 // unaffected by deactivation (they're read through the subject id on the
