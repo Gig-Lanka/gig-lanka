@@ -103,6 +103,7 @@ Every error response — regardless of cause — returns the same outer shape:
 | `APPLICATION_ALREADY_EXISTS` | `POST /api/gigs/:gigId/applications` for a `(gig, applicant)` pair that already has an application (§11.7). Always `409`; the duplicate-key error from the unique index (§11.1) is translated here rather than surfacing as `500` — the same trap GL-15 hit with duplicate emails. Holds whether the earlier application is live, withdrawn or rejected. |
 | `INVALID_APPLICATION_TRANSITION` | Attempted to move an application to a status not reachable from its current status (§11.3). Always `409`, and the message names both the current and the attempted status. Withdrawing a `hired` application (§11.10) surfaces through this same code — Hired's only outgoing move is to `completed`, so a withdraw is refused by the transition table itself, not by a withdraw-specific check. Marking anything other than a `hired` application complete (§11.11) is refused the same way. |
 | `APPLICATION_NOT_COMPLETED` | `POST /api/applications/:applicationId/reviews` on an application whose status isn't `completed` (§12.3). Always `409` — a review requires a completed gig. |
+| `REVIEW_WINDOW_EXPIRED` | `POST /api/applications/:applicationId/reviews` more than 14 days after the application's `completedAt` (§12.1, §12.3). Always `409`, and distinct from `APPLICATION_NOT_COMPLETED` — the two 409s name different problems and the client shows different copy for each. Checked only once the application is confirmed `completed`, so a wrong-status application is never told its window has closed. |
 | `REVIEW_ALREADY_EXISTS` | `POST /api/applications/:applicationId/reviews` for an `(application, direction)` pair that already has a review (§12.3). Always `409`; the duplicate-key error from the unique index (§7) is translated here rather than surfacing as `500`. |
 
 New codes may be added for later sprints' resources; existing codes are never repurposed for a different meaning.
@@ -1807,6 +1808,8 @@ Only the business that posted the gig (GL-253). Moves the application from `appl
 
 `server/src/routes/review.routes.js`, `review.controller.js`, `review.validator.js`, `review.service.js`. A rating is only worth reading if the platform can prove the two people actually worked together — that's why creation takes an application id, not a user id, and why it's gated on that application having reached `completed` (§6.7). Hiring doesn't exist in the product until Sprint 2, so both endpoints below are verified against the hire seeded by `npm run seed` (`scripts/seed.js` prints its id).
 
+Creation is also windowed: a review must be submitted within 14 days of the application's `completedAt`, never `decidedAt` (`decidedAt` holds the moment of hire, not the moment the work finished). The window exists because a rating nobody gets round to writing is a profile nobody can trust — a deadline creates the urgency to review, and review volume is what the whole reputation system runs on. The server enforces this; a client-side countdown is only ever a courtesy, never the source of truth.
+
 ### 12.1 Create a review — `POST /api/applications/:applicationId/reviews`
 
 Either party to the application — the applicant or the business that posted the gig — reviewing the other. Requires `Authorization: Bearer <accessToken>`; either role may call it, so there's no role restriction beyond being a party to this specific application.
@@ -1863,6 +1866,18 @@ Either party to the application — the applicant or the business that posted th
   "error": {
     "code": "APPLICATION_NOT_COMPLETED",
     "message": "A review requires a completed gig — this application has not reached Completed."
+  }
+}
+```
+
+**Failure — `409 Conflict`** (application is `completed`, but more than 14 days have passed since its `completedAt`). Checked only after the status gate above, so an application that never completed is refused for that, never for a window it doesn't have:
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "REVIEW_WINDOW_EXPIRED",
+    "message": "The 14-day window to review this gig has closed."
   }
 }
 ```
@@ -1951,6 +1966,7 @@ No other failure modes — a well-formed id with no reviews is still `200` with 
 | `403` | `FORBIDDEN` | `POST` by a signed-in user who is neither the applicant nor the business that posted the gig. Not returned by `GET` — any signed-in caller may read. |
 | `404` | `NOT_FOUND` | `POST` for an application that doesn't exist or has a malformed id (checked before the 403 party check above). `GET` for a `:userId` that isn't a syntactically valid id. |
 | `409` | `APPLICATION_NOT_COMPLETED` | `POST` where the application exists and the caller is a party to it, but its status isn't `completed`. |
+| `409` | `REVIEW_WINDOW_EXPIRED` | `POST` where the application is `completed`, but more than 14 days have passed since its `completedAt`. Checked only after `APPLICATION_NOT_COMPLETED` above, and always its own distinct code. |
 | `409` | `REVIEW_ALREADY_EXISTS` | `POST` for an `(application, direction)` pair that already has a review. |
 
 ---
