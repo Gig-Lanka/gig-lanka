@@ -94,7 +94,7 @@ export default function MyApplicationsScreen() {
   }
 
   return (
-    <Screen>
+    <Screen edges={['top']}>
       <ScreenHeader title="Applications" rightSlot={completedAction} />
 
       {error ? (
