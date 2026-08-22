@@ -162,7 +162,10 @@ export default function ApplicantsScreen() {
   }
 
   return (
-    <Screen>
+    // The tab instance sits above the tab bar, which already accounts for
+    // the bottom safe-area inset - the pushed, gig-scoped instance has no
+    // tab bar, so it still needs Screen's default bottom edge (GL-279).
+    <Screen edges={isScoped ? ['top', 'bottom'] : ['top']}>
       <ScreenHeader
         title="Applicants"
         small={isScoped}
