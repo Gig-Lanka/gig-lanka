@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import app from '../../src/app.js';
 import { Gig } from '../../src/models/gig.model.js';
 import { Application } from '../../src/models/application.model.js';
+import { Review } from '../../src/models/review.model.js';
 
 const validPassword = 'Password123!';
 
@@ -210,5 +211,56 @@ describe('POST /api/applications/:applicationId/reviews', () => {
       .send(validReviewPayload({ text: '                         ' }));
 
     expect(res.status).toBe(400);
+  });
+
+  it("recomputes the subject's profile aggregate through the profile service", async () => {
+    const business = await registerBusiness('aggregate-business@example.com');
+    const seeker = await registerSeeker('aggregate-seeker@example.com');
+    const { application } = await createApplication(business.userId, seeker.userId, 'hired');
+
+    const res = await request(app)
+      .post(`/api/applications/${application.id}/reviews`)
+      .set('Authorization', `Bearer ${seeker.accessToken}`)
+      .send(validReviewPayload({ rating: 4, categories: ['fair_payment'] }));
+
+    expect(res.status).toBe(201);
+
+    const profileRes = await request(app)
+      .get(`/api/profiles/${business.userId}`)
+      .set('Authorization', `Bearer ${seeker.accessToken}`);
+
+    expect(profileRes.body.data.profile.ratingSummary).toEqual({
+      averageRating: 4,
+      reviewCount: 1,
+      topCategories: ['fair_payment'],
+      distribution: { 1: 0, 2: 0, 3: 0, 4: 1, 5: 0 },
+    });
+  });
+
+  it('leaves the review intact when writing the aggregate onto the profile fails', async () => {
+    const business = await registerBusiness('write-failure-business@example.com');
+    const seeker = await registerSeeker('write-failure-seeker@example.com');
+    const { application } = await createApplication(business.userId, seeker.userId, 'hired');
+
+    // Forces a genuine save() failure inside setRatingSummary, without
+    // mocking: a profile document written straight through the driver,
+    // bypassing Mongoose validation, that is missing the required `name`
+    // field. getOrCreateProfile finds it (it already exists), assigns the
+    // aggregate, and profile.save() rejects on the pre-existing invalid
+    // document — recomputeRatingSummary's own catch is what's under test.
+    await mongoose.connection
+      .collection('profiles')
+      .insertOne({ user: new mongoose.Types.ObjectId(business.userId) });
+
+    const res = await request(app)
+      .post(`/api/applications/${application.id}/reviews`)
+      .set('Authorization', `Bearer ${seeker.accessToken}`)
+      .send(validReviewPayload());
+
+    expect(res.status).toBe(201);
+
+    const reviews = await Review.find({ subject: business.userId });
+    expect(reviews).toHaveLength(1);
+    expect(reviews[0].rating).toBe(5);
   });
 });
