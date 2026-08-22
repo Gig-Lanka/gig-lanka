@@ -61,6 +61,7 @@ const createCompletedApplication = async (businessId, seekerId) => {
     applicant: seekerId,
     profileSnapshot: buildSnapshot(),
     status: 'completed',
+    completedAt: new Date(),
   });
 };
 
