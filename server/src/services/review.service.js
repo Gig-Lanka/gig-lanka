@@ -127,7 +127,9 @@ export const createReview = async (applicationId, actor, body) => {
     throw new ApiError(403, 'FORBIDDEN', 'You do not have permission to perform this action.');
   }
 
-  if (application.status !== 'completed') {
+  const reviewableStatuses = new Set(['completed', 'hired']);
+
+  if (!reviewableStatuses.has(application.status)) {
     throw new ApiError(
       409,
       'APPLICATION_NOT_COMPLETED',
