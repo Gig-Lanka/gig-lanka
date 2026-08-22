@@ -417,6 +417,14 @@ On success, every refresh token belonging to the user is revoked and a fresh acc
 }
 ```
 
+### 5.7 Authentication middleware
+
+`server/src/middleware/auth.middleware.js` exports three middleware:
+
+- **`requireAuth`** — rejects. No token, a malformed header, an expired token, an invalid/tampered token, or a token whose user no longer exists each 401 with one of `AUTH_HEADER_MISSING`, `AUTH_HEADER_MALFORMED`, `TOKEN_EXPIRED`, `TOKEN_INVALID`. A valid token loads the user from the database and sets `req.user`. Used on every endpoint that requires a signed-in caller.
+- **`optionalAuth`** — never rejects. A valid token sets `req.user` exactly as `requireAuth` does. Every other case — no header, a malformed header, an expired token, an invalid/tampered token, or a token whose user no longer exists — leaves `req.user` undefined and calls `next()` with no error. For a public endpoint that wants to know who's asking without requiring anyone to be. The only endpoint using it is `GET /api/gigs/:id` (§10.5).
+- **`requireRole(...roles)`** — placed after `requireAuth` or `optionalAuth`. Fails closed: `401 UNAUTHENTICATED` if `req.user` is absent, `403 FORBIDDEN` if `req.user.role` isn't in the allowed list.
+
 ---
 
 ## 6. Vocabularies
