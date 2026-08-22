@@ -86,7 +86,7 @@ describe('POST /api/applications/:applicationId/reviews', () => {
     const business = await registerBusiness('party-business@example.com');
     const seeker = await registerSeeker('party-seeker@example.com');
     const stranger = await registerSeeker('party-stranger@example.com');
-    const { application } = await createApplication(business.userId, seeker.userId, 'hired');
+    const { application } = await createApplication(business.userId, seeker.userId, 'completed');
 
     const res = await request(app)
       .post(`/api/applications/${application.id}/reviews`)
