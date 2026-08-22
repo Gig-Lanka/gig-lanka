@@ -24,9 +24,11 @@ function categoryLabel(categoryList, value) {
   return categoryList.find((category) => category.value === value)?.label ?? value;
 }
 
-// A generic fallback only - the 409s §12.1 defines (not completed, already
-// reviewed) and the 403 for a non-party both carry their own readable
-// `message` from the server, which is shown as-is when present.
+// A generic fallback only - the 409s §12.1/§12.4 define (not completed,
+// window expired, already reviewed) and the 403 for a non-party all carry
+// their own readable `message` from the server, which is shown as-is when
+// present - so a wrong-status refusal and a closed-window refusal never
+// read as the same error.
 const GENERIC_SUBMIT_ERROR = 'Could not submit your rating. Check your connection and try again.';
 
 export default function WrittenReviewScreen() {
@@ -112,12 +114,7 @@ export default function WrittenReviewScreen() {
               {formError}
             </Notice>
           ) : null}
-          <Button
-            trailingArrow
-            disabled={!canSubmit}
-            loading={submitting}
-            onPress={handleSubmit}
-          >
+          <Button trailingArrow disabled={!canSubmit} loading={submitting} onPress={handleSubmit}>
             Submit rating
           </Button>
         </View>
