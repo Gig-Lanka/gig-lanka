@@ -53,14 +53,14 @@ const setProfile = async (accessToken, { name, photo }) => {
   }
 };
 
-const createHiredApplication = async (businessId, seekerId) => {
+const createCompletedApplication = async (businessId, seekerId) => {
   const gig = await Gig.create({ ...validGigPayload, postedBy: businessId });
 
   return Application.create({
     gig: gig._id,
     applicant: seekerId,
     profileSnapshot: buildSnapshot(),
-    status: 'hired',
+    status: 'completed',
   });
 };
 
