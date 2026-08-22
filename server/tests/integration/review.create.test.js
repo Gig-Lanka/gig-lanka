@@ -139,7 +139,7 @@ describe('POST /api/applications/:applicationId/reviews', () => {
   it('creates a business-authored review of the seeker', async () => {
     const business = await registerBusiness('business-review-business@example.com');
     const seeker = await registerSeeker('business-review-seeker@example.com');
-    const { application } = await createApplication(business.userId, seeker.userId, 'hired');
+    const { application } = await createApplication(business.userId, seeker.userId, 'completed');
 
     const res = await request(app)
       .post(`/api/applications/${application.id}/reviews`)
@@ -155,7 +155,7 @@ describe('POST /api/applications/:applicationId/reviews', () => {
   it('returns 400 naming the field when a category belongs to the other direction', async () => {
     const business = await registerBusiness('mismatch-business@example.com');
     const seeker = await registerSeeker('mismatch-seeker@example.com');
-    const { application } = await createApplication(business.userId, seeker.userId, 'hired');
+    const { application } = await createApplication(business.userId, seeker.userId, 'completed');
 
     const res = await request(app)
       .post(`/api/applications/${application.id}/reviews`)
@@ -169,7 +169,7 @@ describe('POST /api/applications/:applicationId/reviews', () => {
   it('returns 409, not a duplicate document, for a second review in the same direction', async () => {
     const business = await registerBusiness('dup-business@example.com');
     const seeker = await registerSeeker('dup-seeker@example.com');
-    const { application } = await createApplication(business.userId, seeker.userId, 'hired');
+    const { application } = await createApplication(business.userId, seeker.userId, 'completed');
 
     const first = await request(app)
       .post(`/api/applications/${application.id}/reviews`)
@@ -189,7 +189,7 @@ describe('POST /api/applications/:applicationId/reviews', () => {
   it('rejects a rating outside 1-5 with 400', async () => {
     const business = await registerBusiness('rating-business@example.com');
     const seeker = await registerSeeker('rating-seeker@example.com');
-    const { application } = await createApplication(business.userId, seeker.userId, 'hired');
+    const { application } = await createApplication(business.userId, seeker.userId, 'completed');
 
     const res = await request(app)
       .post(`/api/applications/${application.id}/reviews`)
@@ -202,7 +202,7 @@ describe('POST /api/applications/:applicationId/reviews', () => {
   it('rejects whitespace-only text with 400', async () => {
     const business = await registerBusiness('whitespace-business@example.com');
     const seeker = await registerSeeker('whitespace-seeker@example.com');
-    const { application } = await createApplication(business.userId, seeker.userId, 'hired');
+    const { application } = await createApplication(business.userId, seeker.userId, 'completed');
 
     const res = await request(app)
       .post(`/api/applications/${application.id}/reviews`)
