@@ -1880,7 +1880,7 @@ No other failure modes — a well-formed id with no reviews is still `200` with 
 | `401` | `AUTH_HEADER_MISSING` / `AUTH_HEADER_MALFORMED` / `TOKEN_EXPIRED` / `TOKEN_INVALID` | No/malformed/expired/invalid token on either endpoint — both require one. |
 | `403` | `FORBIDDEN` | `POST` by a signed-in user who is neither the applicant nor the business that posted the gig. Not returned by `GET` — any signed-in caller may read. |
 | `404` | `NOT_FOUND` | `POST` for an application that doesn't exist or has a malformed id (checked before the 403 party check above). `GET` for a `:userId` that isn't a syntactically valid id. |
-| `409` | `APPLICATION_NOT_HIRED` | `POST` where the application exists and the caller is a party to it, but its status isn't `hired`. |
+| `409` | `APPLICATION_NOT_COMPLETED` | `POST` where the application exists and the caller is a party to it, but its status isn't `completed`. |
 | `409` | `REVIEW_ALREADY_EXISTS` | `POST` for an `(application, direction)` pair that already has a review. |
 
 ---
