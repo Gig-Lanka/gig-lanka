@@ -91,8 +91,8 @@ describe('GET /api/users/:userId/reviews', () => {
 
     await setProfile(seeker.accessToken, { name: 'Original Name', photo: 'https://cdn.test/old.jpg' });
 
-    const applicationOne = await createHiredApplication(business.userId, seeker.userId);
-    const applicationTwo = await createHiredApplication(business.userId, otherSeeker.userId);
+    const applicationOne = await createCompletedApplication(business.userId, seeker.userId);
+    const applicationTwo = await createCompletedApplication(business.userId, otherSeeker.userId);
 
     // Business reviews seeker (subject = seeker) on applicationOne.
     await request(app)
