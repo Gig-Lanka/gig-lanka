@@ -24,7 +24,7 @@ function categoryLabel(categoryList, value) {
   return categoryList.find((category) => category.value === value)?.label ?? value;
 }
 
-// A generic fallback only - the 409s §12.1 defines (not hired, already
+// A generic fallback only - the 409s §12.1 defines (not completed, already
 // reviewed) and the 403 for a non-party both carry their own readable
 // `message` from the server, which is shown as-is when present.
 const GENERIC_SUBMIT_ERROR = 'Could not submit your rating. Check your connection and try again.';
