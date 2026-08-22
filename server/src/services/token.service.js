@@ -50,3 +50,7 @@ export const rotateRefreshToken = async (token) => {
 export const revokeRefreshToken = async (token) => {
   await RefreshToken.deleteOne({ token });
 };
+
+export const revokeAllRefreshTokensForUser = async (userId) => {
+  await RefreshToken.deleteMany({ user: userId });
+};
