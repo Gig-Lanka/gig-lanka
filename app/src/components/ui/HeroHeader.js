@@ -3,6 +3,8 @@ import { Pressable, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
 
+import Avatar from './Avatar';
+
 function EmberGlow() {
   return (
     <View pointerEvents="none" className="absolute -right-[110px] -top-[130px] h-[340px] w-[340px]">
@@ -72,13 +74,20 @@ export default function HeroHeader({
  * scrolled off-screen. The screen owns the scroll offset and passes
  * `visible` accordingly - this component holds no state of its own.
  */
-export function HeroStickyBar({ title, onBack, visible = false, className }) {
+export function HeroStickyBar({
+  title,
+  photo,
+  avatarSquare = false,
+  onBack,
+  visible = false,
+  className,
+}) {
   if (!visible) return null;
 
   return (
     <View
       className={[
-        'flex-row items-center gap-[9px] border-b border-line bg-paper px-[22px] pb-[11px] pt-0.5',
+        'flex-row items-center gap-[9px] border-b border-line bg-paper px-[22px] py-6',
         className,
       ]
         .filter(Boolean)
@@ -93,8 +102,11 @@ export function HeroStickyBar({ title, onBack, visible = false, className }) {
         </Pressable>
       ) : null}
 
+      <Avatar uri={photo} name={title} size="sm" square={avatarSquare} />
+
       <Text
         className="flex-1 font-display text-[16px] tracking-[-0.015em] text-ink"
+        style={{ textAlignVertical: 'center', includeFontPadding: false }}
         numberOfLines={1}
       >
         {title}
