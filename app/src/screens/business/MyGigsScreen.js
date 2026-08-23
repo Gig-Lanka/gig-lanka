@@ -101,7 +101,7 @@ export default function MyGigsScreen() {
   }
 
   return (
-    <Screen>
+    <Screen edges={['top']}>
       <ScreenHeader title="My Gigs" rightSlot={headerActions} />
 
       {error ? (

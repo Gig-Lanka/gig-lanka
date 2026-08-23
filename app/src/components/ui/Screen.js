@@ -6,6 +6,10 @@ export default function Screen({
   scroll = false,
   className,
   contentClassName,
+  // Bottom-tab screens should override this to ['top'] - the tab bar
+  // already bakes the bottom safe-area inset into its own height, so
+  // adding it here too doubles the gap above the tab bar (GL-279).
+  edges = ['top', 'bottom'],
   ...props
 }) {
   const paddedClassName = ['px-4', contentClassName].filter(Boolean).join(' ');
@@ -13,7 +17,7 @@ export default function Screen({
   return (
     <SafeAreaView
       className={['flex-1 bg-bg-main', className].filter(Boolean).join(' ')}
-      edges={['top', 'bottom']}
+      edges={edges}
     >
       {scroll ? (
         <ScrollView className="flex-1" contentContainerClassName={paddedClassName} {...props}>
