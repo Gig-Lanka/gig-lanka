@@ -63,12 +63,17 @@ export function formatRelativeTime(date, now = new Date()) {
   return formatShortDate(target);
 }
 
+// GL-283: this only formats urgency copy for a deadline that hasn't passed
+// yet - "is the gig closed" is `status`'s question to answer, not a date
+// comparison made independently of it (that's what let the badge and this
+// label disagree). A past date returns null; callers show their own
+// status-driven "Applications closed" copy instead.
 export function formatDeadline(deadline, now = new Date()) {
   const target = new Date(deadline);
   const dayDiff = Math.round((startOfDay(target) - startOfDay(now)) / DAY_MS);
 
   if (dayDiff < 0) {
-    return { label: 'Applications closed', urgent: true };
+    return null;
   }
   if (dayDiff === 0) {
     return { label: 'Closes today', urgent: true };

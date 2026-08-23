@@ -163,7 +163,16 @@ export default function GigDetailScreen({ onSignIn }) {
   } = gig;
 
   const location = formatLocation({ isRemote: remote, area, city });
-  const deadline = applicationsCloseDate ? formatDeadline(applicationsCloseDate) : null;
+  const isOpen = gigStatus === 'open';
+  // GL-283: while open, the banner shows the date-derived urgency copy; once
+  // closed - for any reason, including a deadline that's since passed - it
+  // shows the same status-derived copy as the badge and the primary action
+  // below, so the two can never disagree again.
+  const deadline = isOpen
+    ? applicationsCloseDate
+      ? formatDeadline(applicationsCloseDate)
+      : null
+    : { label: 'Applications closed', urgent: false };
 
   // GL-155's public profile screen may not be registered yet - routing into
   // it unconditionally would throw on tap ("was not handled by any
@@ -194,7 +203,6 @@ export default function GigDetailScreen({ onSignIn }) {
   // viewerApplication itself is server-derived (GL-245), never inferred here.
   const isOwner = user?.role === 'business' && business?.id === user?.id;
   const isSeeker = user?.role === 'seeker';
-  const isOpen = gigStatus === 'open';
 
   let primaryAction = null;
   if (isOwner) {
@@ -204,8 +212,7 @@ export default function GigDetailScreen({ onSignIn }) {
     };
   } else if (viewerApplication) {
     primaryAction = {
-      label:
-        ALREADY_APPLIED_LABEL_BY_STATUS[viewerApplication.status] ?? 'View your application',
+      label: ALREADY_APPLIED_LABEL_BY_STATUS[viewerApplication.status] ?? 'View your application',
       onPress: () =>
         navigation.navigate('ApplicationDetail', { applicationId: viewerApplication.id }),
     };
