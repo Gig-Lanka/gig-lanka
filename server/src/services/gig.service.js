@@ -15,9 +15,13 @@ const SORT_SPECS = {
 
 // Builds the filter for the public listing only — status: 'open' is fixed
 // here and never derived from `query`, so no combination of parameters can
-// widen the result past open gigs.
+// widen the result past open gigs. applicationsCloseDate is excluded here
+// too: a gig whose deadline has passed but hasn't been read (and lazily
+// closed, see closeIfExpired) since must still not appear as browsable.
+// $not/$lt also matches a missing field, so gigs with no deadline pass through.
 const buildOpenGigFilter = (query) => {
-  const filter = { status: 'open' };
+  const today = new Date().toISOString().slice(0, 10);
+  const filter = { status: 'open', applicationsCloseDate: { $not: { $lt: today } } };
 
   if (query.q) {
     // Metacharacters must be escaped before building the RegExp: an
@@ -91,6 +95,23 @@ const UPDATABLE_FIELDS = [
   'applicationsCloseDate',
 ];
 
+// GL-283: nothing else ever moves a gig from 'open' to 'closed' on its own -
+// the only other writer is the business's manual PATCH .../close. Without
+// this, `status` can say 'open' indefinitely after applicationsCloseDate has
+// passed, while anything computing off the date directly (the deadline
+// banner) disagrees with it. Called wherever a single gig is read or written,
+// so status is corrected before anyone - client or another server code path -
+// reads it. Mirrors the 'system' actor pattern planned for positions-filled
+// auto-close: a status change with no HTTP caller behind it.
+const closeIfExpired = async (gig) => {
+  const today = new Date().toISOString().slice(0, 10);
+  if (gig.status === 'open' && gig.applicationsCloseDate && gig.applicationsCloseDate < today) {
+    gig.status = 'closed';
+    await gig.save({ validateModifiedOnly: true });
+  }
+  return gig;
+};
+
 // Exported so other components needing the same existence-then-ownership
 // check on a gig can reuse it rather than growing a second copy — GL-252's
 // applicant list is the first caller outside this file.
@@ -146,6 +167,8 @@ export const getGigById = async (id) => {
     throw new ApiError(404, 'NOT_FOUND', 'Gig not found.');
   }
 
+  await closeIfExpired(gig);
+
   const gigJson = gig.toJSON();
   // Name and photo come from the poster's profile, not the User record —
   // User holds credentials and a role, the profile holds what everyone else
@@ -156,6 +179,17 @@ export const getGigById = async (id) => {
 };
 
 export const listMyGigs = async (userId) => {
+  // Unpaginated and every status, so a single updateMany sweep of this
+  // business's own expired-but-still-open gigs before the read is cheaper
+  // and simpler than closing each one individually as closeIfExpired does
+  // for a single gig - and it keeps every card's badge, deadline and action
+  // row reading the same corrected status the list already returns.
+  const today = new Date().toISOString().slice(0, 10);
+  await Gig.updateMany(
+    { postedBy: userId, status: 'open', applicationsCloseDate: { $lt: today } },
+    { $set: { status: 'closed' } },
+  );
+
   const gigs = await Gig.find({ postedBy: userId }).sort({ createdAt: -1, _id: -1 });
 
   return { gigs };
@@ -202,6 +236,8 @@ export const assertGigIsOpen = async (id) => {
   if (!gig) {
     throw new ApiError(404, 'NOT_FOUND', 'Gig not found.');
   }
+
+  await closeIfExpired(gig);
 
   if (gig.status !== 'open') {
     throw new ApiError(409, 'GIG_CLOSED', 'This gig is no longer open.');

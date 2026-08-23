@@ -17,7 +17,15 @@ function statusLabel(status) {
 
 export default function BusinessGigCard({ gig, onPress, className, ...props }) {
   const { title, payAmount, payType, status, applicantCount = 0, applicationsCloseDate } = gig;
-  const deadline = applicationsCloseDate ? formatDeadline(applicationsCloseDate) : null;
+  const isOpen = status === 'open';
+  // GL-283: same reasoning as GigDetailScreen - once not open, the deadline
+  // chip shows the same status-derived "Applications closed" the badge
+  // already shows, rather than a second, independently date-derived label.
+  const deadline = isOpen
+    ? applicationsCloseDate
+      ? formatDeadline(applicationsCloseDate)
+      : null
+    : { label: 'Applications closed', urgent: false };
   const Container = onPress ? Pressable : View;
 
   return (
