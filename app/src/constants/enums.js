@@ -84,6 +84,28 @@ export const REJECTION_REASONS = freezeList([
   { value: 'positions_filled', label: 'Positions filled', systemOnly: true },
 ]);
 
+// Reporting has no business-rules brief — these were agreed at Sprint 3
+// planning with the product owner. Mirrored from server/src/models/report.model.js,
+// the deliberate duplication every other vocabulary here uses. NOT derived from
+// REJECTION_REASONS: the shape is similar but the vocabulary is unrelated, and
+// sharing them would couple two closed lists that change for different reasons.
+export const REPORT_REASONS = freezeList([
+  { value: 'spam_or_scam', label: 'Spam or scam' },
+  { value: 'misleading_gig_details', label: 'Misleading gig details' },
+  { value: 'inappropriate_content', label: 'Inappropriate content' },
+  { value: 'harassment_or_abuse', label: 'Harassment or abuse' },
+  { value: 'unsafe_working_conditions', label: 'Unsafe working conditions' },
+  { value: 'other', label: 'Other' },
+]);
+
+// `open` is the only status this sprint produces. `resolved` and `dismissed`
+// are declared for Sprint 4 (the moderation actions) and have no writer yet.
+export const REPORT_STATUSES = freezeList([
+  { value: 'open', label: 'Open' },
+  { value: 'resolved', label: 'Resolved' },
+  { value: 'dismissed', label: 'Dismissed' },
+]);
+
 export const BUSINESS_REVIEW_CATEGORIES = freezeList([
   { value: 'fair_payment', label: 'Fair payment' },
   { value: 'clear_job_description', label: 'Clear job description' },
