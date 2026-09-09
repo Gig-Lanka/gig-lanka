@@ -84,6 +84,29 @@ export const REJECTION_REASONS = freezeList([
   { value: 'positions_filled', label: 'Positions filled', systemOnly: true },
 ]);
 
+// GL-301 reporting vocabulary. Deliberately NOT derived from REJECTION_REASONS:
+// the shape is similar on purpose, but the two closed lists are unrelated and
+// sharing them would couple a moderation vocabulary to a hiring one. Keep this
+// list in lockstep with the Mongoose enum in server/src/models/report.model.js.
+export const REPORT_REASONS = freezeList([
+  { value: 'spam_or_scam', label: 'Spam or scam' },
+  { value: 'misleading_gig_details', label: 'Misleading gig details' },
+  { value: 'inappropriate_content', label: 'Inappropriate content' },
+  { value: 'harassment_or_abuse', label: 'Harassment or abuse' },
+  { value: 'unsafe_working_conditions', label: 'Unsafe working conditions' },
+  { value: 'other', label: 'Other' },
+]);
+
+// A report is `open` for all of Sprint 3 — there is no client or server path
+// that writes any other value this sprint. `resolved` and `dismissed` are
+// declared now so Sprint 4's moderation actions have a vocabulary to land on,
+// the same way savedBy was declared before anything wrote to it.
+export const REPORT_STATUSES = freezeList([
+  { value: 'open', label: 'Open' },
+  { value: 'resolved', label: 'Resolved' },
+  { value: 'dismissed', label: 'Dismissed' },
+]);
+
 export const BUSINESS_REVIEW_CATEGORIES = freezeList([
   { value: 'fair_payment', label: 'Fair payment' },
   { value: 'clear_job_description', label: 'Clear job description' },
