@@ -67,7 +67,18 @@ const reportSchema = new mongoose.Schema(
     },
   },
   {
+    // Reports are permanent records of what someone said. Like reviews, there
+    // is no edit and no delete path — not this sprint and not planned — so the
+    // document only ever carries a createdAt.
     timestamps: { createdAt: true, updatedAt: false },
+    toJSON: {
+      transform: (doc, ret) => {
+        ret.id = ret._id;
+        delete ret._id;
+        delete ret.__v;
+        return ret;
+      },
+    },
   },
 );
 
