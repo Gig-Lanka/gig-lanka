@@ -71,4 +71,13 @@ const reportSchema = new mongoose.Schema(
   },
 );
 
+// One open report per reporter per target. This index is unique OUTRIGHT — not
+// a partial index filtered on `status: 'open'`. Sprint 4 adds resolve and
+// dismiss; a partial index would then silently let the same reporter file a
+// second report against the same target once the first was resolved. That may
+// turn out to be the desired rule, but it is a Sprint 4 decision and this
+// sprint must not pre-empt it. If Sprint 4 wants repeat reports after
+// resolution, this is the line that has to change.
+reportSchema.index({ reporter: 1, targetType: 1, targetId: 1 }, { unique: true });
+
 export const Report = mongoose.model('Report', reportSchema);
