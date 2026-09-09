@@ -18,6 +18,13 @@ export const REPORT_REASON_CODES = [
 // deliberately not reportable and no fourth value is ever added here.
 export const REPORT_TARGET_TYPES = ['user', 'gig'];
 
+// The full status vocabulary. `open` is the only value any code path writes
+// this sprint — creation sets it and nothing else touches it. `resolved` and
+// `dismissed` are declared now purely so Sprint 4's resolve/dismiss actions
+// have somewhere to land; shipping the enum without a writer is the same
+// discipline gig.savedBy was declared under.
+export const REPORT_STATUSES = ['open', 'resolved', 'dismissed'];
+
 const reportSchema = new mongoose.Schema(
   {
     // Always taken from the authenticated token, never from the request body —
@@ -50,6 +57,13 @@ const reportSchema = new mongoose.Schema(
     note: {
       type: String,
       maxlength: 300,
+    },
+    // Always `open` on creation. Sprint 3 ships no path that writes any other
+    // value — see REPORT_STATUSES above for why the wider enum exists anyway.
+    status: {
+      type: String,
+      enum: REPORT_STATUSES,
+      default: 'open',
     },
   },
   {
