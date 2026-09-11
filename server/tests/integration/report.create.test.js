@@ -68,6 +68,9 @@ const validReportPayload = (overrides = {}) => ({
   ...overrides,
 });
 
+const omit = (payload, field) =>
+  Object.fromEntries(Object.entries(payload).filter(([key]) => key !== field));
+
 describe('POST /api/reports', () => {
   it('rejects a guest with 401', async () => {
     const res = await request(app).post('/api/reports').send(validReportPayload());
@@ -84,6 +87,116 @@ describe('POST /api/reports', () => {
       .send(validReportPayload());
 
     expect(res.status).toBe(403);
+  });
+
+  it('rejects a targetType outside user/gig with 400', async () => {
+    const reporter = await registerSeeker('report-bad-target-type-reporter@example.com');
+
+    const res = await request(app)
+      .post('/api/reports')
+      .set('Authorization', `Bearer ${reporter.accessToken}`)
+      .send(validReportPayload({ targetType: 'review' }));
+
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('VALIDATION_ERROR');
+    expect(res.body.error.errors[0].field).toBe('targetType');
+  });
+
+  it('rejects a missing targetType with 400', async () => {
+    const reporter = await registerSeeker('report-missing-target-type-reporter@example.com');
+
+    const res = await request(app)
+      .post('/api/reports')
+      .set('Authorization', `Bearer ${reporter.accessToken}`)
+      .send(omit(validReportPayload(), 'targetType'));
+
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('VALIDATION_ERROR');
+    expect(res.body.error.errors[0].field).toBe('targetType');
+  });
+
+  it('rejects a reasonCode outside the closed list with 400', async () => {
+    const reporter = await registerSeeker('report-bad-reason-code-reporter@example.com');
+
+    const res = await request(app)
+      .post('/api/reports')
+      .set('Authorization', `Bearer ${reporter.accessToken}`)
+      .send(validReportPayload({ reasonCode: 'made_it_up' }));
+
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('VALIDATION_ERROR');
+    expect(res.body.error.errors[0].field).toBe('reasonCode');
+  });
+
+  it('rejects a missing reasonCode with 400', async () => {
+    const reporter = await registerSeeker('report-missing-reason-code-reporter@example.com');
+
+    const res = await request(app)
+      .post('/api/reports')
+      .set('Authorization', `Bearer ${reporter.accessToken}`)
+      .send(omit(validReportPayload(), 'reasonCode'));
+
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('VALIDATION_ERROR');
+    expect(res.body.error.errors[0].field).toBe('reasonCode');
+  });
+
+  it('rejects REJECTION_REASON_CODES values not shared with the report vocabulary', async () => {
+    const reporter = await registerSeeker('report-rejection-code-reporter@example.com');
+
+    const res = await request(app)
+      .post('/api/reports')
+      .set('Authorization', `Bearer ${reporter.accessToken}`)
+      // A real value from the unrelated rejection-reason vocabulary (§6.8) —
+      // must not be accepted here, the two closed lists are deliberately
+      // never shared.
+      .send(validReportPayload({ reasonCode: 'schedule_mismatch' }));
+
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('VALIDATION_ERROR');
+  });
+
+  it('rejects a note over 300 characters with 400', async () => {
+    const reporter = await registerSeeker('report-long-note-reporter@example.com');
+
+    const res = await request(app)
+      .post('/api/reports')
+      .set('Authorization', `Bearer ${reporter.accessToken}`)
+      .send(validReportPayload({ note: 'a'.repeat(301) }));
+
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('VALIDATION_ERROR');
+    expect(res.body.error.errors[0].field).toBe('note');
+  });
+
+  it('accepts a note at exactly 300 characters and stores it verbatim', async () => {
+    const reporter = await registerSeeker('report-max-note-reporter@example.com');
+    const target = await registerSeeker('report-max-note-target@example.com');
+    const note = 'a'.repeat(300);
+
+    const res = await request(app)
+      .post('/api/reports')
+      .set('Authorization', `Bearer ${reporter.accessToken}`)
+      .send(validReportPayload({ targetType: 'user', targetId: target.userId, note }));
+
+    expect(res.status).toBe(201);
+    expect(res.body.data.report.note).toBe(note);
+  });
+
+  it('accepts a report with no note at all — note is optional', async () => {
+    const reporter = await registerSeeker('report-no-note-reporter@example.com');
+    const target = await registerSeeker('report-no-note-target@example.com');
+    const payload = omit(
+      validReportPayload({ targetType: 'user', targetId: target.userId }),
+      'note',
+    );
+
+    const res = await request(app)
+      .post('/api/reports')
+      .set('Authorization', `Bearer ${reporter.accessToken}`)
+      .send(payload);
+
+    expect(res.status).toBe(201);
   });
 
   it('creates a report against a user', async () => {
@@ -274,5 +387,35 @@ describe('POST /api/reports', () => {
 
     const reports = await Report.find({ targetId: target.userId });
     expect(reports).toHaveLength(1);
+  });
+
+  it('is readable back through GET /api/reports/mine, scoped to the caller only', async () => {
+    const reporter = await registerSeeker('report-mine-scoped-reporter@example.com');
+    const otherReporter = await registerSeeker('report-mine-scoped-other-reporter@example.com');
+    const target = await registerSeeker('report-mine-scoped-target@example.com');
+
+    const created = await request(app)
+      .post('/api/reports')
+      .set('Authorization', `Bearer ${reporter.accessToken}`)
+      .send(validReportPayload({ targetType: 'user', targetId: target.userId }));
+    expect(created.status).toBe(201);
+
+    const mineRes = await request(app)
+      .get('/api/reports/mine')
+      .set('Authorization', `Bearer ${reporter.accessToken}`);
+
+    expect(mineRes.status).toBe(200);
+    expect(mineRes.body.data.reports).toHaveLength(1);
+    expect(mineRes.body.data.reports[0].id).toBe(created.body.data.report.id);
+    expect(mineRes.body.data.reports[0].reporter).toBe(reporter.userId);
+
+    // No parameter on this endpoint reaches another caller's reports — the
+    // second reporter's own list stays empty even though a report exists
+    // against the same target.
+    const otherMineRes = await request(app)
+      .get('/api/reports/mine')
+      .set('Authorization', `Bearer ${otherReporter.accessToken}`);
+
+    expect(otherMineRes.body.data.reports).toEqual([]);
   });
 });
