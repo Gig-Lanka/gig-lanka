@@ -115,11 +115,20 @@ const TITLE_MAX_LENGTH = 80;
 const DESCRIPTION_MIN_LENGTH = 20;
 const DESCRIPTION_MAX_LENGTH = 2000;
 
+export const SKILL_TRIAL_TASK_TITLE_MAX_LENGTH = 80;
+export const SKILL_TRIAL_TASK_BRIEF_MIN_LENGTH = 20;
+export const SKILL_TRIAL_TASK_BRIEF_MAX_LENGTH = 1000;
+
 // Mirrors GL-158's gig validation client-side - title/description length
 // plus GL-107's four non-negotiable rules - so the form rejects them before
 // a request is ever sent, not just relies on the picker/keyboard to make
 // them hard to violate. See GigForm.js. Shared by PostGigScreen and (GL-120)
 // EditGigScreen since both submit the same shape.
+//
+// skillTrial* fields mirror GL-341's server-side rules (gig.model.js /
+// gig.validator.js) the same way. `skillTrialLocked` (GL-342/343: the gig has
+// applicants, so the section is disabled and never submitted) skips all of
+// them - those fields won't be sent, so there is nothing to validate.
 export function validateGigForm({
   title,
   description,
@@ -129,6 +138,13 @@ export function validateGigForm({
   city,
   applicationsCloseDate,
   positions,
+  skillTrialRequirement,
+  skillTrialTaskTitle,
+  skillTrialTaskBrief,
+  skillTrialSubmissionType,
+  skillTrialEffortEstimate,
+  skillTrialConfirmed,
+  skillTrialLocked = false,
 }) {
   const errors = {};
 
@@ -164,6 +180,36 @@ export function validateGigForm({
   const numericPositions = Number(positions);
   if (!Number.isInteger(numericPositions) || numericPositions < 1) {
     errors.positions = 'Positions must be a whole number of at least 1.';
+  }
+
+  if (!skillTrialLocked && skillTrialRequirement === 'optional') {
+    const trimmedTaskTitle = (skillTrialTaskTitle || '').trim();
+    if (!trimmedTaskTitle) {
+      errors.skillTrialTaskTitle = 'Enter a task title.';
+    } else if (trimmedTaskTitle.length > SKILL_TRIAL_TASK_TITLE_MAX_LENGTH) {
+      errors.skillTrialTaskTitle = `Task title must be ${SKILL_TRIAL_TASK_TITLE_MAX_LENGTH} characters or fewer.`;
+    }
+
+    const taskBriefLength = (skillTrialTaskBrief || '').trim().length;
+    if (
+      taskBriefLength < SKILL_TRIAL_TASK_BRIEF_MIN_LENGTH ||
+      taskBriefLength > SKILL_TRIAL_TASK_BRIEF_MAX_LENGTH
+    ) {
+      errors.skillTrialTaskBrief = `Task brief must be between ${SKILL_TRIAL_TASK_BRIEF_MIN_LENGTH} and ${SKILL_TRIAL_TASK_BRIEF_MAX_LENGTH} characters.`;
+    }
+
+    if (!skillTrialSubmissionType) {
+      errors.skillTrialSubmissionType = 'Select how the seeker should submit their trial.';
+    }
+
+    if (!skillTrialEffortEstimate) {
+      errors.skillTrialEffortEstimate = 'Select an effort estimate.';
+    }
+
+    if (!skillTrialConfirmed) {
+      errors.skillTrialConfirmed =
+        'Confirm this is a sample of skill, not deliverable work, before attaching it.';
+    }
   }
 
   return errors;

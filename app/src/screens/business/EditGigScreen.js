@@ -17,12 +17,22 @@ const GENERIC_LOAD_ERROR = 'Could not load this gig. Check your connection and t
 const GENERIC_SAVE_ERROR = 'Could not save these changes. Check your connection and try again.';
 const GENERIC_CLOSE_ERROR = 'Could not close this gig. Try again.';
 const GENERIC_DELETE_ERROR = 'Could not delete this gig. Try again.';
+const SKILL_TRIAL_LOCKED_REASON =
+  "This gig already has applicants, so its skill trial terms can't change underneath people who already applied under them.";
+const SKILL_TRIAL_LOCKED_SAVE_ERROR =
+  "This gig's skill trial terms can't change now that someone has applied - the rest of your changes were not saved. Go back and try again.";
 
 // Same shape PostGigScreen sends to POST - PUT uses the same validation
 // (§10.7 reuses §10.3), and since PUT replaces the gig in full, every field
 // the form holds is sent, never only the ones that changed. status is never
 // included: closing is PATCH /gigs/:id/close, not this form.
-function buildGigPayload(values) {
+//
+// skillTrial is the one exception to "always send everything" (GL-342,
+// GL-343): when locked, the key is omitted entirely so the server's "omitted
+// means unchanged" rule leaves the existing trial alone. When unlocked, the
+// key is always sent - even for 'none' - since on update (unlike create)
+// omitting it would NOT clear a trial the user just removed in the form.
+function buildGigPayload(values, skillTrialLocked) {
   const payload = {
     title: values.title.trim(),
     description: values.description.trim(),
@@ -39,6 +49,19 @@ function buildGigPayload(values) {
   if ((values.area || '').trim()) payload.area = values.area.trim();
   if (values.startDate) payload.startDate = values.startDate;
   if (values.applicationsCloseDate) payload.applicationsCloseDate = values.applicationsCloseDate;
+
+  if (!skillTrialLocked) {
+    payload.skillTrial =
+      values.skillTrialRequirement === 'optional'
+        ? {
+            requirement: 'optional',
+            taskTitle: values.skillTrialTaskTitle.trim(),
+            taskBrief: values.skillTrialTaskBrief.trim(),
+            submissionType: values.skillTrialSubmissionType,
+            effortEstimate: values.skillTrialEffortEstimate,
+          }
+        : { requirement: 'none' };
+  }
 
   return payload;
 }
@@ -58,6 +81,15 @@ function gigToFormValues(gig) {
     positions: gig.positions != null ? String(gig.positions) : '1',
     startDate: gig.startDate ?? null,
     applicationsCloseDate: gig.applicationsCloseDate ?? null,
+    skillTrialRequirement: gig.skillTrial?.requirement ?? 'none',
+    skillTrialTaskTitle: gig.skillTrial?.taskTitle ?? '',
+    skillTrialTaskBrief: gig.skillTrial?.taskBrief ?? '',
+    skillTrialSubmissionType: gig.skillTrial?.submissionType,
+    skillTrialEffortEstimate: gig.skillTrial?.effortEstimate,
+    // Never persisted (GL-343) and never known from a past save - always
+    // starts unticked, so keeping an existing trial still requires a fresh
+    // confirmation on this save.
+    skillTrialConfirmed: false,
   };
 }
 
@@ -114,17 +146,24 @@ export default function EditGigScreen() {
     setValues((prev) => ({ ...prev, [field]: value }));
   }, []);
 
+  // GL-342's guard is keyed on whether an application has ever existed, not
+  // this count (it falls when applicants withdraw or are rejected) - the
+  // client has no cheaper way to know that, so this is a best-effort lock,
+  // backstopped below by the GIG_HAS_APPLICANTS branch for the rare case
+  // where every applicant has withdrawn and the server still refuses.
+  const skillTrialLocked = applicantCount > 0;
+
   async function handleSubmit() {
     if (busy) return;
 
-    const validationErrors = validateGigForm(values);
+    const validationErrors = validateGigForm({ ...values, skillTrialLocked });
     setErrors(validationErrors);
     setFormError('');
     if (Object.keys(validationErrors).length > 0) return;
 
     setSubmitting(true);
     try {
-      await gigApi.updateGig(gigId, buildGigPayload(values));
+      await gigApi.updateGig(gigId, buildGigPayload(values, skillTrialLocked));
       navigation.goBack();
     } catch (error) {
       const apiError = error.response?.data?.error;
@@ -141,6 +180,11 @@ export default function EditGigScreen() {
         // to edit, so drop into the same "no longer exists" state the
         // initial fetch uses, rather than leaving a Notice on a dead form.
         setLoadError('This gig no longer exists.');
+      } else if (apiError?.code === 'GIG_HAS_APPLICANTS') {
+        // Only reachable when applicantCount had already fallen to zero (so
+        // the section looked unlocked) while an application still exists on
+        // record - see the comment on skillTrialLocked above.
+        setFormError(SKILL_TRIAL_LOCKED_SAVE_ERROR);
       } else {
         setFormError(apiError?.message || GENERIC_SAVE_ERROR);
       }
@@ -202,7 +246,11 @@ export default function EditGigScreen() {
     return (
       <SafeAreaView className="flex-1 bg-paper" edges={['top', 'bottom']}>
         <ScreenHeader title="Edit gig" small onBack={() => navigation.goBack()} />
-        <EmptyState message={loadError} actionLabel="Go back" onAction={() => navigation.goBack()} />
+        <EmptyState
+          message={loadError}
+          actionLabel="Go back"
+          onAction={() => navigation.goBack()}
+        />
       </SafeAreaView>
     );
   }
@@ -227,9 +275,16 @@ export default function EditGigScreen() {
           formError={formError}
           banner={applicantsBanner}
           disabled={busy}
+          skillTrialLocked={skillTrialLocked}
+          skillTrialLockedReason={SKILL_TRIAL_LOCKED_REASON}
           footer={
             <View className="gap-3">
-              <Button loading={submitting} disabled={busy && !submitting} trailingArrow onPress={handleSubmit}>
+              <Button
+                loading={submitting}
+                disabled={busy && !submitting}
+                trailingArrow
+                onPress={handleSubmit}
+              >
                 Save changes
               </Button>
 
@@ -259,8 +314,12 @@ export default function EditGigScreen() {
                 </Button>
               </View>
 
-              {closeError ? <Text className="text-[12.5px] text-danger-ink">{closeError}</Text> : null}
-              {deleteError ? <Text className="text-[12.5px] text-danger-ink">{deleteError}</Text> : null}
+              {closeError ? (
+                <Text className="text-[12.5px] text-danger-ink">{closeError}</Text>
+              ) : null}
+              {deleteError ? (
+                <Text className="text-[12.5px] text-danger-ink">{deleteError}</Text>
+              ) : null}
             </View>
           }
         />

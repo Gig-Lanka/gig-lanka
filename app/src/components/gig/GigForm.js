@@ -13,12 +13,16 @@ import {
 import Chip from '../ui/Chip';
 import Dropdown from '../ui/Dropdown';
 import Notice from '../ui/Notice';
+import SectionLabel from '../ui/SectionLabel';
 import TextInput from '../ui/TextInput';
 import {
   COMMITMENT_LENGTHS,
   GIG_CATEGORIES,
   PAY_TYPES,
   SCHEDULE_TAGS,
+  SKILL_TRIAL_EFFORT_ESTIMATES,
+  SKILL_TRIAL_REQUIREMENTS,
+  SKILL_TRIAL_SUBMISSION_TYPES,
 } from '../../constants/enums';
 
 function toDateString(date) {
@@ -53,6 +57,15 @@ export function createEmptyGigFormValues() {
     positions: '1',
     startDate: null,
     applicationsCloseDate: null,
+    skillTrialRequirement: 'none',
+    skillTrialTaskTitle: '',
+    skillTrialTaskBrief: '',
+    skillTrialSubmissionType: undefined,
+    skillTrialEffortEstimate: undefined,
+    // Client-side commitment only, never persisted (GL-343) - always starts
+    // unticked, on both post and edit, so re-saving an existing trial still
+    // requires a fresh confirmation.
+    skillTrialConfirmed: false,
   };
 }
 
@@ -116,6 +129,134 @@ function RemoteToggleField({ value, onChange, disabled }) {
         {value ? <Text className="text-[13px] font-bold text-paper">✓</Text> : null}
       </View>
     </Pressable>
+  );
+}
+
+// Same checkbox visual as RemoteToggleField's, but top-aligned and with an
+// error slot - the unpaid-work confirmation's label runs to two lines and
+// (GL-343) is the one control in this form that blocks submission on its own.
+function ConfirmationCheckbox({ value, onChange, error, disabled, children }) {
+  return (
+    <View className="mb-4">
+      <Pressable
+        onPress={() => !disabled && onChange(!value)}
+        disabled={disabled}
+        className={[
+          'flex-row items-start gap-3 rounded-ds-lg bg-haze px-4 py-3.5',
+          disabled && 'opacity-40',
+        ]
+          .filter(Boolean)
+          .join(' ')}
+      >
+        <View
+          className={[
+            'mt-0.5 h-6 w-6 items-center justify-center rounded-[8px]',
+            value ? 'bg-signal' : 'border-[1.5px] border-line bg-paper',
+          ].join(' ')}
+        >
+          {value ? <Text className="text-[13px] font-bold text-paper">✓</Text> : null}
+        </View>
+        <Text className="flex-1 text-[14.5px] font-medium text-ink">{children}</Text>
+      </Pressable>
+      {error ? <Text className="mt-1.5 text-[13px] font-medium text-danger">{error}</Text> : null}
+    </View>
+  );
+}
+
+// Choosing 'none' (the default) collapses this to the single Dropdown - the
+// only remaining vocabulary value is 'optional', per the product decision
+// removing 'required' (see enums.js). Choosing 'optional' reveals the four
+// task fields plus the unpaid-work confirmation, the same way the remote
+// toggle above visibly changes whether city is required. `disabled` covers
+// both an in-flight submit and GL-342's applicants lock; `disabledReason` is
+// shown only for the latter, per GL-343's "state the rule on screen" rule.
+function SkillTrialSection({
+  requirement,
+  taskTitle,
+  taskBrief,
+  submissionType,
+  effortEstimate,
+  confirmed,
+  onChange,
+  errors,
+  disabled,
+  disabledReason,
+}) {
+  const attached = requirement === 'optional';
+
+  return (
+    <View className="mb-4">
+      <SectionLabel className="mb-2">Skill trial</SectionLabel>
+
+      {disabledReason ? (
+        <View className="mb-3">
+          <Notice>{disabledReason}</Notice>
+        </View>
+      ) : null}
+
+      <Dropdown
+        label="Attach a skill trial?"
+        placeholder="Select whether this gig has a skill trial"
+        options={SKILL_TRIAL_REQUIREMENTS}
+        value={requirement}
+        onChange={(next) => onChange('skillTrialRequirement', next)}
+        disabled={disabled}
+      />
+
+      {attached ? (
+        <View pointerEvents={disabled ? 'none' : 'auto'}>
+          <TextInput
+            label="Task title"
+            placeholder="Write a short function"
+            value={taskTitle}
+            onChangeText={(text) => onChange('skillTrialTaskTitle', text)}
+            error={errors.skillTrialTaskTitle}
+            disabled={disabled}
+            maxLength={80}
+          />
+
+          <TextInput
+            label="Task brief"
+            placeholder="Describe exactly what you want to see, in plain terms…"
+            value={taskBrief}
+            onChangeText={(text) => onChange('skillTrialTaskBrief', text)}
+            error={errors.skillTrialTaskBrief}
+            disabled={disabled}
+            multiline
+            maxLength={1000}
+          />
+
+          <Dropdown
+            label="How should they submit it?"
+            placeholder="Select a submission type"
+            options={SKILL_TRIAL_SUBMISSION_TYPES}
+            value={submissionType}
+            onChange={(next) => onChange('skillTrialSubmissionType', next)}
+            error={errors.skillTrialSubmissionType}
+            disabled={disabled}
+          />
+
+          <Dropdown
+            label="How long should it take?"
+            placeholder="Select an effort estimate"
+            options={SKILL_TRIAL_EFFORT_ESTIMATES}
+            value={effortEstimate}
+            onChange={(next) => onChange('skillTrialEffortEstimate', next)}
+            error={errors.skillTrialEffortEstimate}
+            disabled={disabled}
+          />
+
+          <ConfirmationCheckbox
+            value={confirmed}
+            onChange={(next) => onChange('skillTrialConfirmed', next)}
+            error={errors.skillTrialConfirmed}
+            disabled={disabled}
+          >
+            This is a sample of their skill, not deliverable work I&apos;d otherwise pay for.
+          </ConfirmationCheckbox>
+        </View>
+      ) : null}
+    </View>
   );
 }
 
@@ -243,6 +384,8 @@ export default function GigForm({
   footer,
   disabled = false,
   keyboardVerticalOffset = 0,
+  skillTrialLocked = false,
+  skillTrialLockedReason,
 }) {
   const isRemote = Boolean(values.remote);
 
@@ -391,6 +534,19 @@ export default function GigForm({
           placeholder="Select a closing date (optional)"
           error={errors.applicationsCloseDate}
           disabled={disabled}
+        />
+
+        <SkillTrialSection
+          requirement={values.skillTrialRequirement}
+          taskTitle={values.skillTrialTaskTitle}
+          taskBrief={values.skillTrialTaskBrief}
+          submissionType={values.skillTrialSubmissionType}
+          effortEstimate={values.skillTrialEffortEstimate}
+          confirmed={values.skillTrialConfirmed}
+          onChange={set}
+          errors={errors}
+          disabled={disabled || skillTrialLocked}
+          disabledReason={skillTrialLocked ? skillTrialLockedReason : undefined}
         />
       </ScrollView>
 
