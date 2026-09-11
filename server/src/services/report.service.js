@@ -3,6 +3,7 @@ import { ApiError } from '../utils/ApiError.js';
 import { Report } from '../models/report.model.js';
 import { User } from '../models/user.model.js';
 import { Gig } from '../models/gig.model.js';
+import { getPublicIdentity } from './profile.service.js';
 
 // Checked before anything else — including who's asking — so a report
 // against a bad id always 404s the same way, and refusal codes can never be
@@ -89,4 +90,56 @@ export const createReport = async (actor, body) => {
     }
     throw err;
   }
+};
+
+// Never the full gig — just enough to recognise which posting a report
+// belongs to, the same trimmed shape application.service.js's toGigSummary
+// uses. A deleted gig (a business can delete its own) reads back as null
+// rather than breaking the response.
+const toGigSummary = (gig) => {
+  if (!gig) return null;
+
+  const gigJson = gig.toJSON();
+
+  return {
+    id: gigJson.id,
+    title: gigJson.title,
+    payAmount: gigJson.payAmount,
+    payType: gigJson.payType,
+    city: gigJson.city,
+    status: gigJson.status,
+  };
+};
+
+// The target summary carried on each of the caller's own reports — a public
+// identity for a user target, a gig summary for a gig target. Deliberately
+// nothing about any *other* report against the same target: no count, no
+// "N others reported this". That's another reporter's action, not this
+// caller's own, and surfacing it would double as a way to gauge how much
+// attention a target is drawing.
+const getTargetSummary = async (targetType, targetId) => {
+  if (targetType === 'user') {
+    return getPublicIdentity(targetId);
+  }
+
+  const gig = await Gig.findById(targetId);
+  return toGigSummary(gig);
+};
+
+// GL-368: the reports the signed-in caller has filed, newest first, each
+// with its target's summary attached. Scoped to `reporter: callerId` only —
+// there is no parameter that reaches another reporter's reports, matching
+// listMyApplications and listMyReviews. Unpaginated, like those two: a
+// caller's own list is expected to return in full.
+export const listMyReports = async (callerId) => {
+  const reports = await Report.find({ reporter: callerId }).sort({ createdAt: -1, _id: -1 });
+
+  const reportsWithTarget = await Promise.all(
+    reports.map(async (report) => {
+      const reportJson = report.toJSON();
+      return { ...reportJson, target: await getTargetSummary(reportJson.targetType, reportJson.targetId) };
+    }),
+  );
+
+  return { reports: reportsWithTarget };
 };
