@@ -572,6 +572,33 @@ The closed list a report's `reasonCode` is drawn from (§13.1). Deliberately not
 | `unsafe_working_conditions` | Unsafe working conditions |
 | `other` | Other |
 
+### 6.12 Skill trial vocabularies
+
+The three closed lists behind `Gig.skillTrial` (§10.1). Each is a Mongoose enum on the server and a frozen labelled list in `app/src/constants/enums.js`, the same deliberate duplication as every other vocabulary above.
+
+**Requirement** — whether a trial is attached, and whether it is required to apply. Two values only: the Application & Hiring brief originally named a third, `required`, but the product decided against it — a skill trial is never mandatory to apply, in no instance.
+
+| Value | Label |
+|---|---|
+| `none` | No trial |
+| `optional` | Optional |
+
+**Submission type** — how the seeker is expected to submit their attempt.
+
+| Value | Label |
+|---|---|
+| `text` | Text |
+| `file` | File |
+| `text_and_file` | Text and file |
+
+**Effort estimate** — the time the task is expected to take. `1_to_2_hours` is a hard ceiling: the brief caps trial effort at two hours to protect the seeker, so there is no fourth value and none may be added.
+
+| Value | Label |
+|---|---|
+| `under_30_minutes` | Under 30 minutes |
+| `30_to_60_minutes` | 30-60 minutes |
+| `1_to_2_hours` | 1-2 hours |
+
 ---
 
 ## 7. Review document shape
@@ -1077,6 +1104,13 @@ Returned under `data.gig` (single) or `data.gigs` (list), everywhere a gig appea
   "status": "open",
   "postedBy": "64f1a2b3c4d5e6f7a8b9c0d4",
   "applicantCount": 0,
+  "skillTrial": {
+    "requirement": "optional",
+    "taskTitle": "Write a two-paragraph product description",
+    "taskBrief": "Given the attached photo and three bullet points, write a persuasive but accurate product description under 150 words.",
+    "submissionType": "text",
+    "effortEstimate": "under_30_minutes"
+  },
   "createdAt": "2026-08-12T09:15:00.000Z",
   "updatedAt": "2026-08-12T09:15:00.000Z"
 }
@@ -1088,6 +1122,7 @@ Returned under `data.gig` (single) or `data.gigs` (list), everywhere a gig appea
 - `status` defaults to `open` on creation and cannot be set by a client — see 10.3.
 - `postedBy` is a user id, taken from the caller's token on create and never from the request body.
 - `applicantCount` defaults to `0`. It is owned by Application & Hiring (GL-110 and later); this component only declares and defaults it, never writes it.
+- **`skillTrial` is optional and, when the gig has none, omitted entirely — never an empty object.** `requirement` is one of `none` or `optional` (§6.12; the Application & Hiring brief's original third value, `required`, was a considered-and-rejected product decision — a skill trial is never mandatory to apply, in no case). `taskTitle` (max 80 characters) and `taskBrief` (20–1,000 characters) are required whenever `requirement` is `optional`; `submissionType` and `effortEstimate` are each one of the closed vocabularies at §6.12. When `requirement` is `none`, none of the other four fields may be present. Reaches every read that returns a gig — §10.4 (list), §10.5 (single) and §10.6 (mine) — because a seeker must see the task and its effort estimate before deciding to apply.
 - **`savedBy` is never present in any response, for anyone, including the gig's own owner** — not even once Sprint 2 starts writing saver ids to it. A business learns how many people applied (`applicantCount`), never who saved.
 - Optional fields (`area`, `startDate`, `applicationsCloseDate`) are omitted, not null, when unset — same convention as profiles (§8.1).
 
@@ -1139,6 +1174,7 @@ Businesses only.
 | `commitment` | Required, one of §6.4. |
 | `positions` | Optional integer, minimum 1, defaults to `1`. |
 | `startDate`, `applicationsCloseDate` | Optional, `YYYY-MM-DD`. `applicationsCloseDate` cannot be in the past. |
+| `skillTrial` | Optional object — see 10.1's bullet for the field-by-field rules. Omit it entirely for "no trial"; sending `{ "requirement": "none" }` is equivalent, but the client never needs to. |
 
 `status`, `postedBy` and `applicantCount` are not accepted fields on this schema — if sent, they are silently stripped rather than rejected, the same as any other field the endpoint doesn't recognize. `status` always comes back `open`; `postedBy` always comes back the caller's id.
 
