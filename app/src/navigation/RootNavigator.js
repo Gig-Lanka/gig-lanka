@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import AuthStack from './AuthStack';
 import BusinessTabs from './BusinessTabs';
 import SeekerTabs from './SeekerTabs';
+import { navigationRef } from './navigationRef';
 import Loader from '../components/ui/Loader';
 import ComponentDemoScreen from '../screens/dev/ComponentDemoScreen';
 import ApplicationDetailScreen from '../screens/seeker/ApplicationDetailScreen';
@@ -99,6 +100,13 @@ export default function RootNavigator() {
   // goes through the same bootstrap/login/logout status transitions either
   // way, so it stays local UI state here instead of touching AuthContext.
   const [guestMode, setGuestMode] = useState(false);
+  // GL-340: which gig sent a guest to sign-in, so they land back on it
+  // instead of the tab home once authenticated. A ref, not state - reading
+  // it never needs to trigger a render, only the one-shot effect below,
+  // and mutating it there would otherwise be a same-effect setState.
+  // Set only by the guest Apply action; untouched by every other sign-in
+  // path, so a guest who never tapped Apply keeps landing on Main as before.
+  const pendingGigIdRef = useRef(null);
 
   if (status !== prevStatus) {
     setPrevStatus(status);
@@ -107,6 +115,18 @@ export default function RootNavigator() {
       setGuestMode(false);
     }
   }
+
+  // Fires once AppStack has mounted for this authentication. navigate()
+  // pushes GigDetail on top of AppStack's default initial route (Main), so
+  // back from it returns to the tab home rather than exiting - the same
+  // shape as reaching GigDetail from Browse.
+  useEffect(() => {
+    if (status !== AUTH_STATUS.AUTHENTICATED || !pendingGigIdRef.current) return;
+    if (!navigationRef.isReady()) return;
+
+    navigationRef.navigate('GigDetail', { gigId: pendingGigIdRef.current });
+    pendingGigIdRef.current = null;
+  }, [status]);
 
   if (status === AUTH_STATUS.LOADING) {
     return <Loader fullScreen />;
@@ -120,13 +140,23 @@ export default function RootNavigator() {
   // bare, as before GL-122) so a guest can still reach GigDetail from
   // Browse - a screen outside the tab navigator itself.
   if (guestMode) {
+    // Only GigDetail's own Apply action has a gig to remember - the "Sign
+    // in" prompts SeekerTabs shows on My Applications/Profile go through
+    // Button's onPress, which is called with the press event, not a gig id,
+    // so that path is wired through the plain no-arg form below instead of
+    // handleGuestSignIn directly.
+    const handleGuestSignIn = (gigId) => {
+      pendingGigIdRef.current = gigId ?? null;
+      setGuestMode(false);
+    };
+
     return (
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         <Stack.Screen name="Main">
-          {() => <SeekerTabs guest onSignIn={() => setGuestMode(false)} />}
+          {() => <SeekerTabs guest onSignIn={() => handleGuestSignIn()} />}
         </Stack.Screen>
         <Stack.Screen name="GigDetail">
-          {() => <GigDetailScreen onSignIn={() => setGuestMode(false)} />}
+          {() => <GigDetailScreen onSignIn={handleGuestSignIn} />}
         </Stack.Screen>
       </Stack.Navigator>
     );
