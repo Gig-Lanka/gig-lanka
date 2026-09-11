@@ -81,7 +81,9 @@ const skillTrialSchema = new mongoose.Schema(
 // When requirement is 'none' the other four fields are not just optional but
 // forbidden, per Application & Hiring brief §4 - a trial that isn't required
 // shouldn't silently carry leftover task details.
-skillTrialSchema.pre('validate', function (next) {
+// Mongoose 9 dropped callback-style ("next") pre hooks - middleware must be
+// synchronous or return a promise, so this takes no `next` argument.
+skillTrialSchema.pre('validate', function () {
   if (this.requirement === 'none') {
     const disallowedField = ['taskTitle', 'taskBrief', 'submissionType', 'effortEstimate'].find(
       (field) => this[field] !== undefined,
@@ -93,7 +95,6 @@ skillTrialSchema.pre('validate', function (next) {
       );
     }
   }
-  next();
 });
 
 const gigSchema = new mongoose.Schema(
