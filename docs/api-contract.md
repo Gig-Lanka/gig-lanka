@@ -105,6 +105,7 @@ Every error response — regardless of cause — returns the same outer shape:
 | `APPLICATION_NOT_COMPLETED` | `POST /api/applications/:applicationId/reviews` on an application whose status isn't `completed` (§12.4). Always `409` — a review requires a completed gig. |
 | `REVIEW_WINDOW_EXPIRED` | `POST /api/applications/:applicationId/reviews` more than 14 days after the application's `completedAt` (§12.1, §12.4). Always `409`, and distinct from `APPLICATION_NOT_COMPLETED` — the two 409s name different problems and the client shows different copy for each. Checked only once the application is confirmed `completed`, so a wrong-status application is never told its window has closed. |
 | `REVIEW_ALREADY_EXISTS` | `POST /api/applications/:applicationId/reviews` for an `(application, direction)` pair that already has a review (§12.4). Always `409`; the duplicate-key error from the unique index (§7) is translated here rather than surfacing as `500`. |
+| `REPORT_ALREADY_EXISTS` | `POST /api/reports` for a `(reporter, targetType, targetId)` pair that already has an open report. Always `409`; the duplicate-key error from the unique index on the Report model is translated here rather than surfacing as `500` — the same trap `POST /api/auth/register` and `POST /api/gigs/:gigId/applications` have both been caught by. |
 
 New codes may be added for later sprints' resources; existing codes are never repurposed for a different meaning.
 
