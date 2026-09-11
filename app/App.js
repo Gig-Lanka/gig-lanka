@@ -12,13 +12,14 @@ import {
 } from '@expo-google-fonts/inter-tight';
 
 import RootNavigator from './src/navigation/RootNavigator';
+import { navigationRef } from './src/navigation/navigationRef';
 import { AuthProvider } from './src/store/AuthContext';
 
 SplashScreen.preventAutoHideAsync();
 
 function AppContent() {
   return (
-    <NavigationContainer>
+    <NavigationContainer ref={navigationRef}>
       <RootNavigator />
     </NavigationContainer>
   );

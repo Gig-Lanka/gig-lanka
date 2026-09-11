@@ -219,7 +219,7 @@ export default function GigDetailScreen({ onSignIn }) {
   } else if (!isOpen) {
     primaryAction = { label: 'Applications closed', disabled: true };
   } else if (!user) {
-    primaryAction = { label: 'Apply for this gig', onPress: () => onSignIn?.() };
+    primaryAction = { label: 'Apply for this gig', onPress: () => onSignIn?.(gigId) };
   } else if (isSeeker) {
     primaryAction = {
       label: 'Apply for this gig',
