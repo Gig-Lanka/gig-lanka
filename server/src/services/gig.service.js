@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { Gig } from '../models/gig.model.js';
+import { Application } from '../models/application.model.js';
 import { ApiError } from '../utils/ApiError.js';
 import { getPublicIdentity } from './profile.service.js';
 
@@ -195,12 +196,40 @@ export const listMyGigs = async (userId) => {
   return { gigs };
 };
 
+// skillTrial is deliberately not in UPDATABLE_FIELDS: that list is a blind
+// full-replace, and a client that never renders the trial section (an older
+// build, or GL-343's EditGigScreen disabling it once the gig has applicants)
+// would omit the key and wipe an existing trial by omission. Presence of the
+// key on the body is instead what counts as "the caller wants to change it" -
+// checked against Application's existence, not `applicantCount`, since that
+// count falls when applicants withdraw or are rejected and a business could
+// otherwise wait everyone out and edit a trial whose terms someone already
+// applied under. `{ requirement: 'none' }` is how a caller removes a trial;
+// storing that literally would leave `gig.skillTrial` truthy, so it is
+// normalised to unset instead, matching GL-341's "no trial stores nothing" rule.
 export const updateGig = async (id, body, userId) => {
   const gig = await findOwnedGig(id, userId);
+
+  const isChangingSkillTrial = Object.prototype.hasOwnProperty.call(body, 'skillTrial');
+
+  if (isChangingSkillTrial) {
+    const hasEverHadApplicant = await Application.exists({ gig: gig._id });
+    if (hasEverHadApplicant) {
+      throw new ApiError(
+        409,
+        'GIG_HAS_APPLICANTS',
+        'This gig already has applicants, so its skill trial terms cannot change underneath people who already accepted them.',
+      );
+    }
+  }
 
   UPDATABLE_FIELDS.forEach((field) => {
     gig[field] = body[field];
   });
+
+  if (isChangingSkillTrial) {
+    gig.skillTrial = body.skillTrial?.requirement === 'none' ? undefined : body.skillTrial;
+  }
 
   await gig.save();
 

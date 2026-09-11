@@ -100,6 +100,7 @@ Every error response — regardless of cause — returns the same outer shape:
 | `FILE_TOO_LARGE` | An uploaded file exceeds the 5MB limit. |
 | `STORAGE_UNAVAILABLE` | The storage backend (Supabase) failed or was unreachable. Always `502`. |
 | `GIG_CLOSED` | Attempted to apply to or save a gig whose status isn't `open`. Always `409`. |
+| `GIG_HAS_APPLICANTS` | `PUT /api/gigs/:id` attempted to add, change or remove `skillTrial` on a gig that has ever had an application (§10.7, §10.10). Always `409`. Keyed on an existence check against `Application`, not `applicantCount` — that count falls when applicants withdraw or are rejected, and the terms must not change underneath someone who already applied even after they leave. |
 | `APPLICATION_ALREADY_EXISTS` | `POST /api/gigs/:gigId/applications` for a `(gig, applicant)` pair that already has an application (§11.7). Always `409`; the duplicate-key error from the unique index (§11.1) is translated here rather than surfacing as `500` — the same trap GL-15 hit with duplicate emails. Holds whether the earlier application is live, withdrawn or rejected. |
 | `INVALID_APPLICATION_TRANSITION` | Attempted to move an application to a status not reachable from its current status (§11.3). Always `409`, and the message names both the current and the attempted status. Withdrawing a `hired` application (§11.10) surfaces through this same code — Hired's only outgoing move is to `completed`, so a withdraw is refused by the transition table itself, not by a withdraw-specific check. Marking anything other than a `hired` application complete (§11.11) is refused the same way. |
 | `APPLICATION_NOT_COMPLETED` | `POST /api/applications/:applicationId/reviews` on an application whose status isn't `completed` (§12.4). Always `409` — a review requires a completed gig. |
@@ -1302,6 +1303,10 @@ Unlike 10.4, there is no pagination or `total` here — a business's own list is
 
 Only the business that posted the gig may update it. `PUT` replaces the editable fields in full, using the same request body and validation as 10.3 create.
 
+**`skillTrial` is the one exception to "full replace."** Every other field is cleared when omitted from the body, the normal `PUT` rule — but omitting `skillTrial` entirely means **leave it unchanged**, not remove it, so a client that doesn't render the trial section (an older build, or the edit screen disabling it per the next paragraph) can't wipe an existing trial by omission. Sending the key at all — to add, edit, or explicitly remove it with `{ "requirement": "none" }` — counts as an attempted change.
+
+**Once a gig has ever had an application, any attempted change to `skillTrial` is refused with `409 GIG_HAS_APPLICANTS`** — the terms cannot change underneath someone who already applied under them. This is keyed on whether an `Application` document exists for the gig, not on the live `applicantCount`, which falls when applicants withdraw or are rejected. Every other field on the gig stays editable regardless.
+
 **Success — `200 OK`** — `data.gig`, the updated shape.
 
 **Failure — `400 Bad Request`** — same validation as create.
@@ -1309,6 +1314,8 @@ Only the business that posted the gig may update it. `PUT` replaces the editable
 **Failure — `401 Unauthorized`** (guest), **`403 Forbidden`** (seeker token, or a business token that isn't the owner) — see 10.9 for the ownership ordering.
 
 **Failure — `404 Not Found`** — no gig with that id.
+
+**Failure — `409 Conflict`** (`GIG_HAS_APPLICANTS`) — see above.
 
 ### 10.8 Close a gig — `PATCH /api/gigs/:id/close`
 
@@ -1343,6 +1350,7 @@ Only the owner. Permanently deletes the gig. There is no soft delete and no undo
 | `403` | `FORBIDDEN` | Authenticated but not a business (`POST`, `GET /mine`, `PUT`, `PATCH .../close`, `DELETE`), **or** a business token that isn't the gig's owner (`PUT`, `PATCH .../close`, `DELETE`). Same code, same shape, both cases — the distinction is which endpoint and whether the gig exists (see 10.9's ordering). |
 | `404` | `NOT_FOUND` | `GET /api/gigs/:id` for a gig that doesn't exist, or `PUT` / `PATCH .../close` / `DELETE` for a gig that doesn't exist or has a malformed id — checked before ownership. |
 | `409` | `GIG_CLOSED` | **Not returned by any endpoint in this section.** None of the seven gig endpoints reject on gig status. `GIG_CLOSED` is the guard (`assertGigIsOpen` in `gig.service.js`) that GL-110's apply endpoint and Sprint 2's save endpoint call before acting on a gig — documented here because it is this component's error code, first surfaced through theirs. See §3 for the shared definition. |
+| `409` | `GIG_HAS_APPLICANTS` | `PUT /api/gigs/:id` attempted to add, change or remove `skillTrial` on a gig that has ever had an application (§10.7). See §3 for the shared definition. |
 
 ---
 
