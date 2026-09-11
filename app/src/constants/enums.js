@@ -47,6 +47,27 @@ export const GIG_SORT_ORDERS = freezeList([
   { value: 'starting_soon', label: 'Starting soon' },
 ]);
 
+// No 'required' value: product decided a skill trial is never mandatory to
+// apply, only ever absent or optional. See GL-341's PR / Jira note.
+export const SKILL_TRIAL_REQUIREMENTS = freezeList([
+  { value: 'none', label: 'No trial' },
+  { value: 'optional', label: 'Optional' },
+]);
+
+export const SKILL_TRIAL_SUBMISSION_TYPES = freezeList([
+  { value: 'text', label: 'Text' },
+  { value: 'file', label: 'File' },
+  { value: 'text_and_file', label: 'Text and file' },
+]);
+
+// 1-2 hours is a hard ceiling - the brief caps trial effort at two hours to
+// protect the seeker, so no fourth value may be added here.
+export const SKILL_TRIAL_EFFORT_ESTIMATES = freezeList([
+  { value: 'under_30_minutes', label: 'Under 30 minutes' },
+  { value: '30_to_60_minutes', label: '30-60 minutes' },
+  { value: '1_to_2_hours', label: '1-2 hours' },
+]);
+
 // `terminal` marks the five §11.2 calls "decided" - hired, completed,
 // rejected, withdrawn and closed_filled - and drives isLiveApplication
 // (ApplicationStatusFilter.js), which the tracker also consumes. `hired`
