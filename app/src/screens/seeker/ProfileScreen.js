@@ -81,6 +81,7 @@ export default function ProfileScreen() {
   }
 
   const {
+    user,
     name,
     photo,
     bio,
@@ -204,7 +205,7 @@ export default function ProfileScreen() {
             </View>
           </View>
 
-          <RatingSummary rating={ratingSummary} className="mt-5" />
+          <RatingSummary rating={ratingSummary} userId={user} className="mt-5" />
 
           {/*
             Skill Trial badges - read-only, no route into anything. The
