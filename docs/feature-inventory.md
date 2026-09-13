@@ -195,13 +195,13 @@ were reachable.
 | Rating aggregate schema | ✅ | `RATING_AGGREGATE_SHAPE` is exported from `review.model.js` and imported by `profile.model.js` and `application.model.js`, so the ownership boundary is expressed in code: Reviews owns the shape, Profile stores and displays it, neither computes the other's number. GL-264 added `distribution` (five star buckets) to the shape and to contract §6.10 **before** the computation was written, closing the old §7.7 by construction. |
 | Create review | ✅ | `POST /applications/:applicationId/reviews`. Gated in order: application exists (404) → caller is a party (403) → status is `completed` (409 `APPLICATION_NOT_COMPLETED`) → **within 14 days of `completedAt`** (GL-269) → categories match the derived direction (400) → not a duplicate (409 `REVIEW_ALREADY_EXISTS`). `direction`, `author` and `subject` are all derived server-side and never accepted from the body. GL-268 moved the gate from `hired` to `completed`. |
 | Aggregate computation | ✅ | GL-222. `recomputeRatingSummary` / `computeRatingAggregate` in `review.service.js` compute average, count, top categories and the five-bucket distribution in one pass; `setRatingSummary` in `profile.service.js` is the **single narrow writer** onto the profile, so E5 never reaches into E2's document directly. Covered by `review.rating-aggregate.test.js` and `profile.service.test.js`. Every rating summary in the app now shows real data. |
-| Read reviews | ✅ (server) / ⬜ (client) | `GET /users/:userId/reviews`, paged 10/page, newest first, author name/photo populated **live from the profile** at read time — the opposite of the application's frozen snapshot, and deliberately so. **Still no client consumes it** (§7.6). |
+| Read reviews | ✅ | `GET /users/:userId/reviews`, paged 10/page, newest first, author name/photo populated **live from the profile** at read time — the opposite of the application's frozen snapshot, and deliberately so. Server-side `rating` filter (GL-373) narrows the query, not the loaded page. Consumed by `ReviewsScreen` (§7.6, GL-303). |
 | The caller's own reviews | ✅ | `GET /api/reviews/mine` (GL-270) + `reviewApi.getMyReviews` — the reviews the signed-in caller has written, each carrying its `application` id, so the completed-gigs screen can tell rated from unrated in one request rather than one per card. |
-| Rating components | ✅ | `StarRating` (read + interactive), `CategoryChipGroup`, `RatingSummary`, `RatingBars`, `CompletedGigCard`. `ReviewCard` is built and **still referenced only by the dev gallery**. |
-| Rating summary on profiles | ✅ | Rendered on the seeker profile, business profile and public profile, now with real aggregates and a populated "Rating breakdown". Shows "New to Gig Lanka" only when `reviewCount === 0`, which is no longer always. Its "See all N reviews" button is **still hardcoded `disabled` with no `onPress`** — §7.6. |
+| Rating components | ✅ | `StarRating` (read + interactive), `CategoryChipGroup`, `RatingSummary`, `RatingBars`, `CompletedGigCard`. `ReviewCard` has its first real caller in `ReviewsScreen` (§7.6, GL-303). |
+| Rating summary on profiles | ✅ | Rendered on the seeker profile, business profile and public profile, now with real aggregates and a populated "Rating breakdown". Shows "New to Gig Lanka" only when `reviewCount === 0`, which is no longer always. Its "See all N reviews" button now routes to `ReviewsScreen` with the subject's user id from all three surfaces — §7.6. |
 | Rate flow | ✅ | `shared/rate/` — `RateFlowNavigator` + `RateFlowProvider` + four steps (subject & stars → categories → written review → confirmation). Direction and subject are derived once in the provider from the application and the signed-in user, so the seeker and business sides can never disagree. Double-submit guard, draft preserved on failure, 20–1000 character validation. **Now reachable** via Completed Gigs. |
 | Rating entry point | ✅ | GL-223/GL-271. `shared/CompletedGigsScreen` + `CompletedGigCard`, registered in `RootNavigator` and reached from both My Gigs and My Applications (GL-272). The card has three states — `awaiting` (shows "Nd left" and the only action), `rated` ("Rated ✓") and `closed` ("Rating closed", the 14-day window expired). Expired and rated cards deliberately offer **no** action rather than a dead button. |
-| Reviews list screen | ⬜ | Sprint 3. Was Bineth's designated pull-forward; the pull-forward was not taken. |
+| Reviews list screen | ✅ | GL-303 (GL-373–GL-376). Was Bineth's designated pull-forward, delivered Sprint 3 — see §7.6. |
 | Inline rating on the gig detail business block | ⬜ | Sprint 3. GL-122 AC6 is still unmet — see §7.10. |
 | Report / moderation | ⬜ | Sprint 3. |
 
@@ -388,23 +388,19 @@ folder allow-list, the MIME/extension mismatch in both directions, a stubbed sto
 surfacing as `502 STORAGE_UNAVAILABLE`, and the stored object key shape). Storage is stubbed at the
 `@supabase/supabase-js` boundary via `jest.unstable_mockModule` — CI never reaches a real bucket.
 
-### 7.6 🔴 Open — `GET /users/:userId/reviews` still has no client, and `ReviewCard` still has no caller
-Unchanged from Sprint 1, and now more visible rather than less. `reviewApi.js` exposes
-`submitReview` and `getMyReviews`; there is **no client for `GET /users/:userId/reviews`**.
-`ReviewCard` is referenced only by `ComponentDemoScreen`. `RatingSummary`'s "See all N reviews"
-button is still hardcoded `disabled` with no `onPress`, under a comment that still reads
-*"No reviews list screen until Sprint 2"* — a comment that is now wrong on its own terms.
-
-**Why it got worse:** GL-222 means `reviewCount` is now real. In Sprint 1 the button sat under an
-always-empty summary, so nobody could reach a state where it mattered. Now a profile can say
-"See all 7 reviews" on a button that does nothing. **The reviews list screen was Bineth's
-designated pull-forward and the pull-forward was not taken**; it stays Sprint 3 and is first in
-line. Until then the disabled button is the most likely thing a demo viewer will try to tap.
-
-**Ticketed for Sprint 3 as GL-303** — the client method, `ReviewsScreen` built to the
-`#reviews-section` frame, `ReviewCard`'s first real caller, and the `onPress` that finally makes the
-button live. It also adds a `rating` query parameter to §12.2 so the frame's star tabs narrow the
-query rather than the loaded page.
+### 7.6 ✅ Closed — `GET /users/:userId/reviews` had no client, and `ReviewCard` had no caller
+**GL-303 resolved it in full, across four sub-tasks.** GL-373 added `reviewApi.getReviewsForUser`
+and the `rating` query parameter the endpoint was missing (documented in §12.2, `total` computed
+from the same filtered query as the list). GL-374 built `ReviewsScreen` to the `#reviews-section`
+frame — the one-line identity strip, ten-per-page pagination with the same single-in-flight guard
+and inline "load more" retry as `BrowseGigsScreen`, and loading/empty/error states — giving
+`ReviewCard` its first real caller. GL-375 added the star tabs, built from the subject's
+`ratingSummary.distribution` (only non-empty buckets render), narrowing the server query rather
+than the pages already fetched. GL-376 made `RatingSummary`'s "See all N reviews" button live: it
+lost `disabled`, gained an `onPress` that navigates to `ReviewsScreen` with the subject's user id
+from all three surfaces that render it (seeker profile, business profile, public profile — an
+own-profile view opens the reader's own reviews), and the stale *"No reviews list screen until
+Sprint 2"* comment is gone.
 
 ### 7.7 ✅ Closed — `RatingSummary` read a `distribution` field the contract did not define
 **GL-222/GL-264 resolved it in the direction the component already assumed: the aggregate gained
