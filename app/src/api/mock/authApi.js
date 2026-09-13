@@ -145,6 +145,10 @@ async function login({ email, password }) {
     throw apiError(401, 'INVALID_CREDENTIALS', 'Email or password is incorrect.');
   }
 
+  if (user.active === false) {
+    throw apiError(403, 'ACCOUNT_DEACTIVATED', 'This account has been deactivated.');
+  }
+
   return issueSession(user);
 }
 
@@ -254,6 +258,32 @@ async function changePassword({ accessToken, currentPassword, newPassword }) {
   return { accessToken: session.accessToken, refreshToken: session.refreshToken };
 }
 
+// GL-317: mirrors the real endpoint (GL-314) - deactivates the caller's own
+// account and revokes every token they hold, the same revoke-everything
+// sweep changePassword above does. login() then refuses a re-attempt the
+// same way the real server does (ACCOUNT_DEACTIVATED), so the mock adapter
+// exercises the same "can't sign back in" behaviour manual testing needs.
+async function deactivateAccount({ accessToken }) {
+  await delay();
+
+  const userId = requireValidAccessToken(accessToken);
+  const user = users.find((candidate) => candidate.id === userId);
+  if (!user) {
+    throw apiError(401, 'UNAUTHENTICATED', 'You must be logged in to do this.');
+  }
+
+  user.active = false;
+
+  for (const [token, record] of refreshTokens.entries()) {
+    if (record.userId === user.id) refreshTokens.delete(token);
+  }
+  for (const [token, record] of accessTokens.entries()) {
+    if (record.userId === user.id) accessTokens.delete(token);
+  }
+
+  return null;
+}
+
 export default {
   register,
   login,
@@ -261,4 +291,5 @@ export default {
   logout,
   getCurrentUser,
   changePassword,
+  deactivateAccount,
 };

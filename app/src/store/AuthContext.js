@@ -104,9 +104,24 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
+  // GL-317: ends the session through the same path as logout above - the
+  // account itself is already gone server-side (every refresh token revoked
+  // by the endpoint), so this always clears the local session in `finally`
+  // regardless of how the request resolves.
+  const deactivateAccount = useCallback(async () => {
+    const { accessToken } = await secureStorage.getTokens();
+    try {
+      await authApi.deactivateAccount({ accessToken });
+    } finally {
+      await secureStorage.clearTokens();
+      setUser(null);
+      setStatus(AUTH_STATUS.UNAUTHENTICATED);
+    }
+  }, []);
+
   const value = useMemo(
-    () => ({ user, status, register, login, logout, changePassword }),
-    [user, status, register, login, logout, changePassword]
+    () => ({ user, status, register, login, logout, changePassword, deactivateAccount }),
+    [user, status, register, login, logout, changePassword, deactivateAccount]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -48,7 +48,7 @@ function NavRow({ label, onPress }) {
 export default function AccountSettingsScreen() {
   const navigation = useNavigation();
   const route = useRoute();
-  const { user, logout } = useAuth();
+  const { user, logout, deactivateAccount } = useAuth();
   const isSeeker = user?.role === 'seeker';
 
   // AuthContext's user already carries createdAt from login/register/bootstrap
@@ -59,6 +59,7 @@ export default function AccountSettingsScreen() {
   const [status, setStatus] = useState(user?.createdAt ? STATUS.READY : STATUS.LOADING);
   const [reloadToken, setReloadToken] = useState(0);
   const [logoutConfirmVisible, setLogoutConfirmVisible] = useState(false);
+  const [deactivateConfirmVisible, setDeactivateConfirmVisible] = useState(false);
 
   // ChangePasswordScreen (GL-230) navigates back here with this param
   // instead of a plain goBack() so there's somewhere to hand the
@@ -176,10 +177,10 @@ export default function AccountSettingsScreen() {
         </View>
       </ScrollView>
 
-      {/* Sprint 3 work (account deactivation) - disabled so the layout is
-          settled now rather than a destructive action landing later on a
-          screen that has already been reviewed. */}
-      <Pressable disabled className="items-center px-[22px] py-2 opacity-40">
+      <Pressable
+        onPress={() => setDeactivateConfirmVisible(true)}
+        className="items-center px-[22px] py-2"
+      >
         <Text className="text-[14px] font-semibold text-danger">Deactivate account</Text>
       </Pressable>
 
@@ -192,6 +193,17 @@ export default function AccountSettingsScreen() {
         cancelLabel="Cancel"
         onConfirm={logout}
         onCancel={() => setLogoutConfirmVisible(false)}
+      />
+
+      <ConfirmDialog
+        visible={deactivateConfirmVisible}
+        destructive
+        title="Deactivate account?"
+        body="You'll be signed out everywhere and won't be able to sign in again. Your gigs, applications and ratings are kept — nothing is deleted."
+        confirmLabel="Deactivate"
+        cancelLabel="Cancel"
+        onConfirm={deactivateAccount}
+        onCancel={() => setDeactivateConfirmVisible(false)}
       />
     </SafeAreaView>
   );
