@@ -419,7 +419,26 @@ On success, every refresh token belonging to the user is revoked and a fresh acc
 }
 ```
 
-### 5.7 Authentication middleware
+### 5.7 Deactivate account — `POST /api/auth/deactivate`
+
+Deactivates the authenticated caller's own account. Requires `Authorization: Bearer <accessToken>`. There is no request body and no id parameter — a caller can only ever deactivate their own account.
+
+Sets `isActive` to `false` and revokes every refresh token belonging to the user, signing every device out immediately — there is no session to preserve, unlike §5.6, because the account is going away. Deactivation never deletes anything: existing gigs, applications, reviews and the profile document are left exactly as they are, nothing is anonymised, and no rating aggregate is recomputed.
+
+**Request body:** none.
+
+**Success — `200 OK`**
+
+```json
+{
+  "success": true,
+  "data": null
+}
+```
+
+**Failure — `401 Unauthorized`** (no/invalid/expired access token — same codes as §5.5)
+
+### 5.8 Authentication middleware
 
 `server/src/middleware/auth.middleware.js` exports three middleware:
 

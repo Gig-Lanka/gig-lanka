@@ -74,3 +74,10 @@ export const changeUserPassword = async (user, { currentPassword, newPassword })
 
   return issueTokens(user);
 };
+
+export const deactivateOwnAccount = async (user) => {
+  user.isActive = false;
+  await user.save();
+
+  await revokeAllRefreshTokensForUser(user._id);
+};
