@@ -16,8 +16,23 @@ function statusLabel(status) {
 }
 
 export default function BusinessGigCard({ gig, onPress, className, ...props }) {
-  const { title, payAmount, payType, status, applicantCount = 0, applicationsCloseDate } = gig;
+  const {
+    title,
+    payAmount,
+    payType,
+    status,
+    applicantCount = 0,
+    applicationsCloseDate,
+    waitingOnYouCount = 0,
+  } = gig;
   const isOpen = status === 'open';
+  // Application & Hiring brief §6: once a gig is filled, anyone still
+  // shortlisted or sitting on a submitted skill trial is owed a personal
+  // answer. This has no dismiss and no expiry - it's not a nudge, it's a
+  // standing fact about the gig that only goes away once E4's sweep resolves
+  // those applications. waitingOnYouCount comes from that story; this card
+  // only renders it.
+  const isWaitingOnBusiness = status === 'filled' && waitingOnYouCount > 0;
   // GL-283: same reasoning as GigDetailScreen - once not open, the deadline
   // chip shows the same status-derived "Applications closed" the badge
   // already shows, rather than a second, independently date-derived label.
@@ -58,6 +73,14 @@ export default function BusinessGigCard({ gig, onPress, className, ...props }) {
           </Text>
         ) : null}
       </View>
+
+      {isWaitingOnBusiness ? (
+        <View className="mt-3 rounded-ds-md bg-warning-soft px-[14px] py-[11px]">
+          <Text className="text-[13.5px] font-medium text-warning-ink">
+            {`${waitingOnYouCount} ${waitingOnYouCount === 1 ? 'applicant' : 'applicants'} still waiting on you`}
+          </Text>
+        </View>
+      ) : null}
     </Container>
   );
 }
