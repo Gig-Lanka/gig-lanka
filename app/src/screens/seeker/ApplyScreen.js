@@ -7,6 +7,7 @@ import applicationApi from '../../api/applicationApi';
 import gigApi from '../../api/gigApi';
 import { profileApi } from '../../api';
 import Avatar from '../../components/ui/Avatar';
+import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import EmptyState from '../../components/ui/EmptyState';
 import Loader from '../../components/ui/Loader';
@@ -16,8 +17,17 @@ import SectionLabel from '../../components/ui/SectionLabel';
 import EntryCard from '../../components/profile/EntryCard';
 import ProfileEmptyRow from '../../components/profile/ProfileEmptyRow';
 import SkillsRow from '../../components/profile/SkillsRow';
+import {
+  SKILL_TRIAL_EFFORT_ESTIMATES,
+  SKILL_TRIAL_REQUIREMENTS,
+  SKILL_TRIAL_RESULTS,
+} from '../../constants/enums';
 import useAuth from '../../hooks/useAuth';
 import { formatDateRange, formatDeadline, formatPay } from '../../utils/format';
+
+function labelFor(list, value) {
+  return list.find((item) => item.value === value)?.label ?? value;
+}
 
 const STATUS = { LOADING: 'loading', READY: 'ready', ERROR: 'error', NOT_FOUND: 'not_found' };
 
@@ -41,7 +51,7 @@ function isThinProfile(profile) {
 export default function ApplyScreen() {
   const navigation = useNavigation();
   const { params } = useRoute();
-  const { gigId } = params;
+  const { gigId, trialSubmission } = params;
   const { user } = useAuth();
   // A guest can never actually mount this screen - it's only registered in
   // the authenticated seeker stack (RootNavigator.js), and GigDetailScreen
@@ -183,11 +193,57 @@ export default function ApplyScreen() {
   const deadline = applicationsCloseDate ? formatDeadline(applicationsCloseDate) : null;
   const thinProfile = isThinProfile(profile);
 
+  // GL-355 - the trial block, drawn above the snapshot because it's the
+  // blocking step (frame note, #apply). `requirement` is only ever `none` or
+  // `optional` (GL-341 removed `required` from the vocabulary entirely - see
+  // docs/api-contract.md §6.12), so a gig with a trial here is always
+  // `optional`, and an optional trial never blocks Submit (§298 AC9). The
+  // "required trial blocks Submit" gate GL-298 AC8 describes has no state
+  // that can ever reach it, so there is deliberately no disabling logic
+  // below - only the informational card.
+  const skillTrial = gig.skillTrial;
+  const hasTrial = Boolean(skillTrial) && skillTrial.requirement !== 'none';
+  const trialResult = trialSubmission ? 'submitted' : 'not_submitted';
+
   return (
     <SafeAreaView className="flex-1 bg-paper" edges={['top', 'bottom']}>
       <ScreenHeader title="Apply" small onBack={handleBack} />
 
       <ScrollView contentContainerClassName="px-[22px] pb-8" showsVerticalScrollIndicator={false}>
+        {hasTrial ? (
+          <View className="mb-6">
+            <SectionLabel>Skill trial</SectionLabel>
+
+            <View className="mt-2 rounded-ds-card border-[1.5px] border-line bg-paper p-4">
+              <View className="flex-row items-start justify-between gap-3">
+                <Text className="flex-1 font-display text-title text-ink">
+                  {skillTrial.taskTitle}
+                </Text>
+                <Badge variant="strong">
+                  {labelFor(SKILL_TRIAL_REQUIREMENTS, skillTrial.requirement)}
+                </Badge>
+              </View>
+
+              <View className="mt-3 flex-row flex-wrap items-center gap-[8px]">
+                <Badge variant="neutral">
+                  {labelFor(SKILL_TRIAL_EFFORT_ESTIMATES, skillTrial.effortEstimate)}
+                </Badge>
+                <Badge variant="neutral">{labelFor(SKILL_TRIAL_RESULTS, trialResult)}</Badge>
+              </View>
+
+              <View className="mt-3 flex-row items-center justify-between gap-3">
+                <Text className="text-[12px] text-muted">A sample of skill, not paid work</Text>
+                <Text
+                  className="text-[13px] font-semibold text-signal"
+                  onPress={() => navigation.navigate('SkillTrial', { gigId })}
+                >
+                  Open the task →
+                </Text>
+              </View>
+            </View>
+          </View>
+        ) : null}
+
         <View className="rounded-ds-card border-[1.5px] border-line bg-paper p-4">
           <Text className="font-display text-title text-ink">{title}</Text>
           <Text className="mt-[5px] text-desc text-muted" numberOfLines={1}>
