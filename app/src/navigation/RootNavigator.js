@@ -24,6 +24,7 @@ import CompletedGigsScreen from '../screens/shared/CompletedGigsScreen';
 import GigDetailScreen from '../screens/shared/GigDetailScreen';
 import RateFlowNavigator from '../screens/shared/rate/RateFlowNavigator';
 import PublicProfileScreen from '../screens/shared/PublicProfileScreen';
+import ReviewsScreen from '../screens/shared/ReviewsScreen';
 import useAuth from '../hooks/useAuth';
 import { AUTH_STATUS } from '../store/AuthContext';
 
@@ -46,6 +47,9 @@ function AppStack({ role }) {
           business from My Gigs - so it's registered once here too. */}
       <Stack.Screen name="CompletedGigs" component={CompletedGigsScreen} />
       <Stack.Screen name="PublicProfile" component={PublicProfileScreen} />
+      {/* Either role can be the subject read about (GL-374), so this is
+          registered once here too, rather than duplicated below. */}
+      <Stack.Screen name="Reviews" component={ReviewsScreen} />
       {role === 'business' ? (
         <>
           <Stack.Screen
