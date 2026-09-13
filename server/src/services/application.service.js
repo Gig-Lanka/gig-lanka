@@ -121,11 +121,64 @@ const buildProfileSnapshot = (profile) => ({
 // entirely, so that case never arises here.
 const resolveSkillTrialRequirement = (gig) => gig.skillTrial?.requirement ?? 'none';
 
+const TRIAL_TEXT_MIN_LENGTH = 20;
+const TRIAL_TEXT_MAX_LENGTH = 2000;
+
+// GL-297 AC6: the submission is checked against the gig's own
+// `submissionType`, not a fixed shape — `text` requires `textResponse`
+// (20-2,000 characters, the same range the SkillTrialScreen counter
+// promises) and forbids `fileUrl`; `file` is the mirror image; `text_and_file`
+// requires both. A file itself never reaches this endpoint — the client
+// uploads it through POST /api/uploads into the `trials` folder first and
+// sends only the returned URL.
+const assertValidSkillTrialSubmissionContent = (submissionType, submissionBody) => {
+  const { textResponse, fileUrl } = submissionBody;
+  const textAllowed = submissionType === 'text' || submissionType === 'text_and_file';
+  const fileAllowed = submissionType === 'file' || submissionType === 'text_and_file';
+  const errors = [];
+
+  if (textAllowed) {
+    const trimmed = textResponse?.trim();
+    if (!trimmed) {
+      errors.push({
+        field: 'skillTrialSubmission.textResponse',
+        message: 'textResponse is required for this trial',
+      });
+    } else if (trimmed.length < TRIAL_TEXT_MIN_LENGTH || trimmed.length > TRIAL_TEXT_MAX_LENGTH) {
+      errors.push({
+        field: 'skillTrialSubmission.textResponse',
+        message: `textResponse must be between ${TRIAL_TEXT_MIN_LENGTH} and ${TRIAL_TEXT_MAX_LENGTH} characters`,
+      });
+    }
+  } else if (textResponse !== undefined) {
+    errors.push({
+      field: 'skillTrialSubmission.textResponse',
+      message: 'textResponse is not accepted for this trial',
+    });
+  }
+
+  if (fileAllowed) {
+    if (!fileUrl) {
+      errors.push({
+        field: 'skillTrialSubmission.fileUrl',
+        message: 'fileUrl is required for this trial',
+      });
+    }
+  } else if (fileUrl !== undefined) {
+    errors.push({
+      field: 'skillTrialSubmission.fileUrl',
+      message: 'fileUrl is not accepted for this trial',
+    });
+  }
+
+  if (errors.length > 0) {
+    throw new ApiError(400, 'VALIDATION_ERROR', 'Skill trial submission is invalid.', errors);
+  }
+};
+
 // GL-297 §4: a `none` gig has no task to answer, so a submission sent
-// anyway is refused; an `optional` gig accepts one or records a deliberate
-// skip. Content validation against the gig's submissionType (text length,
-// file requirement per submission type) is a sibling sub-task's concern —
-// this only decides submitted vs. skipped vs. refused.
+// anyway is refused; an `optional` gig accepts one, validated against its
+// own submissionType, or records a deliberate skip.
 const buildSkillTrialSubmission = (gig, submissionBody) => {
   const requirement = resolveSkillTrialRequirement(gig);
 
@@ -141,6 +194,8 @@ const buildSkillTrialSubmission = (gig, submissionBody) => {
   if (!submissionBody) {
     return { result: 'skipped' };
   }
+
+  assertValidSkillTrialSubmissionContent(gig.skillTrial.submissionType, submissionBody);
 
   return { ...submissionBody, result: 'submitted', submittedAt: new Date() };
 };
