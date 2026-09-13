@@ -195,3 +195,31 @@ export const getPublicIdentity = async (userId) => {
     photo: profile?.photo ?? null,
   };
 };
+
+// Batched sibling of getPublicIdentity, for a caller that needs several
+// people's identities at once (GL-371: an admin report page's reporters,
+// user targets and gig-poster businesses) — one query for the whole set
+// instead of one per id. Same contract per id as the single-id version,
+// including the no-profile-yet fallback to nulls; returned as a Map keyed by
+// the string id so a caller can look up a raw ObjectId reference either way.
+export const getPublicIdentities = async (userIds) => {
+  const uniqueIds = [...new Set(userIds.map((id) => id.toString()))];
+
+  if (uniqueIds.length === 0) return new Map();
+
+  const profiles = await Profile.find({ user: { $in: uniqueIds } })
+    .select('user name photo')
+    .lean();
+  const byUserId = new Map(profiles.map((profile) => [profile.user.toString(), profile]));
+
+  return new Map(
+    uniqueIds.map((id) => [
+      id,
+      {
+        id,
+        name: byUserId.get(id)?.name ?? null,
+        photo: byUserId.get(id)?.photo ?? null,
+      },
+    ]),
+  );
+};

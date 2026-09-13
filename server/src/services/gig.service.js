@@ -2,7 +2,7 @@ import mongoose from 'mongoose';
 import { Gig } from '../models/gig.model.js';
 import { Application } from '../models/application.model.js';
 import { ApiError } from '../utils/ApiError.js';
-import { getPublicIdentity } from './profile.service.js';
+import { getPublicIdentity, getPublicIdentities } from './profile.service.js';
 
 const PAGE_SIZE = 10;
 
@@ -273,4 +273,31 @@ export const assertGigIsOpen = async (id) => {
   }
 
   return gig;
+};
+
+// GL-371: the trimmed gig context an admin report needs — id, title and the
+// posting business's identity — never the full gig. This is "the gig's own
+// service" a report reads a gig target through, so report.service.js never
+// imports the Gig model directly. Batched for a whole page of reports (one
+// query for the gigs, one for their posters' identities) rather than one
+// lookup per row. A gig that's since been hard-deleted is simply absent from
+// the returned map; the caller reads that as the target having vanished.
+export const getGigSummariesByIds = async (gigIds) => {
+  const uniqueIds = [...new Set(gigIds.map((id) => id.toString()))];
+
+  if (uniqueIds.length === 0) return new Map();
+
+  const gigs = await Gig.find({ _id: { $in: uniqueIds } }).select('title postedBy').lean();
+  const businesses = await getPublicIdentities(gigs.map((gig) => gig.postedBy));
+
+  return new Map(
+    gigs.map((gig) => [
+      gig._id.toString(),
+      {
+        id: gig._id.toString(),
+        title: gig.title,
+        business: businesses.get(gig.postedBy.toString()),
+      },
+    ]),
+  );
 };

@@ -1,26 +1,63 @@
+import { jest } from '@jest/globals';
 import jwt from 'jsonwebtoken';
 import request from 'supertest';
 import app from '../../src/app.js';
 import { env } from '../../src/config/env.js';
 import { User } from '../../src/models/user.model.js';
 import { Report } from '../../src/models/report.model.js';
+import { Profile } from '../../src/models/profile.model.js';
+import { Gig } from '../../src/models/gig.model.js';
 
 const validPassword = 'Password123!';
 
-const registerSeeker = async (email) => {
+const validGigPayload = (overrides = {}) => ({
+  title: 'Weekend event helper',
+  description: 'Help set up and run a community weekend event, greeting guests.',
+  category: 'event_help',
+  payAmount: 2500,
+  payType: 'per_day',
+  city: 'Colombo',
+  schedule: ['weekends'],
+  commitment: 'one_off',
+  positions: 2,
+  ...overrides,
+});
+
+const setProfileName = async (accessToken, name) =>
+  request(app)
+    .put('/api/profiles/me')
+    .set('Authorization', `Bearer ${accessToken}`)
+    .send({ name });
+
+const registerSeeker = async (email, name) => {
   const res = await request(app)
     .post('/api/auth/register')
     .send({ email, password: validPassword, role: 'seeker' });
 
-  return { accessToken: res.body.data.accessToken, userId: res.body.data.user.id };
+  const account = { accessToken: res.body.data.accessToken, userId: res.body.data.user.id };
+  if (name) await setProfileName(account.accessToken, name);
+
+  return account;
 };
 
-const registerBusiness = async (email) => {
+const registerBusiness = async (email, name) => {
   const res = await request(app)
     .post('/api/auth/register')
     .send({ email, password: validPassword, role: 'business' });
 
-  return { accessToken: res.body.data.accessToken, userId: res.body.data.user.id };
+  const account = { accessToken: res.body.data.accessToken, userId: res.body.data.user.id };
+  if (name) await setProfileName(account.accessToken, name);
+
+  return account;
+};
+
+const createGig = async (accessToken, overrides = {}) => {
+  const res = await request(app)
+    .post('/api/gigs')
+    .set('Authorization', `Bearer ${accessToken}`)
+    .send(validGigPayload(overrides));
+
+  return res.body.data.gig;
 };
 
 // Admin accounts are never created through public registration — the same
@@ -159,6 +196,120 @@ describe('GET /api/admin/reports', () => {
     expect(res.status).toBe(200);
     expect(res.body.data.reports).toHaveLength(1);
     expect(res.body.data.reports[0].targetId).toBe(openTarget.userId);
+  });
+
+  it('carries the reason code, note, filed-at time, and reporter and user-target identities', async () => {
+    const admin = await createAdmin('admin-queue-context-admin@example.com');
+    const reporter = await registerSeeker(
+      'admin-queue-context-reporter@example.com',
+      'Reporting Reya',
+    );
+    const target = await registerSeeker('admin-queue-context-target@example.com', 'Targeted Tom');
+
+    await createOpenReport(reporter.userId, target.userId, {
+      reasonCode: 'harassment_or_abuse',
+      note: 'Sent repeated abusive messages after I declined the gig.',
+    });
+
+    const res = await request(app)
+      .get('/api/admin/reports')
+      .set('Authorization', `Bearer ${admin.accessToken}`);
+
+    expect(res.status).toBe(200);
+    const [report] = res.body.data.reports;
+    expect(report).toMatchObject({
+      reasonCode: 'harassment_or_abuse',
+      note: 'Sent repeated abusive messages after I declined the gig.',
+      targetType: 'user',
+    });
+    expect(report.createdAt).toBeDefined();
+    expect(report.reporter).toMatchObject({ id: reporter.userId, name: 'Reporting Reya' });
+    expect(report.target).toMatchObject({ id: target.userId, name: 'Targeted Tom' });
+  });
+
+  it("carries a gig target's id, title and the posting business's identity", async () => {
+    const admin = await createAdmin('admin-queue-gig-admin@example.com');
+    const reporter = await registerSeeker('admin-queue-gig-reporter@example.com');
+    const business = await registerBusiness(
+      'admin-queue-gig-business@example.com',
+      'Colombo Events Co',
+    );
+    const gig = await createGig(business.accessToken);
+
+    await createOpenReport(reporter.userId, gig.id, {
+      targetType: 'gig',
+      reasonCode: 'misleading_gig_details',
+    });
+
+    const res = await request(app)
+      .get('/api/admin/reports')
+      .set('Authorization', `Bearer ${admin.accessToken}`);
+
+    expect(res.status).toBe(200);
+    const [report] = res.body.data.reports;
+    expect(report.targetType).toBe('gig');
+    expect(report.target).toMatchObject({
+      id: gig.id,
+      title: gig.title,
+      business: { id: business.userId, name: 'Colombo Events Co' },
+    });
+  });
+
+  it('still returns a report whose gig target has since been hard-deleted, with a null target summary', async () => {
+    const admin = await createAdmin('admin-queue-deleted-gig-admin@example.com');
+    const reporter = await registerSeeker('admin-queue-deleted-gig-reporter@example.com');
+    const business = await registerBusiness('admin-queue-deleted-gig-business@example.com');
+    const gig = await createGig(business.accessToken);
+
+    await createOpenReport(reporter.userId, gig.id, { targetType: 'gig' });
+
+    await request(app)
+      .delete(`/api/gigs/${gig.id}`)
+      .set('Authorization', `Bearer ${business.accessToken}`);
+
+    const res = await request(app)
+      .get('/api/admin/reports')
+      .set('Authorization', `Bearer ${admin.accessToken}`);
+
+    expect(res.status).toBe(200);
+    const [report] = res.body.data.reports;
+    expect(report.targetId).toBe(gig.id);
+    expect(report.target).toBeNull();
+  });
+
+  it('resolves a full page of mixed target types with a bounded, constant number of queries', async () => {
+    const admin = await createAdmin('admin-queue-batch-admin@example.com');
+    const reporter = await registerSeeker('admin-queue-batch-reporter@example.com');
+    const business = await registerBusiness('admin-queue-batch-business@example.com');
+    const gig = await createGig(business.accessToken);
+
+    const userTargets = [];
+    for (let i = 0; i < 9; i += 1) {
+      userTargets.push(await registerSeeker(`admin-queue-batch-target-${i}@example.com`));
+    }
+    for (const target of userTargets) {
+      await createOpenReport(reporter.userId, target.userId);
+    }
+    await createOpenReport(reporter.userId, gig.id, { targetType: 'gig' });
+
+    const profileFindSpy = jest.spyOn(Profile, 'find');
+    const gigFindSpy = jest.spyOn(Gig, 'find');
+
+    const res = await request(app)
+      .get('/api/admin/reports')
+      .set('Authorization', `Bearer ${admin.accessToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.reports).toHaveLength(10);
+    // One batched Profile.find for reporters, one for user targets, one more
+    // inside gig.service.js for the gig's posting business — a fixed number
+    // regardless of how many of the ten rows are which type, never one query
+    // per row.
+    expect(profileFindSpy).toHaveBeenCalledTimes(3);
+    expect(gigFindSpy).toHaveBeenCalledTimes(1);
+
+    profileFindSpy.mockRestore();
+    gigFindSpy.mockRestore();
   });
 
   it('mounts no write verb on the admin reports route', async () => {
