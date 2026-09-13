@@ -3,7 +3,8 @@ import { ApiError } from '../utils/ApiError.js';
 import { Report } from '../models/report.model.js';
 import { User } from '../models/user.model.js';
 import { Gig } from '../models/gig.model.js';
-import { getPublicIdentity } from './profile.service.js';
+import { getPublicIdentity, getPublicIdentities } from './profile.service.js';
+import { getGigSummariesByIds } from './gig.service.js';
 
 // Matches review.service.js and gig.service.js — ten per page everywhere
 // pagination shows up in this API.
@@ -154,6 +155,18 @@ export const listMyReports = async (callerId) => {
 // first, ten per page, same shape §10.4 and §12.2 already return. Read-only:
 // this is the whole endpoint for this subtask, with no resolve, dismiss or
 // other write path attached anywhere near it.
+//
+// GL-371: each row carries the reporter's identity and a summary of its
+// target, resolved through the same narrow boundaries every other component
+// reads through — getPublicIdentity(-ies) in profile.service.js for people,
+// getGigSummariesByIds in gig.service.js for gigs. Neither profile.model.js
+// nor gig.model.js is imported here for this. Resolved in one batched pass
+// per page (ids grouped by type, fetched once, mapped back) rather than one
+// lookup per row, so a page costs a constant number of queries regardless of
+// its mix of target types. A target that's vanished — a hard-deleted gig, a
+// user row that's gone — is simply absent from its lookup map and reads back
+// as a null target rather than failing the request; the report itself still
+// renders, the same tolerance GET /api/applications/mine has for a deleted gig.
 export const listOpenReports = async (query) => {
   const page = Math.max(1, parseInt(query.page, 10) || 1);
   const filter = { status: 'open' };
@@ -166,5 +179,33 @@ export const listOpenReports = async (query) => {
     Report.countDocuments(filter),
   ]);
 
-  return { reports: reports.map((report) => report.toJSON()), total, page, limit: PAGE_SIZE };
+  const reportsJson = reports.map((report) => report.toJSON());
+
+  const userTargetIds = reportsJson
+    .filter((report) => report.targetType === 'user')
+    .map((report) => report.targetId);
+  const gigTargetIds = reportsJson
+    .filter((report) => report.targetType === 'gig')
+    .map((report) => report.targetId);
+
+  const [reporterIdentities, userTargetIdentities, gigTargetSummaries] = await Promise.all([
+    getPublicIdentities(reportsJson.map((report) => report.reporter)),
+    getPublicIdentities(userTargetIds),
+    getGigSummariesByIds(gigTargetIds),
+  ]);
+
+  const enrichedReports = reportsJson.map((report) => {
+    const targetSummary =
+      report.targetType === 'user'
+        ? (userTargetIdentities.get(report.targetId.toString()) ?? null)
+        : (gigTargetSummaries.get(report.targetId.toString()) ?? null);
+
+    return {
+      ...report,
+      reporter: reporterIdentities.get(report.reporter.toString()) ?? null,
+      target: targetSummary,
+    };
+  });
+
+  return { reports: enrichedReports, total, page, limit: PAGE_SIZE };
 };
