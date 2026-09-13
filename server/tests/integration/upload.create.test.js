@@ -49,7 +49,10 @@ describe('POST /api/uploads', () => {
     const res = await request(app)
       .post('/api/uploads')
       .field('folder', 'avatars')
-      .attach('file', Buffer.from('fake-image'), { filename: 'photo.png', contentType: 'image/png' });
+      .attach('file', Buffer.from('fake-image'), {
+        filename: 'photo.png',
+        contentType: 'image/png',
+      });
 
     expect(res.status).toBe(401);
   });
@@ -75,8 +78,11 @@ describe('POST /api/uploads', () => {
     const res = await request(app)
       .post('/api/uploads')
       .set('Authorization', `Bearer ${seeker.accessToken}`)
-      .field('folder', 'resumes')
-      .attach('file', Buffer.from('fake-image'), { filename: 'photo.png', contentType: 'image/png' });
+      .field('folder', 'not-a-real-folder')
+      .attach('file', Buffer.from('fake-image'), {
+        filename: 'photo.png',
+        contentType: 'image/png',
+      });
 
     expect(res.status).toBe(400);
     expect(res.body.error.errors).toEqual(
@@ -120,7 +126,10 @@ describe('POST /api/uploads', () => {
       .post('/api/uploads')
       .set('Authorization', `Bearer ${seeker.accessToken}`)
       .field('folder', 'avatars')
-      .attach('file', Buffer.from('fake-image'), { filename: 'photo.png', contentType: 'image/png' });
+      .attach('file', Buffer.from('fake-image'), {
+        filename: 'photo.png',
+        contentType: 'image/png',
+      });
 
     expect(res.status).toBe(502);
     expect(res.body.error.code).toBe('STORAGE_UNAVAILABLE');
@@ -133,7 +142,10 @@ describe('POST /api/uploads', () => {
       .post('/api/uploads')
       .set('Authorization', `Bearer ${seeker.accessToken}`)
       .field('folder', 'avatars')
-      .attach('file', Buffer.from('fake-image'), { filename: 'my-photo.png', contentType: 'image/png' });
+      .attach('file', Buffer.from('fake-image'), {
+        filename: 'my-photo.png',
+        contentType: 'image/png',
+      });
 
     expect(res.status).toBe(201);
     const url = res.body.data.url;

@@ -68,6 +68,20 @@ export const SKILL_TRIAL_EFFORT_ESTIMATES = freezeList([
   { value: '1_to_2_hours', label: '1-2 hours' },
 ]);
 
+// The brief's closed five-value trial-result vocabulary (GL-297 §4/§8),
+// mirrored from server/src/models/application.model.js. `submitted` and
+// `skipped` are set by the applicant's own action at apply time;
+// `passed`/`not_passed` are set only by the business, once, through the
+// trial review endpoint. This is a result, not a status - it never joins
+// APPLICATION_STATUSES below.
+export const SKILL_TRIAL_RESULTS = freezeList([
+  { value: 'not_submitted', label: 'Not submitted' },
+  { value: 'submitted', label: 'Submitted' },
+  { value: 'passed', label: 'Passed' },
+  { value: 'not_passed', label: 'Not passed' },
+  { value: 'skipped', label: 'Skipped' },
+]);
+
 // `terminal` marks the five §11.2 calls "decided" - hired, completed,
 // rejected, withdrawn and closed_filled - and drives isLiveApplication
 // (ApplicationStatusFilter.js), which the tracker also consumes. `hired`
