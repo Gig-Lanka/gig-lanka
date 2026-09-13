@@ -15,7 +15,7 @@ import {
 } from '../services/application.service.js';
 
 export const applyToGig = asyncHandler(async (req, res) => {
-  const result = await applyToGigService(req.params.gigId, req.user);
+  const result = await applyToGigService(req.params.gigId, req.user, req.body);
 
   sendSuccess(res, result, 201);
 });
