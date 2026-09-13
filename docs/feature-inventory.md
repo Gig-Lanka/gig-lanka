@@ -481,14 +481,22 @@ destination. The only server change is one field on `getPublicIdentity` in `prof
   read back `gig: null`. Documented and handled, but it will look odd in the applications list.
 - `Application.create` and `adjustGigApplicantCount` are two separate writes with no transaction.
   A crash between them leaves the count one low. Low impact, worth knowing.
-- `draft` and `filled` gig statuses are renderable but unproducible; `savedBy` and
-  `skillTrialResults` are declared and never written. `filled` waits on Sprint 3's positions-filled
-  auto-close — GL-283's deadline auto-close writes `closed`, which is a different rule and does not
-  close this gap. **Sprint 3 gives three of these four a writer: `filled` via GL-291 (the write) and
-  GL-296 (the trigger), `savedBy` via GL-292, `skillTrialResults` via GL-297. `draft` still has no
-  producer and no ticket.** Note `skillTrialResults` gains a writer but **not a renderer** — the
-  profile-badge story is deferred to Sprint 4, so a passed trial is stored and published by the API
-  and invisible in the app until then. Deliberate, and recorded in `ROADMAP.md`'s carried risks.
+- `draft` gig status is renderable but unproducible; `savedBy` and `skillTrialResults` are declared
+  and never written. `filled` is no longer in that set: **GL-328 gives it a producer**,
+  `markGigFilled` in `gig.service.js` — a system transition with no HTTP route, idempotent on an
+  already-`filled` gig, refusing a `closed` or `draft` one. GL-283's deadline auto-close still
+  writes `closed`, a different rule, and `closeIfExpired`'s `status === 'open'` guard keeps the two
+  from fighting over a filled gig even with a past deadline. **GL-329 renders it** across My Gigs,
+  gig detail and the "still waiting on you" prompt, and **GL-330's integration suite**
+  (`gig.filled.test.js`) proves the write, the idempotency, the `closed` refusal, the browse
+  exclusion, and both status-writing rules' guards, against `listMyGigs`'s sweep as well as
+  `closeIfExpired`. The trigger — counting hires against `positions` and calling `markGigFilled` —
+  is still open, owned by E4's positions-filled auto-close story and not yet ticketed.
+  **Sprint 3 gives two of the remaining three items a writer: `savedBy` via GL-292,
+  `skillTrialResults` via GL-297. `draft` still has no producer and no ticket.** Note
+  `skillTrialResults` gains a writer but **not a renderer** — the profile-badge story is deferred to
+  Sprint 4, so a passed trial is stored and published by the API and invisible in the app until
+  then. Deliberate, and recorded in `ROADMAP.md`'s carried risks.
 - `GIG_SORT_ORDERS` is no longer unused — GL-216 consumes it in `GigFilters`.
 
 ### 7.12 🔴 Open — an admin signing in lands in the seeker tabs
