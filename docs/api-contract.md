@@ -104,7 +104,7 @@ Every error response — regardless of cause — returns the same outer shape:
 | `APPLICATION_ALREADY_EXISTS` | `POST /api/gigs/:gigId/applications` for a `(gig, applicant)` pair that already has an application (§11.7). Always `409`; the duplicate-key error from the unique index (§11.1) is translated here rather than surfacing as `500` — the same trap GL-15 hit with duplicate emails. Holds whether the earlier application is live, withdrawn or rejected. |
 | `TRIAL_ALREADY_SUBMITTED` | `POST /api/gigs/:gigId/applications` for a `(gig, applicant)` pair whose existing application already carries a skill trial submission — submitted, skipped, passed or not passed (§11.7). Always `409`; replaces `APPLICATION_ALREADY_EXISTS` for that specific case, since a submission cannot be edited after it is made. |
 | `INVALID_APPLICATION_TRANSITION` | Attempted to move an application to a status not reachable from its current status (§11.3). Always `409`, and the message names both the current and the attempted status. Withdrawing a `hired` application (§11.10) surfaces through this same code — Hired's only outgoing move is to `completed`, so a withdraw is refused by the transition table itself, not by a withdraw-specific check. Marking anything other than a `hired` application complete (§11.11) is refused the same way. |
-| `TRIAL_ALREADY_REVIEWED` | `PATCH /api/applications/:id/trial-review` on a trial that is already marked (`passed` or `not_passed`, in either direction, including passed-then-passed) or was never eligible for review in the first place (no submission, or `skipped`). Always `409` — a trial's result, once decided, is final, and there is nothing to judge on one that was never submitted. |
+| `TRIAL_ALREADY_REVIEWED` | `PATCH /api/applications/:id/trial-review` (§11.18) on a trial that is already marked (`passed` or `not_passed`, in either direction, including passed-then-passed) or was never eligible for review in the first place (no submission, or `skipped`). Always `409` — a trial's result, once decided, is final, and there is nothing to judge on one that was never submitted. |
 | `APPLICATION_NOT_COMPLETED` | `POST /api/applications/:applicationId/reviews` on an application whose status isn't `completed` (§12.4). Always `409` — a review requires a completed gig. |
 | `REVIEW_WINDOW_EXPIRED` | `POST /api/applications/:applicationId/reviews` more than 14 days after the application's `completedAt` (§12.1, §12.4). Always `409`, and distinct from `APPLICATION_NOT_COMPLETED` — the two 409s name different problems and the client shows different copy for each. Checked only once the application is confirmed `completed`, so a wrong-status application is never told its window has closed. |
 | `REVIEW_ALREADY_EXISTS` | `POST /api/applications/:applicationId/reviews` for an `(application, direction)` pair that already has a review (§12.4). Always `409`; the duplicate-key error from the unique index (§7) is translated here rather than surfacing as `500`. |
@@ -595,7 +595,7 @@ The closed list a report's `reasonCode` is drawn from (§13.1). Deliberately not
 
 ### 6.12 Skill trial vocabularies
 
-The three closed lists behind `Gig.skillTrial` (§10.1). Each is a Mongoose enum on the server and a frozen labelled list in `app/src/constants/enums.js`, the same deliberate duplication as every other vocabulary above.
+The four closed lists behind `Gig.skillTrial` (§10.1) and `Application.skillTrialSubmission` (§11.1). Each is a Mongoose enum on the server and a frozen labelled list in `app/src/constants/enums.js`, the same deliberate duplication as every other vocabulary above.
 
 **Requirement** — whether a trial is attached, and whether it is required to apply. Two values only: the Application & Hiring brief originally named a third, `required`, but the product decided against it — a skill trial is never mandatory to apply, in no instance.
 
@@ -619,6 +619,16 @@ The three closed lists behind `Gig.skillTrial` (§10.1). Each is a Mongoose enum
 | `under_30_minutes` | Under 30 minutes |
 | `30_to_60_minutes` | 30-60 minutes |
 | `1_to_2_hours` | 1-2 hours |
+
+**Result** — the outcome of one applicant's trial, on `Application.skillTrialSubmission.result` (§11.1). `submitted` and `skipped` are set by the applicant's own action at apply time (§11.7); `passed` and `not_passed` are set only by the business, once, through the trial review endpoint (§11.18) — this is a result, not a status, and never joins §11.2's application-status vocabulary or §11.3's transition table.
+
+| Value | Label |
+|---|---|
+| `not_submitted` | Not submitted |
+| `submitted` | Submitted |
+| `passed` | Passed |
+| `not_passed` | Not passed |
+| `skipped` | Skipped |
 
 ---
 
@@ -1462,6 +1472,20 @@ Only the owner. Permanently deletes the gig. There is no soft delete and no undo
 - `viewedAt`, `decidedAt`, `completedAt` — `null` until set by a transition (§11.3), never cleared or overwritten afterwards. Present as `null` rather than omitted, unlike the optional-field convention elsewhere in this document (§8.1) — these are always-present timestamps that happen to start empty, not optional data.
 - `completedAt` — the moment the business marked the work finished, set the first time `completed` is reached. Separate from `decidedAt`, which is already occupied by the hire and guarded against being overwritten: one application carries both, and they are different moments.
 - `rejectionReasonCode`, `rejectionNote` — absent until the application is rejected. `rejectionReasonCode` is one of §11.4's codes. `rejectionNote` is free text up to 300 characters, stored exactly as written, shown to the applicant verbatim.
+- `skillTrialSubmission` — present only when the gig carries a skill trial (`optional`, §6.12); absent entirely for a gig with no trial, the same "stores nothing" rule `Gig.skillTrial` itself follows. Set once, at apply time (§11.7):
+
+  ```json
+  {
+    "textResponse": "I'd start by confirming stock levels before opening...",
+    "fileUrl": null,
+    "submittedAt": "2026-08-04T09:15:00.000Z",
+    "result": "submitted",
+    "resultNote": null,
+    "reviewedAt": null
+  }
+  ```
+
+  `result` is one of §6.12's five values: `submitted`/`skipped` are set at apply time (§11.7); `passed`/`not_passed` are set only by the business, once, through the trial review endpoint (§11.18). `resultNote`, like `rejectionNote`, is optional, up to 300 characters, stored exactly as written, shown to the applicant verbatim. `reviewedAt` is `null` until reviewed.
 
 ### 11.2 Status vocabulary
 
@@ -1542,7 +1566,26 @@ Returned under `data.applications[].gig` (§11.7) and `data.application.gig` (§
 
 Seekers only. A business token gets `403`, a guest gets `401`.
 
-**Request body:** none. `status` and `appliedAt` are never accepted from the client — sending them (or anything else) has no effect, since the validator strips every field.
+**Request body:** `skillTrialSubmission`, optional — `status`, `appliedAt` and every other field are never accepted from the client, whatever the gig's trial state; sending them has no effect, since the validator strips them.
+
+```json
+{
+  "skillTrialSubmission": {
+    "textResponse": "I'd start by confirming stock levels before opening...",
+    "fileUrl": null
+  }
+}
+```
+
+| Gig's trial (`skillTrial.requirement`, §6.12) | Body sent | Result |
+|---|---|---|
+| `none` (no trial) | omitted | `skillTrialSubmission` absent from the created application (§11.1). |
+| `none` (no trial) | present | `400 VALIDATION_ERROR` — there is no task to answer. |
+| `optional` | omitted | Application created with `skillTrialSubmission.result: "skipped"`. Never counts against the applicant on its own. |
+| `optional` | present, valid for the gig's `submissionType` | Application created with `result: "submitted"`, `submittedAt` stamped. |
+| `optional` | present, invalid for the gig's `submissionType` | `400 VALIDATION_ERROR`, field-level `errors` (see below). |
+
+`textResponse`/`fileUrl` are validated against the gig's own `submissionType` (§6.12), not a fixed shape: `text` requires `textResponse` (20–2,000 characters) and forbids `fileUrl`; `file` requires `fileUrl` and forbids `textResponse`; `text_and_file` requires both. A file itself is never sent here — it is uploaded through `POST /api/uploads` (§9.1) into the `trials` folder first, and only the returned URL is sent as `fileUrl`.
 
 **Success — `201 Created`**
 
@@ -1580,6 +1623,41 @@ Seekers only. A business token gets `403`, a guest gets `401`.
 {
   "success": false,
   "error": { "code": "APPLICATION_ALREADY_EXISTS", "message": "You have already applied to this gig." }
+}
+```
+
+**Failure — `409 Conflict`** (a second application to a gig whose earlier application already carries a skill trial submission — `submitted`, `skipped`, `passed` or `not_passed`; replaces `APPLICATION_ALREADY_EXISTS` for that specific case, since a submission cannot be edited after it is made):
+
+```json
+{
+  "success": false,
+  "error": { "code": "TRIAL_ALREADY_SUBMITTED", "message": "A trial has already been submitted for this application." }
+}
+```
+
+**Failure — `400 Bad Request`** (a submission sent to a gig whose trial is `none`):
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "This gig has no skill trial to submit.",
+    "errors": [{ "field": "skillTrialSubmission", "message": "This gig has no skill trial to submit" }]
+  }
+}
+```
+
+**Failure — `400 Bad Request`** (a submission that doesn't match the gig's `submissionType` — missing/short/long `textResponse`, a forbidden field present, or a required field absent):
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Skill trial submission is invalid.",
+    "errors": [{ "field": "skillTrialSubmission.textResponse", "message": "textResponse is required for this trial" }]
+  }
 }
 ```
 
@@ -1877,19 +1955,70 @@ Only the business that posted the gig (GL-253). Moves the application from `appl
 }
 ```
 
-### 11.18 Error codes for these endpoints
+### 11.18 Review a skill trial — `PATCH /api/applications/:id/trial-review`
+
+Only the business that posted the gig (GL-352), checked by ownership the same way §11.14–§11.17 are. Not routed through `transitionApplicationStatus` and has no status precondition — the review is a result, not a status (§6.12), so a business can still shortlist, hire or reject the same application afterwards regardless of how the trial was marked.
+
+**Request body**
+
+```json
+{
+  "result": "passed",
+  "resultNote": "Confirmed pricing correctly and handled the return scenario well."
+}
+```
+
+| Field | Rule |
+|---|---|
+| `result` | Required. One of `passed` or `not_passed` (§6.12) — the two decided values. Anything else is refused. |
+| `resultNote` | Optional, up to 300 characters, stored on `skillTrialSubmission.resultNote` exactly as written — not trimmed, not sanitised (§11.1), the same rule as a rejection note and for the same reason: the seeker reads it verbatim. |
+
+**Success — `200 OK`** — same shape as §11.9, with `skillTrialSubmission.result` now `passed` or `not_passed`, `resultNote` (once given) and `reviewedAt` set.
+
+**Failure — `401 Unauthorized`** (guest) — as in §8.6.
+
+**Failure — `403 Forbidden`** (a seeker token, or a business token belonging to a different business) — as in §11.9.
+
+**Failure — `404 Not Found`** (no application with that id, or a malformed id) — as in §11.9.
+
+**Failure — `400 Bad Request`** (a missing or unrecognised `result`, or a `resultNote` over 300 characters):
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "result must be \"passed\" or \"not_passed\".",
+    "errors": [{ "field": "result", "message": "result must be \"passed\" or \"not_passed\"" }]
+  }
+}
+```
+
+**Failure — `409 Conflict`** (the trial is already marked — `passed` or `not_passed`, in either direction, including passed-then-passed — or was never eligible for review: no submission at all, or `skipped`. Marking is once and final; there is no un-mark or amend path):
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "TRIAL_ALREADY_REVIEWED",
+    "message": "This trial cannot be reviewed — it is either already marked, or was never submitted."
+  }
+}
+```
+
+### 11.19 Error codes for these endpoints
 
 | Status | Code | When |
 |---|---|---|
-| `400` | `VALIDATION_ERROR` | §11.12/§11.13 for an unrecognised `status` filter value. §11.17 for a missing, non-selectable, unrecognised, or Skill-Trial-without-a-trial rejection reason code (§11.4). `PATCH /api/applications/:id/trial-review` for a missing or unrecognised `result` (must be `passed` or `not_passed`), or a `resultNote` over 300 characters. |
+| `400` | `VALIDATION_ERROR` | §11.12/§11.13 for an unrecognised `status` filter value. §11.17 for a missing, non-selectable, unrecognised, or Skill-Trial-without-a-trial rejection reason code (§11.4). §11.7 for a skill trial submission sent to a `none` gig, or one that doesn't match the gig's `submissionType` (§6.12). §11.18 for a missing or unrecognised `result`, or a `resultNote` over 300 characters. |
 | `401` | `AUTH_HEADER_MISSING` / `AUTH_HEADER_MALFORMED` / `TOKEN_EXPIRED` / `TOKEN_INVALID` | No/malformed/expired/invalid token — every endpoint in this section requires one. |
-| `403` | `FORBIDDEN` | A business token on §11.7 or §11.8; a seeker or business token that isn't a party to the application on §11.9; a business token or the wrong seeker on §11.10; any seeker token, or a business that didn't post the gig, on §11.11, §11.12, §11.13, §11.14, §11.15, §11.16, §11.17 or `PATCH /api/applications/:id/trial-review`. |
-| `404` | `NOT_FOUND` | §11.7 or §11.12 for a gig that doesn't exist or has a malformed id. §11.9/§11.10/§11.11/§11.14/§11.15/§11.16/§11.17/`PATCH /api/applications/:id/trial-review` for an application that doesn't exist or has a malformed id, checked before the party/ownership check above. |
+| `403` | `FORBIDDEN` | A business token on §11.7 or §11.8; a seeker or business token that isn't a party to the application on §11.9; a business token or the wrong seeker on §11.10; any seeker token, or a business that didn't post the gig, on §11.11, §11.12, §11.13, §11.14, §11.15, §11.16, §11.17 or §11.18. |
+| `404` | `NOT_FOUND` | §11.7 or §11.12 for a gig that doesn't exist or has a malformed id. §11.9/§11.10/§11.11/§11.14/§11.15/§11.16/§11.17/§11.18 for an application that doesn't exist or has a malformed id, checked before the party/ownership check above. |
 | `409` | `GIG_CLOSED` | §11.7 for a gig that exists but isn't `open`. |
 | `409` | `APPLICATION_ALREADY_EXISTS` | §11.7 for a `(gig, applicant)` pair that already has an application, live, withdrawn or rejected. |
 | `409` | `TRIAL_ALREADY_SUBMITTED` | §11.7 for a `(gig, applicant)` pair whose existing application already carries a skill trial submission. See §3 for the shared definition. |
 | `409` | `INVALID_APPLICATION_TRANSITION` | §11.10 for an application that isn't `applied`, `viewed` or `shortlisted`. §11.11 for an application that isn't `hired`. §11.14 for an application that isn't `applied`. §11.15 for an application that isn't `viewed`. §11.16 for an application that isn't `shortlisted`. §11.17 for an application that isn't `applied`, `viewed` or `shortlisted`. |
-| `409` | `TRIAL_ALREADY_REVIEWED` | `PATCH /api/applications/:id/trial-review` for a trial that is already marked, or was never submitted or was skipped. See §3 for the shared definition. |
+| `409` | `TRIAL_ALREADY_REVIEWED` | §11.18 for a trial that is already marked, or was never submitted or was skipped. See §3 for the shared definition. |
 
 ---
 

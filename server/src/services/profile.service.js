@@ -175,6 +175,27 @@ export const setRatingSummary = async (userId, ratingSummary) => {
   await profile.save();
 };
 
+// GL-353: the single writer of Profile.skillTrialResults — the mirror image
+// of setRatingSummary above, called only by application.service.js's
+// reviewSkillTrial, and only after a trial is marked `passed`. Narrow by
+// design: this appends one badge and nothing else, so the ownership
+// boundary with Application & Hiring is expressed in code the same way the
+// rating aggregate's already is (no import of profile.model.js from outside
+// this file). `skill` is the gig's category **value**, not its label, so
+// the client renders the label from the enum like everywhere else. A
+// `not_passed`, `skipped` or unmarked trial never reaches here — the caller
+// only calls this on a pass — and marking is once and final, so there is no
+// corresponding un-writing path.
+export const addSkillTrialResult = async (userId, { skill, completedAt }) => {
+  const user = await User.findById(userId);
+
+  if (!user) return;
+
+  const profile = await getOrCreateProfile(user);
+  profile.skillTrialResults.push({ skill, passed: true, completedAt });
+  await profile.save();
+};
+
 // The name and photo any other feature embeds when it shows who someone is —
 // a gig's business block, and later an application or review author. This is
 // the only shape other components should read a profile through, so when the
