@@ -1,4 +1,5 @@
 import { Text, View } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 
 import Button from '../ui/Button';
 import Chip from '../ui/Chip';
@@ -14,7 +15,8 @@ const CATEGORY_LABELS = [...BUSINESS_REVIEW_CATEGORIES, ...YOUTH_WORKER_REVIEW_C
   {},
 );
 
-export default function RatingSummary({ rating, className, ...props }) {
+export default function RatingSummary({ rating, userId, className, ...props }) {
+  const navigation = useNavigation();
   const {
     averageRating = 0,
     reviewCount = 0,
@@ -72,8 +74,7 @@ export default function RatingSummary({ rating, className, ...props }) {
         </View>
       ) : null}
 
-      {/* No reviews list screen until Sprint 2 - stays disabled, no onPress. */}
-      <Button variant="small" disabled>
+      <Button variant="small" onPress={() => navigation.navigate('Reviews', { userId })}>
         {`See all ${reviewCount} ${reviewLabel}`}
       </Button>
     </View>
