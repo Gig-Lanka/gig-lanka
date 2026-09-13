@@ -1275,7 +1275,7 @@ Public — no `Authorization` header required. With no parameters: `status: 'ope
 | `minPay` | number, `>= 0` | `payAmount >= minPay`. See the limitation below. |
 | `sort` | one of §6.6 | Reorders the result; see below. Defaults to `newest`. |
 
-**Combination rules:** every parameter ANDs with every other — a gig must satisfy `q` **and** `category` **and** `remote`, etc., all at once. Within `category`, `schedule`, `payType` and `commitment`, multiple values OR — a gig matching *any one* of the values given for that parameter satisfies it. `status: 'open'` is applied unconditionally underneath all of this; no combination of parameters can surface a `closed`, `filled` or `draft` gig.
+**Combination rules:** every parameter ANDs with every other — a gig must satisfy `q` **and** `category` **and** `remote`, etc., all at once. Within `category`, `schedule`, `payType` and `commitment`, multiple values OR — a gig matching *any one* of the values given for that parameter satisfies it. `status: 'open'` is applied unconditionally underneath all of this; no combination of parameters can surface a `closed`, `filled` or `draft` gig. A gig posted by a deactivated business is excluded the same unconditional way (§5's account deactivation) — `GET /api/gigs/:id` still resolves it by direct link, but it never appears in this listing and its `total` reflects the exclusion.
 
 **Multi-value wire format:** `category`, `schedule`, `payType` and `commitment` each take a **comma-separated** list of values from their closed vocabulary — e.g. `?category=tech,creative`. A single value needs no comma. This is the one shape both this endpoint and its client (GL-216) build to; repeated keys (`category=tech&category=creative`) are not accepted.
 
