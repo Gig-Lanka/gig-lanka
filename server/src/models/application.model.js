@@ -25,6 +25,20 @@ export const REJECTION_REASON_CODES = [
   'positions_filled',
 ];
 
+// The brief's closed five-value trial-result vocabulary (GL-297 §4/§8),
+// mirrored in app/src/constants/enums.js as a frozen labelled list.
+// `submitted` and `skipped` are set by the applicant's own action at apply
+// time; `passed`/`not_passed` are set only by the business, once, through
+// the trial review endpoint. The review is a result, not a status — these
+// values never join APPLICATION_STATUSES or TRANSITION_RULES.
+export const SKILL_TRIAL_RESULTS = [
+  'not_submitted',
+  'submitted',
+  'passed',
+  'not_passed',
+  'skipped',
+];
+
 const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 const snapshotWorkExperienceSchema = new mongoose.Schema(
@@ -59,6 +73,26 @@ const profileSnapshotSchema = new mongoose.Schema(
     experience: { type: [snapshotWorkExperienceSchema], default: [] },
     education: { type: [snapshotEducationSchema], default: [] },
     rating: RATING_AGGREGATE_SHAPE,
+  },
+  { _id: false },
+);
+
+// Belongs to the application, not the gig — editing a gig's trial after
+// applications exist does not change what anyone already submitted
+// (GL-297 §4). Content validation against the gig's submissionType and the
+// apply-time / review-time writers are other sub-tasks; this only shapes
+// the field.
+const skillTrialSubmissionSchema = new mongoose.Schema(
+  {
+    textResponse: { type: String, trim: true },
+    fileUrl: { type: String, trim: true },
+    submittedAt: { type: Date },
+    result: { type: String, enum: SKILL_TRIAL_RESULTS },
+    // Free text up to 300 characters, shown to the seeker verbatim —
+    // deliberately not trimmed so it is stored exactly as written, the same
+    // rule as rejectionNote below.
+    resultNote: { type: String, maxlength: 300 },
+    reviewedAt: { type: Date },
   },
   { _id: false },
 );
@@ -115,6 +149,12 @@ const applicationSchema = new mongoose.Schema(
     rejectionNote: {
       type: String,
       maxlength: 300,
+    },
+    // Optional: an application to a gig with no trial stores nothing (stays
+    // undefined) rather than an empty object.
+    skillTrialSubmission: {
+      type: skillTrialSubmissionSchema,
+      required: false,
     },
   },
   {
