@@ -7,7 +7,7 @@ import {
   REJECTION_REASON_CODES,
 } from '../models/application.model.js';
 import { assertGigIsOpen, findOwnedGig } from './gig.service.js';
-import { getMyProfile } from './profile.service.js';
+import { getMyProfile, addSkillTrialResult } from './profile.service.js';
 
 // Source status -> target status -> which kind of actor may trigger that
 // move. Modeled as data, not a chain of conditionals, so Sprint 2's hiring
@@ -614,8 +614,8 @@ export const rejectApplication = async (id, actor, body) => {
 
 const RESULT_NOTE_MAX_LENGTH = 300;
 
-// GL-352: PATCH /api/applications/:id/trial-review. The review is a result,
-// not a status (GL-297 §4/§8) — it never goes through
+// GL-352/GL-353: PATCH /api/applications/:id/trial-review. The review is a
+// result, not a status (GL-297 §4/§8) — it never goes through
 // transitionApplicationStatus or TRANSITION_RULES, so a business can still
 // shortlist, hire or reject the same application afterwards regardless of
 // which way the trial was marked. Only the business that posted the gig may
@@ -625,10 +625,10 @@ const RESULT_NOTE_MAX_LENGTH = 300;
 // already `passed`/`not_passed`, or never eligible in the first place
 // (`skipped`, or no submission at all) — is refused with the same
 // TRIAL_ALREADY_REVIEWED code, the same way INVALID_APPLICATION_TRANSITION
-// covers every unreachable status move under one code. Writing the passed
-// badge to the seeker's profile, through profile.service.js's narrow
-// writer, is a sibling sub-task's concern (GL-353) — this function only
-// marks the result.
+// covers every unreachable status move under one code. A pass writes a
+// badge to the seeker's profile — the gig's category and the moment it was
+// marked — through profile.service.js's narrow writer, never by importing
+// profile.model.js directly; a fail or a skip writes nothing there.
 export const reviewSkillTrial = async (id, actor, body) => {
   const { application, businessId } = await getApplicationWithParties(id);
 
@@ -666,8 +666,9 @@ export const reviewSkillTrial = async (id, actor, body) => {
     );
   }
 
+  const reviewedAt = new Date();
   application.skillTrialSubmission.result = result;
-  application.skillTrialSubmission.reviewedAt = new Date();
+  application.skillTrialSubmission.reviewedAt = reviewedAt;
   if (resultNote !== undefined) {
     application.skillTrialSubmission.resultNote = resultNote;
   }
@@ -675,6 +676,13 @@ export const reviewSkillTrial = async (id, actor, body) => {
   await application.save();
 
   const gig = await Gig.findById(application.gig);
+
+  if (result === 'passed') {
+    await addSkillTrialResult(application.applicant, {
+      skill: gig?.category,
+      completedAt: reviewedAt,
+    });
+  }
 
   return {
     application: { ...application.toJSON(), gig: toGigSummary(gig) },
