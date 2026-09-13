@@ -147,24 +147,14 @@ describe('GET /api/profiles/:userId', () => {
     expect(profile.skillTrialResults).toBeUndefined();
   });
 
-  // Sprint 3 deactivation guard, pinned before the feature exists: getPublicProfile
-  // must answer 404 — identical to a userId that was never registered — once a
-  // user record has isActive === false. Named "deactivation guard" so the Sprint 3
-  // story that adds isActive to the User schema can find this test.
+  // Deactivation guard: getPublicProfile must answer 404 — identical to a
+  // userId that was never registered — once a user record has isActive === false.
   describe('deactivation guard (isActive: false)', () => {
     it('answers 404 for a deactivated account, identical to a profile that never existed', async () => {
       const subject = await registerSeeker('public-deactivated-subject@example.com');
       const viewer = await registerBusiness('public-deactivated-viewer@example.com');
 
-      // isActive is not on the User schema until Sprint 3. A normal Mongoose
-      // save/updateOne in strict mode would silently drop it, so it is written
-      // through the native driver collection to bypass schema stripping —
-      // exercising the guard against the raw stored document, the way a
-      // Sprint 3 migration would actually set it.
-      await User.collection.updateOne(
-        { _id: new mongoose.Types.ObjectId(subject.userId) },
-        { $set: { isActive: false } },
-      );
+      await User.updateOne({ _id: new mongoose.Types.ObjectId(subject.userId) }, { isActive: false });
 
       const res = await request(app)
         .get(`/api/profiles/${subject.userId}`)

@@ -18,6 +18,10 @@ const userSchema = new mongoose.Schema(
       enum: ['seeker', 'business', 'admin'],
       required: true,
     },
+    isActive: {
+      type: Boolean,
+      default: true,
+    },
   },
   {
     timestamps: true,
@@ -26,6 +30,7 @@ const userSchema = new mongoose.Schema(
         ret.id = ret._id;
         delete ret._id;
         delete ret.passwordHash;
+        delete ret.isActive;
         delete ret.__v;
         return ret;
       },
