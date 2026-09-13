@@ -48,6 +48,16 @@ function isThinProfile(profile) {
   return (profile.workExperience?.length ?? 0) === 0 && (profile.education?.length ?? 0) === 0;
 }
 
+// GL-357 - the wire shape §11.7 accepts is exactly `{ textResponse, fileUrl }`;
+// `attachmentName`/`attachmentSize` on the object SkillTrialScreen hands back
+// are only for SkillTrialScreen's own locked-reopen re-display and are
+// never sent here.
+function toSkillTrialSubmissionBody(trialSubmission) {
+  if (!trialSubmission) return undefined;
+  const { textResponse, fileUrl } = trialSubmission;
+  return { textResponse, fileUrl };
+}
+
 export default function ApplyScreen() {
   const navigation = useNavigation();
   const { params } = useRoute();
@@ -67,6 +77,11 @@ export default function ApplyScreen() {
   const [reloadToken, setReloadToken] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState(null);
+  // GL-357 - true only when the server refused the trial content itself
+  // (a validation error on skillTrialSubmission), which is the one failure
+  // that has to unlock the trial for editing again - every other apply
+  // failure leaves it exactly as submitted, per the frame's finality promise.
+  const [trialNeedsRevision, setTrialNeedsRevision] = useState(false);
 
   // Same refetch-on-focus pattern as GigDetailScreen/ProfileScreen - bumping
   // reloadToken changes this callback's identity, which is what makes
@@ -117,7 +132,10 @@ export default function ApplyScreen() {
     setFormError(null);
     setSubmitting(true);
     try {
-      const { application } = await applicationApi.apply(gigId);
+      const { application } = await applicationApi.apply(
+        gigId,
+        toSkillTrialSubmissionBody(trialSubmission),
+      );
       navigation.replace('ApplicationDetail', { applicationId: application.id });
     } catch (error) {
       const apiError = error.response?.data?.error;
@@ -131,6 +149,28 @@ export default function ApplyScreen() {
           message: 'You already have an application for this gig.',
           actionLabel: 'View your application',
           onAction: () => navigation.navigate('Main', { screen: 'My Applications' }),
+        });
+      } else if (apiError?.code === 'TRIAL_ALREADY_SUBMITTED') {
+        // Reachable if a stale screen resubmits after the trial already
+        // landed on an earlier application for this gig (§11.7) - not a
+        // race this screen's own state can otherwise produce, since a
+        // locked trial already blocks a second "Submit trial" tap.
+        setFormError({
+          message: 'A trial has already been submitted for this application.',
+        });
+      } else if (
+        apiError?.code === 'VALIDATION_ERROR' &&
+        apiError.errors?.some((fieldError) => fieldError.field?.startsWith('skillTrialSubmission'))
+      ) {
+        // The seeker's typed response/attachment is what the server refused
+        // - unlock the trial so "Open the task →" lets them fix it, rather
+        // than leaving it locked with no way back in (§298's finality
+        // promise is about a trial that succeeded, not one that didn't).
+        setTrialNeedsRevision(true);
+        setFormError({
+          message: apiError.errors[0]?.message || apiError.message,
+          actionLabel: 'Edit your response',
+          onAction: () => navigation.navigate('SkillTrial', { gigId, locked: false }),
         });
       } else if (apiError?.code === 'FORBIDDEN') {
         setFormError({ message: BUSINESS_REFUSAL_MESSAGE });
@@ -204,6 +244,10 @@ export default function ApplyScreen() {
   const skillTrial = gig.skillTrial;
   const hasTrial = Boolean(skillTrial) && skillTrial.requirement !== 'none';
   const trialResult = trialSubmission ? 'submitted' : 'not_submitted';
+  // Locked once submitted, per the frame's finality promise - unless the
+  // server just refused that exact content, in which case it has to be
+  // editable again or the seeker has no way to ever apply.
+  const trialLocked = Boolean(trialSubmission) && !trialNeedsRevision;
 
   return (
     <SafeAreaView className="flex-1 bg-paper" edges={['top', 'bottom']}>
@@ -235,7 +279,13 @@ export default function ApplyScreen() {
                 <Text className="text-[12px] text-muted">A sample of skill, not paid work</Text>
                 <Text
                   className="text-[13px] font-semibold text-signal"
-                  onPress={() => navigation.navigate('SkillTrial', { gigId })}
+                  onPress={() =>
+                    navigation.navigate('SkillTrial', {
+                      gigId,
+                      locked: trialLocked,
+                      submission: trialSubmission,
+                    })
+                  }
                 >
                   Open the task →
                 </Text>

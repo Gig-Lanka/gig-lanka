@@ -6,8 +6,11 @@
 // parent story (GL-298) it travels with the application, so Submit trial
 // only assembles { textResponse, fileUrl } and hands it back to Apply via
 // navigation params - one of the two options the story's technical notes
-// name for this. GL-357 owns finishing that hand-off (locking a submitted
-// trial read-only, and actually sending it on POST .../applications).
+// name for this. GL-357 finishes that hand-off: ApplyScreen sends it on
+// POST .../applications, and passes `locked`/`submission` back here (via
+// "Open the task →") once it's been submitted, so reopening it renders
+// read-only rather than losing the promise that a submitted trial can't be
+// edited (§298's frame note) the moment the seeker navigates away and back.
 //
 // The "Required" badge state the frame and parent story describe cannot
 // occur: GL-341 removed `required` from skillTrial.requirement across the
@@ -60,14 +63,25 @@ function labelFor(list, value) {
 export default function SkillTrialScreen() {
   const navigation = useNavigation();
   const { params } = useRoute();
-  const { gigId } = params;
+  const { gigId, locked, submission } = params;
 
   const [gig, setGig] = useState(null);
   const [status, setStatus] = useState(STATUS.LOADING);
   const [reloadToken, setReloadToken] = useState(0);
 
-  const [textResponse, setTextResponse] = useState('');
-  const [attachment, setAttachment] = useState(null);
+  // Prefilled once from the submission ApplyScreen hands back for a locked
+  // reopen - route params don't change for the life of this screen instance,
+  // so a lazy initializer is enough; there is nothing to keep in sync after.
+  const [textResponse, setTextResponse] = useState(() => submission?.textResponse ?? '');
+  const [attachment, setAttachment] = useState(() =>
+    submission?.fileUrl
+      ? {
+          name: submission.attachmentName,
+          size: submission.attachmentSize,
+          url: submission.fileUrl,
+        }
+      : null,
+  );
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
 
@@ -102,6 +116,7 @@ export default function SkillTrialScreen() {
   const handleBack = () => navigation.goBack();
 
   async function handlePickAttachment() {
+    if (locked) return;
     setUploadError('');
 
     const result = await DocumentPicker.getDocumentAsync({
@@ -138,7 +153,14 @@ export default function SkillTrialScreen() {
 
     const trialSubmission = {};
     if (showResponseField) trialSubmission.textResponse = textResponse.trim();
-    if (showAttachment) trialSubmission.fileUrl = attachment.url;
+    if (showAttachment) {
+      trialSubmission.fileUrl = attachment.url;
+      // Not part of the §11.7 wire shape - ApplyScreen strips these before
+      // sending, they only round-trip back here for a locked reopen's
+      // read-only re-display (the server response never carries a name).
+      trialSubmission.attachmentName = attachment.name;
+      trialSubmission.attachmentSize = attachment.size;
+    }
 
     // Not a network call - GL-357 sends this with the application itself
     // (docs/api-contract.md §11.7). Handing it back through navigation
@@ -232,6 +254,7 @@ export default function SkillTrialScreen() {
               onChangeText={setTextResponse}
               maxLength={SKILL_TRIAL_RESPONSE_MAX_LENGTH}
               containerClassName="mb-0"
+              disabled={locked}
             />
             <Text
               className={[
@@ -251,7 +274,7 @@ export default function SkillTrialScreen() {
             {attachment ? (
               <Pressable
                 onPress={handlePickAttachment}
-                disabled={uploading}
+                disabled={uploading || locked}
                 className="flex-row items-center gap-[13px] rounded-ds-lg border-[1.5px] border-line bg-haze px-[18px] py-[14px]"
               >
                 <View className="flex-1">
@@ -259,14 +282,15 @@ export default function SkillTrialScreen() {
                     {attachment.name}
                   </Text>
                   <Text className="mt-0.5 text-[12px] text-muted">
-                    {formatFileSize(attachment.size)} · Tap to replace
+                    {formatFileSize(attachment.size)}
+                    {locked ? '' : ' · Tap to replace'}
                   </Text>
                 </View>
               </Pressable>
             ) : (
               <Pressable
                 onPress={handlePickAttachment}
-                disabled={uploading}
+                disabled={uploading || locked}
                 className="flex-row items-center gap-[13px] rounded-ds-lg border-[1.5px] border-dashed border-line bg-haze px-[18px] py-[14px]"
               >
                 <Text className="text-[17px] text-muted-dark">↑</Text>
@@ -289,15 +313,21 @@ export default function SkillTrialScreen() {
       </ScrollView>
 
       <View className="border-t border-line px-[22px] pb-3 pt-3">
-        <Button
-          onPress={() => handleSubmitTrial(canSubmit, showResponseField, showAttachment)}
-          disabled={!canSubmit}
-        >
-          Submit trial
-        </Button>
-        <Text className="mt-2 text-center text-[12px] font-medium text-muted">
-          You can&apos;t edit a trial after submitting
-        </Text>
+        {locked ? (
+          <Notice>This trial has already been submitted and can&apos;t be edited.</Notice>
+        ) : (
+          <>
+            <Button
+              onPress={() => handleSubmitTrial(canSubmit, showResponseField, showAttachment)}
+              disabled={!canSubmit}
+            >
+              Submit trial
+            </Button>
+            <Text className="mt-2 text-center text-[12px] font-medium text-muted">
+              You can&apos;t edit a trial after submitting
+            </Text>
+          </>
+        )}
       </View>
     </SafeAreaView>
   );

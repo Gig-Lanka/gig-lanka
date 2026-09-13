@@ -18,14 +18,20 @@ async function getMyApplications() {
 }
 
 /**
- * `POST /api/gigs/:gigId/applications` - apply to a gig (§11.7). No request
- * body: the endpoint strips every field the client might send. Resolves to
- * `{ application, profileIncomplete }` - `profileIncomplete` mirrors the
- * same no-experience-and-no-education check the apply screen runs
- * beforehand, computed again server-side at the moment of submission.
+ * `POST /api/gigs/:gigId/applications` - apply to a gig (§11.7). Every field
+ * except `skillTrialSubmission` is stripped server-side, whatever the
+ * client sends. `skillTrialSubmission` is optional - GL-357: the seeker's
+ * skill trial response, `{ textResponse, fileUrl }`, assembled by
+ * SkillTrialScreen and carried here through Apply's navigation params, sent
+ * in the same request rather than through a submission endpoint of its own.
+ * Resolves to `{ application, profileIncomplete }` - `profileIncomplete`
+ * mirrors the same no-experience-and-no-education check the apply screen
+ * runs beforehand, computed again server-side at the moment of submission.
  */
-async function apply(gigId) {
-  const response = await client.post(`/gigs/${gigId}/applications`);
+async function apply(gigId, skillTrialSubmission) {
+  const response = await client.post(`/gigs/${gigId}/applications`, {
+    skillTrialSubmission,
+  });
   return response.data.data;
 }
 
