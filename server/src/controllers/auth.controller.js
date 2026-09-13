@@ -6,6 +6,7 @@ import {
   refreshTokens,
   logoutUser,
   changeUserPassword,
+  deactivateOwnAccount,
 } from '../services/auth.service.js';
 
 export const register = asyncHandler(async (req, res) => {
@@ -40,4 +41,10 @@ export const changePassword = asyncHandler(async (req, res) => {
   const { accessToken, refreshToken } = await changeUserPassword(req.user, req.body);
 
   sendSuccess(res, { accessToken, refreshToken }, 200);
+});
+
+export const deactivate = asyncHandler(async (req, res) => {
+  await deactivateOwnAccount(req.user);
+
+  sendSuccess(res, null, 200);
 });
