@@ -5,6 +5,10 @@ import { User } from '../models/user.model.js';
 import { Gig } from '../models/gig.model.js';
 import { getPublicIdentity } from './profile.service.js';
 
+// Matches review.service.js and gig.service.js — ten per page everywhere
+// pagination shows up in this API.
+const PAGE_SIZE = 10;
+
 // Checked before anything else — including who's asking — so a report
 // against a bad id always 404s the same way, and refusal codes can never be
 // used to probe which ids exist. Mirrors the existence-then-everything-else
@@ -142,4 +146,25 @@ export const listMyReports = async (callerId) => {
   );
 
   return { reports: reportsWithTarget };
+};
+
+// GL-370: the admin queue. `status: 'open'` is hard-coded into the filter —
+// never read from `query` — so no combination of request parameters can
+// widen it; the query object is only ever consulted for `page`. Newest
+// first, ten per page, same shape §10.4 and §12.2 already return. Read-only:
+// this is the whole endpoint for this subtask, with no resolve, dismiss or
+// other write path attached anywhere near it.
+export const listOpenReports = async (query) => {
+  const page = Math.max(1, parseInt(query.page, 10) || 1);
+  const filter = { status: 'open' };
+
+  const [reports, total] = await Promise.all([
+    Report.find(filter)
+      .sort({ createdAt: -1, _id: -1 })
+      .skip((page - 1) * PAGE_SIZE)
+      .limit(PAGE_SIZE),
+    Report.countDocuments(filter),
+  ]);
+
+  return { reports: reports.map((report) => report.toJSON()), total, page, limit: PAGE_SIZE };
 };
