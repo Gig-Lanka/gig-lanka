@@ -1,9 +1,7 @@
-// Review client - GL-203/GL-111. The only place the rating flow talks to
-// the network for reviews; screens never import axios or touch a token,
+// Review client - GL-203/GL-111/GL-373. The only place the rating flow talks
+// to the network for reviews; screens never import axios or touch a token,
 // `client` handles auth headers the same way it does for gigs and
-// applications (see ./client.js). Covers the endpoint this sprint needs
-// (docs/api-contract.md §12.1) - reading reviews back (§12.2) is Sprint 2's
-// reviews list screen.
+// applications (see ./client.js).
 
 import client from './client';
 
@@ -35,7 +33,21 @@ async function getMyReviews() {
   return response.data.data;
 }
 
+/**
+ * `GET /api/users/:userId/reviews` (§12.2) - the reviews written about
+ * `userId`, newest first, ten per page. `rating` narrows the query
+ * server-side rather than the page already fetched, so `total` and the
+ * list it counts can never disagree; omit it to get every star value.
+ */
+async function getReviewsForUser(userId, page, rating) {
+  const response = await client.get(`/users/${userId}/reviews`, {
+    params: { page, rating },
+  });
+  return response.data.data;
+}
+
 export default {
   submitReview,
   getMyReviews,
+  getReviewsForUser,
 };
