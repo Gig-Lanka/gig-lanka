@@ -245,6 +245,45 @@ export const closeGig = async (id, userId) => {
   return gig.toJSON();
 };
 
+// filled has been in the status vocabulary since Sprint 1 (docs/feature-inventory.md
+// §7.11) with no producer - this is it. E4's positions-filled auto-close is the
+// only intended caller, raising this once hires reach the gig's position count;
+// there is deliberately no route here, since a business filling their own gig by
+// hand isn't a feature in any brief and the only legitimate cause is a hire. Takes
+// no HTTP actor, mirroring closeIfExpired's system-actor pattern. Idempotent so a
+// duplicate trigger from E4 is harmless. Refuses 'closed' and 'draft': a business
+// who closed a gig early made a decision that a later hire must not silently
+// overwrite, and this is not GL-283's deadline auto-close, which writes 'closed'
+// on an unrelated rule.
+export const markGigFilled = async (gigId) => {
+  if (!mongoose.isValidObjectId(gigId)) {
+    throw new ApiError(404, 'NOT_FOUND', 'Gig not found.');
+  }
+
+  const gig = await Gig.findById(gigId);
+
+  if (!gig) {
+    throw new ApiError(404, 'NOT_FOUND', 'Gig not found.');
+  }
+
+  if (gig.status === 'filled') {
+    return gig.toJSON();
+  }
+
+  if (gig.status === 'closed' || gig.status === 'draft') {
+    throw new ApiError(
+      409,
+      'GIG_NOT_FILLABLE',
+      'This gig is closed or still a draft and cannot be marked filled.',
+    );
+  }
+
+  gig.status = 'filled';
+  await gig.save({ validateModifiedOnly: true });
+
+  return gig.toJSON();
+};
+
 export const deleteGig = async (id, userId) => {
   const gig = await findOwnedGig(id, userId);
 
