@@ -74,7 +74,7 @@ export default function ProfileScreen() {
     );
   }
 
-  const { name, photo, bio, city, category, ratingSummary } = profile;
+  const { user, name, photo, bio, city, category, ratingSummary } = profile;
 
   return (
     <View className="flex-1 bg-ink">
@@ -131,7 +131,7 @@ export default function ProfileScreen() {
             </View>
           ) : null}
 
-          <RatingSummary rating={ratingSummary} className="mt-5" />
+          <RatingSummary rating={ratingSummary} userId={user} className="mt-5" />
 
           <Button
             variant="small"

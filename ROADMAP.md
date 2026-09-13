@@ -248,15 +248,17 @@ screening questions and years-of-experience fields anywhere
   says "until X lands". **GL-236 closed the first. The second is still open** — `GigBusinessBlock`
   still carries its "No rating slot" comment and `GET /api/gigs/:id` still sends no rating — and it
   is still Sprint 3. Sprint 2 added a third instance of the same pattern: `RatingSummary`'s "See all
-  N reviews" button, left `disabled` for a reviews list screen that did not arrive.
+  N reviews" button, left `disabled` for a reviews list screen that did not arrive. **The third is
+  now closed** — GL-303 (its GL-376 sub-task) gave the button its `onPress` to the new
+  `ReviewsScreen` and deleted the stale comment.
   **Sprint 3 breaks the pattern deliberately for the first time.** The report/complaint flow would
   have been the fifth instance — a Report button writing into a queue with no reader until Sprint 4
   — so E6's open-reports list is pulled forward to ship alongside it. The rule this establishes: a
   feature that writes something a human is supposed to act on does not ship before the screen that
   shows it. That is narrower than "no inert code" and is the part worth holding to.
-  **Both open instances are ticketed for Sprint 3** — GL-304 closes GL-122 AC6, GL-303 closes the
-  disabled "See all N reviews" button — and GL-301/GL-306 keep the report flow from becoming a
-  fourth. **One new instance is accepted deliberately, with eyes open:** GL-297 writes
+  **Of the two instances still open at ticketing, one is now closed** — GL-303 closed the disabled
+  "See all N reviews" button; GL-304 still owes GL-122 AC6 — and GL-301/GL-306 keep the report flow
+  from becoming a fourth. **One new instance is accepted deliberately, with eyes open:** GL-297 writes
   `skillTrialResults` onto the seeker's profile and the story that renders those badges is deferred
   to Sprint 4, so a passed trial is stored and public in the API but invisible in the app until then.
   It is display, not an action queue, so it does not violate the rule above — but it is the same
