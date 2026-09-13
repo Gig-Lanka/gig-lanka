@@ -1993,7 +1993,12 @@ Either party to the application — the applicant or the business that posted th
 
 The reviews written about `:userId`, newest first (`createdAt` descending), ten per page. Requires `Authorization: Bearer <accessToken>` — any signed-in caller, not just the two parties.
 
-**Request:** `?page=<n>` — optional, defaults to `1`. Malformed or missing values fall back to `1`, the same as §10.4.
+**Request:** `?page=<n>&rating=<n>`
+
+* `page` — optional, defaults to `1`. Malformed or missing values fall back to `1`, the same as §10.4.
+* `rating` — optional, one of `1`-`5`. Narrows the query itself to reviews at that star value — it is not a post-filter over the page already fetched, so a matching review on page 4 of the unfiltered list still surfaces on page 1 once `rating` is applied. Combines with `page`, which then paginates the filtered set. Any other value 400s with `VALIDATION_ERROR`. Omit it to get every star value.
+
+`total` always counts the same query the `reviews` page was drawn from — with `rating` applied, `total` reflects the filtered count, not the count across all star values, so a tab's count and the list behind it can never disagree.
 
 **Success — `200 OK`**
 
@@ -2025,7 +2030,7 @@ The reviews written about `:userId`, newest first (`createdAt` descending), ten 
 }
 ```
 
-`author` is populated from the author's current profile (§8) at read time, not a frozen copy — a display name change is reflected on every past review, not just new ones. `name`/`photo` come back `null` if the author has no profile yet, the same as §10.2's business block. `total` counts every review about this user, not just the page returned. This component never checks whether `:userId` belongs to a real, active user — a deactivated account's reviews are unaffected by deactivation (§8.5's privacy rules don't apply here). A well-formed id nobody has ever reviewed returns `200` with an empty page (see below), not `404`; only a syntactically invalid id 404s.
+`author` is populated from the author's current profile (§8) at read time, not a frozen copy — a display name change is reflected on every past review, not just new ones. `name`/`photo` come back `null` if the author has no profile yet, the same as §10.2's business block. `total` counts every review matching the request (every review about this user, or just those at `rating` when it's given), not just the page returned. This component never checks whether `:userId` belongs to a real, active user — a deactivated account's reviews are unaffected by deactivation (§8.5's privacy rules don't apply here). A well-formed id nobody has ever reviewed returns `200` with an empty page (see below), not `404`; only a syntactically invalid id 404s.
 
 `categories`, `rating`, `text`, `createdAt` are exactly §7. There is no `updatedAt` — reviews are permanent, with no edit, delete or respond endpoint anywhere in this component.
 
@@ -2040,7 +2045,9 @@ The reviews written about `:userId`, newest first (`createdAt` descending), ten 
 }
 ```
 
-No other failure modes — a well-formed id with no reviews is still `200` with `"reviews": []` and `"total": 0`.
+**Failure — `400 Bad Request`** (`rating` given but not one of `1`-`5`) — `VALIDATION_ERROR`, the same shape as §8.4.
+
+A well-formed id with no reviews (or none at the requested `rating`) is still `200` with `"reviews": []` and `"total": 0`.
 
 ### 12.3 My reviews — `GET /api/reviews/mine`
 
