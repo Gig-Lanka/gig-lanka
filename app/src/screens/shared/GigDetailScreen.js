@@ -20,6 +20,8 @@ import {
   GIG_CATEGORIES,
   GIG_STATUSES,
   SCHEDULE_TAGS,
+  SKILL_TRIAL_EFFORT_ESTIMATES,
+  SKILL_TRIAL_REQUIREMENTS,
 } from '../../constants/enums';
 import { formatDeadline, formatLocation, formatPay, formatShortDate } from '../../utils/format';
 
@@ -160,7 +162,16 @@ export default function GigDetailScreen({ onSignIn }) {
     applicantCount = 0,
     createdAt,
     description,
+    skillTrial,
   } = gig;
+
+  // GL-356 - brief §4: the effort estimate is shown before the seeker opens
+  // the task, not only on Apply, so nobody discovers the size of the task
+  // after committing to it. `requirement` is only ever `none` or `optional`
+  // (GL-341 removed `required` from the vocabulary - see
+  // docs/api-contract.md §6.12), so the badge below reads its label from the
+  // real list rather than hardcoding "Required".
+  const hasSkillTrial = Boolean(skillTrial) && skillTrial.requirement !== 'none';
 
   const location = formatLocation({ isRemote: remote, area, city });
   const isOpen = gigStatus === 'open';
@@ -294,6 +305,25 @@ export default function GigDetailScreen({ onSignIn }) {
             <SectionLabel>About this gig</SectionLabel>
             <Text className="mt-2 text-desc leading-[21px] text-muted">{description}</Text>
           </View>
+
+          {hasSkillTrial ? (
+            <View className="mt-5">
+              <SectionLabel>Skill trial</SectionLabel>
+              <View className="mt-2 flex-row items-center justify-between gap-3">
+                <Text className="flex-1 text-[13.5px] font-semibold text-ink" numberOfLines={1}>
+                  {skillTrial.taskTitle}
+                </Text>
+                <View className="flex-row items-center gap-[6px]">
+                  <Badge variant="strong">
+                    {labelFor(SKILL_TRIAL_REQUIREMENTS, skillTrial.requirement)}
+                  </Badge>
+                  <Badge variant="neutral">
+                    {labelFor(SKILL_TRIAL_EFFORT_ESTIMATES, skillTrial.effortEstimate)}
+                  </Badge>
+                </View>
+              </View>
+            </View>
+          ) : null}
 
           <View className="mt-5">
             <SectionLabel>Details</SectionLabel>
