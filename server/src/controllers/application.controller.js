@@ -12,6 +12,7 @@ import {
   shortlistApplication as shortlistApplicationService,
   hireApplication as hireApplicationService,
   rejectApplication as rejectApplicationService,
+  reviewSkillTrial as reviewSkillTrialService,
 } from '../services/application.service.js';
 
 export const applyToGig = asyncHandler(async (req, res) => {
@@ -71,6 +72,13 @@ export const hireApplication = asyncHandler(async (req, res) => {
 export const rejectApplication = asyncHandler(async (req, res) => {
   const actor = { id: req.user.id, role: req.user.role };
   const result = await rejectApplicationService(req.params.id, actor, req.body);
+
+  sendSuccess(res, result, 200);
+});
+
+export const reviewSkillTrial = asyncHandler(async (req, res) => {
+  const actor = { id: req.user.id, role: req.user.role };
+  const result = await reviewSkillTrialService(req.params.id, actor, req.body);
 
   sendSuccess(res, result, 200);
 });

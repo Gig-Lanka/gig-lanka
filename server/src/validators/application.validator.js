@@ -24,3 +24,13 @@ export const rejectApplicationSchema = Joi.object({
   reasonCode: Joi.string(),
   note: Joi.string(),
 });
+
+// `result` must be `passed` or `not_passed` — the two decided values;
+// "already marked"/"nothing to judge" and the 300-character cap on
+// `resultNote` are business rules that live in reviewSkillTrial
+// (application.service.js), not here. `resultNote` is never trimmed, the
+// same rule as `note` above — it is shown to the seeker exactly as written.
+export const trialReviewSchema = Joi.object({
+  result: Joi.string(),
+  resultNote: Joi.string(),
+});
