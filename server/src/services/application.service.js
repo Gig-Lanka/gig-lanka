@@ -612,6 +612,75 @@ export const rejectApplication = async (id, actor, body) => {
   };
 };
 
+const RESULT_NOTE_MAX_LENGTH = 300;
+
+// GL-352: PATCH /api/applications/:id/trial-review. The review is a result,
+// not a status (GL-297 §4/§8) — it never goes through
+// transitionApplicationStatus or TRANSITION_RULES, so a business can still
+// shortlist, hire or reject the same application afterwards regardless of
+// which way the trial was marked. Only the business that posted the gig may
+// call it, checked by ownership the same way every other decision endpoint
+// here is (403 for a seeker, a guest, or a business that owns a different
+// gig). Marking is once and final: a trial not currently `submitted` —
+// already `passed`/`not_passed`, or never eligible in the first place
+// (`skipped`, or no submission at all) — is refused with the same
+// TRIAL_ALREADY_REVIEWED code, the same way INVALID_APPLICATION_TRANSITION
+// covers every unreachable status move under one code. Writing the passed
+// badge to the seeker's profile, through profile.service.js's narrow
+// writer, is a sibling sub-task's concern (GL-353) — this function only
+// marks the result.
+export const reviewSkillTrial = async (id, actor, body) => {
+  const { application, businessId } = await getApplicationWithParties(id);
+
+  if (!actor || actor.role !== 'business' || businessId !== actor.id.toString()) {
+    throw FORBIDDEN_ERROR();
+  }
+
+  const result = body?.result;
+  if (result !== 'passed' && result !== 'not_passed') {
+    throw new ApiError(400, 'VALIDATION_ERROR', 'result must be "passed" or "not_passed".', [
+      { field: 'result', message: 'result must be "passed" or "not_passed"' },
+    ]);
+  }
+
+  const resultNote = body?.resultNote;
+  if (resultNote !== undefined && resultNote.length > RESULT_NOTE_MAX_LENGTH) {
+    throw new ApiError(
+      400,
+      'VALIDATION_ERROR',
+      `resultNote must be at most ${RESULT_NOTE_MAX_LENGTH} characters.`,
+      [
+        {
+          field: 'resultNote',
+          message: `resultNote must be at most ${RESULT_NOTE_MAX_LENGTH} characters`,
+        },
+      ],
+    );
+  }
+
+  if (application.skillTrialSubmission?.result !== 'submitted') {
+    throw new ApiError(
+      409,
+      'TRIAL_ALREADY_REVIEWED',
+      'This trial cannot be reviewed — it is either already marked, or was never submitted.',
+    );
+  }
+
+  application.skillTrialSubmission.result = result;
+  application.skillTrialSubmission.reviewedAt = new Date();
+  if (resultNote !== undefined) {
+    application.skillTrialSubmission.resultNote = resultNote;
+  }
+
+  await application.save();
+
+  const gig = await Gig.findById(application.gig);
+
+  return {
+    application: { ...application.toJSON(), gig: toGigSummary(gig) },
+  };
+};
+
 // Shared by both GL-252 lists: `status` may be one value or several
 // (repeated query params or a comma-separated string), validated against
 // §6.7 rather than left to Mongo to silently match nothing. Absent
