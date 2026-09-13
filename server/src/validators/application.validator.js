@@ -1,10 +1,18 @@
 import Joi from 'joi';
 
-// Apply has no accepted fields — status and appliedAt are set by the
-// service and never taken from the client. An empty schema still routes
-// the body through validate() so any fields a caller sends are stripped
-// rather than silently reaching the service.
-export const applyToGigSchema = Joi.object({});
+// `skillTrialSubmission` is the only accepted field — status, appliedAt and
+// the profile snapshot stay server-derived and are stripped (stripUnknown,
+// validate.middleware.js) if a caller sends them. Content validation against
+// the gig's submissionType (text length, file requirement per type) is a
+// sibling sub-task's concern; this only shapes the two client-settable
+// fields — `result`, `submittedAt` etc. are server-derived and stripped the
+// same way if sent here.
+export const applyToGigSchema = Joi.object({
+  skillTrialSubmission: Joi.object({
+    textResponse: Joi.string(),
+    fileUrl: Joi.string(),
+  }).optional(),
+});
 
 // The four rejection rules — a missing code, a code that isn't
 // business-selectable, an unrecognised code, and a trial code on a gig

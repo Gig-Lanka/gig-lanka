@@ -115,16 +115,47 @@ const buildProfileSnapshot = (profile) => ({
   rating: profile.ratingSummary,
 });
 
+// `gig.skillTrial` is only ever absent (no trial — see updateGig's "none
+// stores nothing" normalisation in gig.service.js) or `{ requirement:
+// 'optional', ... }`: GL-341 removed `required` from the vocabulary
+// entirely, so that case never arises here.
+const resolveSkillTrialRequirement = (gig) => gig.skillTrial?.requirement ?? 'none';
+
+// GL-297 §4: a `none` gig has no task to answer, so a submission sent
+// anyway is refused; an `optional` gig accepts one or records a deliberate
+// skip. Content validation against the gig's submissionType (text length,
+// file requirement per submission type) is a sibling sub-task's concern —
+// this only decides submitted vs. skipped vs. refused.
+const buildSkillTrialSubmission = (gig, submissionBody) => {
+  const requirement = resolveSkillTrialRequirement(gig);
+
+  if (requirement === 'none') {
+    if (submissionBody) {
+      throw new ApiError(400, 'VALIDATION_ERROR', 'This gig has no skill trial to submit.', [
+        { field: 'skillTrialSubmission', message: 'This gig has no skill trial to submit' },
+      ]);
+    }
+    return undefined;
+  }
+
+  if (!submissionBody) {
+    return { result: 'skipped' };
+  }
+
+  return { ...submissionBody, result: 'submitted', submittedAt: new Date() };
+};
+
 // GL-182: creates the application a seeker submits for a gig. The profile
 // snapshot is read through profile.service.js rather than profile.model.js
 // directly, so the ownership boundary with E2 holds. Status and appliedAt
 // are schema defaults here, never accepted from a caller.
-export const applyToGig = async (gigId, user) => {
+export const applyToGig = async (gigId, user, body) => {
   const gig = await assertGigIsOpen(gigId);
   const profile = await getMyProfile(user);
 
   const profileSnapshot = buildProfileSnapshot(profile);
   const profileIncomplete = profile.workExperience.length === 0 && profile.education.length === 0;
+  const skillTrialSubmission = buildSkillTrialSubmission(gig, body?.skillTrialSubmission);
 
   let application;
   try {
@@ -132,14 +163,30 @@ export const applyToGig = async (gigId, user) => {
       gig: gig._id,
       applicant: user._id,
       profileSnapshot,
+      skillTrialSubmission,
     });
   } catch (err) {
     // Same trap GL-15 hit with duplicate emails: the unique (gig, applicant)
     // index is what actually enforces "one application per seeker per gig",
     // so the duplicate-key error is translated here rather than reaching the
     // client as a 500. Holds whether the earlier application is live,
-    // withdrawn or rejected — the index doesn't distinguish.
+    // withdrawn or rejected — the index doesn't distinguish. When the
+    // earlier application already carries a trial submission (submitted,
+    // skipped, passed or not passed), the more specific
+    // TRIAL_ALREADY_SUBMITTED replaces the generic error — the server half
+    // of "you can't edit a trial after submitting" (GL-297 §4/§8).
     if (err.code === 11000) {
+      const existing = await Application.findOne({ gig: gig._id, applicant: user._id });
+      const existingResult = existing?.skillTrialSubmission?.result;
+
+      if (existingResult && existingResult !== 'not_submitted') {
+        throw new ApiError(
+          409,
+          'TRIAL_ALREADY_SUBMITTED',
+          'A trial has already been submitted for this application.',
+        );
+      }
+
       throw new ApiError(
         409,
         'APPLICATION_ALREADY_EXISTS',
