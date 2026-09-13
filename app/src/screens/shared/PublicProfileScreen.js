@@ -176,7 +176,7 @@ export default function PublicProfileScreen() {
                 </View>
               ) : null}
 
-              <RatingSummary rating={ratingSummary} className="mt-5" />
+              <RatingSummary rating={ratingSummary} userId={userId} className="mt-5" />
             </>
           ) : (
             <>
@@ -221,7 +221,7 @@ export default function PublicProfileScreen() {
                 </View>
               ) : null}
 
-              <RatingSummary rating={ratingSummary} className="mt-5" />
+              <RatingSummary rating={ratingSummary} userId={userId} className="mt-5" />
             </>
           )}
         </HeroSheet>
