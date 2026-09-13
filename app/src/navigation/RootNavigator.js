@@ -25,6 +25,7 @@ import GigDetailScreen from '../screens/shared/GigDetailScreen';
 import RateFlowNavigator from '../screens/shared/rate/RateFlowNavigator';
 import PublicProfileScreen from '../screens/shared/PublicProfileScreen';
 import ReviewsScreen from '../screens/shared/ReviewsScreen';
+import SkillTrialScreen from '../screens/seeker/SkillTrialScreen';
 import useAuth from '../hooks/useAuth';
 import { AUTH_STATUS } from '../store/AuthContext';
 
@@ -72,6 +73,7 @@ function AppStack({ role }) {
           <Stack.Screen name="EducationForm" component={EducationFormScreen} />
           <Stack.Screen name="ApplicationDetail" component={ApplicationDetailScreen} />
           <Stack.Screen name="Apply" component={ApplyScreen} />
+          <Stack.Screen name="SkillTrial" component={SkillTrialScreen} />
         </>
       )}
 

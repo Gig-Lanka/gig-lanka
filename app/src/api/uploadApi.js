@@ -33,6 +33,29 @@ async function uploadImage(asset, folder) {
   return response.data.data.url;
 }
 
+/**
+ * `POST /api/uploads` for a non-image purpose (GL-354: the skill trial
+ * attachment, `folder: "trials"`). `asset` is an `expo-document-picker`
+ * result asset - `{ uri, name, mimeType }` - which already carries a real
+ * file name and MIME type, unlike `expo-image-picker`'s asset shape that
+ * `uploadImage` above has to derive them from.
+ */
+async function uploadFile(asset, folder) {
+  const formData = new FormData();
+  formData.append('file', {
+    uri: asset.uri,
+    name: asset.name,
+    type: asset.mimeType,
+  });
+  formData.append('folder', folder);
+
+  const response = await client.post('/uploads', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return response.data.data.url;
+}
+
 export default {
   uploadImage,
+  uploadFile,
 };

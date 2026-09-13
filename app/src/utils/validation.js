@@ -101,6 +101,37 @@ export function isValidReviewText(text) {
   return trimmedLength >= REVIEW_TEXT_MIN_LENGTH && trimmedLength <= REVIEW_TEXT_MAX_LENGTH;
 }
 
+// Mirrors application.service.js's TRIAL_TEXT_MIN_LENGTH/MAX_LENGTH (§11.7) -
+// the same range the SkillTrialScreen counter promises, trimmed before the
+// length check the same way isValidReviewText is.
+export const SKILL_TRIAL_RESPONSE_MIN_LENGTH = 20;
+export const SKILL_TRIAL_RESPONSE_MAX_LENGTH = 2000;
+
+export function isValidSkillTrialResponse(text) {
+  const trimmedLength = (text || '').trim().length;
+  return (
+    trimmedLength >= SKILL_TRIAL_RESPONSE_MIN_LENGTH &&
+    trimmedLength <= SKILL_TRIAL_RESPONSE_MAX_LENGTH
+  );
+}
+
+// Mirrors the server's trials-folder upload rule (upload.middleware.js) -
+// same 5MB cap and PNG/JPG/PDF allow-list as avatars, just with PDF added.
+export const MAX_TRIAL_ATTACHMENT_FILE_SIZE = 5 * 1024 * 1024;
+const ALLOWED_TRIAL_ATTACHMENT_MIME_TYPES = ['image/png', 'image/jpeg', 'application/pdf'];
+
+export function validateTrialAttachmentFile({ fileSize, mimeType }) {
+  if (mimeType && !ALLOWED_TRIAL_ATTACHMENT_MIME_TYPES.includes(mimeType)) {
+    return 'Attachment must be a PDF, PNG or JPG file.';
+  }
+
+  if (typeof fileSize === 'number' && fileSize > MAX_TRIAL_ATTACHMENT_FILE_SIZE) {
+    return 'Attachment must be 5MB or smaller.';
+  }
+
+  return null;
+}
+
 function parseDateOnly(value) {
   const [year, month, day] = value.split('-').map(Number);
   return new Date(year, month - 1, day);

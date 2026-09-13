@@ -87,6 +87,16 @@ export function formatDeadline(deadline, now = new Date()) {
   return { label: `Closes ${formatShortDate(target)}`, urgent: false };
 }
 
+// Binary units (1024, not 1000) since these are file sizes off the device
+// picker/server, not network-transfer estimates - matches how OSes report
+// picked-file sizes back to the app.
+export function formatFileSize(bytes) {
+  if (typeof bytes !== 'number' || Number.isNaN(bytes)) return '';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 export function formatLocation({ isRemote, area, city }) {
   if (isRemote) {
     return 'Remote';
