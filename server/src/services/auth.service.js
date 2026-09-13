@@ -45,6 +45,14 @@ export const loginUser = async ({ email, password }) => {
     throw new ApiError(401, 'INVALID_CREDENTIALS', 'Email or password is incorrect.');
   }
 
+  // Distinguishable from a wrong password on purpose: the enumeration rule
+  // above protects unknown accounts, but the caller here has already proven
+  // they hold the right credentials, so they're the account's owner, not an
+  // attacker probing for addresses.
+  if (user.isActive === false) {
+    throw new ApiError(403, 'ACCOUNT_DEACTIVATED', 'This account has been deactivated.');
+  }
+
   const { accessToken, refreshToken } = await issueTokens(user);
 
   return { user, accessToken, refreshToken };
