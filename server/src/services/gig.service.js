@@ -139,7 +139,27 @@ export const createGig = async (body, postedBy) => {
   return gig.toJSON();
 };
 
-export const listOpenGigs = async (query) => {
+// GL-333: batched viewerSaved for a whole page, not a lookup per card. One
+// query against the page's own ids rather than ten (or PAGE_SIZE) — the
+// same shape as the page's `total`, which is computed from the filtered
+// query rather than by re-deriving it per row. A guest, a business or an
+// admin gets an empty set for free (no query at all) since none of them can
+// have saved anything the caller needs to know about. select('_id') keeps
+// savedBy itself out of the result even though it's the match condition.
+const getSavedGigIdSet = async (gigs, user) => {
+  if (!user || user.role !== 'seeker' || gigs.length === 0) {
+    return new Set();
+  }
+
+  const savedGigs = await Gig.find({
+    _id: { $in: gigs.map((gig) => gig._id) },
+    savedBy: user.id,
+  }).select('_id');
+
+  return new Set(savedGigs.map((gig) => gig.id));
+};
+
+export const listOpenGigs = async (query, user) => {
   const page = Math.max(1, parseInt(query.page, 10) || 1);
   const filter = buildOpenGigFilter(query);
   const sort = query.sort ?? 'newest';
@@ -154,7 +174,19 @@ export const listOpenGigs = async (query) => {
     Gig.countDocuments(filter),
   ]);
 
-  return { gigs, total, page, limit: PAGE_SIZE };
+  const savedGigIds = await getSavedGigIdSet(gigs, user);
+  // toJSON()'s `id` is still the raw ObjectId at this point (the schema
+  // transform runs before JSON.stringify ever stringifies it on the wire),
+  // so it must be stringified here to compare against the string ids in
+  // savedGigIds — comparing the ObjectId instance directly would silently
+  // always miss.
+  const gigsJson = gigs.map((gig) => {
+    const gigJson = gig.toJSON();
+    gigJson.viewerSaved = savedGigIds.has(gigJson.id.toString());
+    return gigJson;
+  });
+
+  return { gigs: gigsJson, total, page, limit: PAGE_SIZE };
 };
 
 export const getGigById = async (id) => {
@@ -345,6 +377,19 @@ export const unsaveGig = async (id, userId) => {
   if (result.matchedCount === 0) {
     throw new ApiError(404, 'NOT_FOUND', 'Gig not found.');
   }
+};
+
+// GL-333: "have I saved this?" mirrors getViewerApplication's shape exactly
+// — false for a guest, a business or an admin, computed behind the same
+// optionalAuth already mounted on GET /api/gigs/:id. Answered with an
+// existence check rather than a read: savedBy is never selected, so there
+// is no array to discard here, only a match to test.
+export const getViewerSaved = async (gigId, user) => {
+  if (!user || user.role !== 'seeker') {
+    return false;
+  }
+
+  return Boolean(await Gig.exists({ _id: gigId, savedBy: user.id }));
 };
 
 // Applying and saving both act on a gig that must still be open. GL-110

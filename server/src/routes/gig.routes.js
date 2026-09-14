@@ -19,7 +19,10 @@ import { createGigSchema, updateGigSchema, listGigsQuerySchema } from '../valida
 const router = Router();
 
 router.post('/', requireAuth, requireRole('business'), validate(createGigSchema), createGig);
-router.get('/', validateQuery(listGigsQuerySchema), listGigs);
+// GL-333. optionalAuth so a signed-in seeker's viewerSaved can ride along
+// on the page without requiring a token; a guest, business or admin caller
+// is unaffected — the field just reads false throughout for them.
+router.get('/', optionalAuth, validateQuery(listGigsQuerySchema), listGigs);
 router.get('/mine', requireAuth, requireRole('business'), getMyGigs);
 // GL-332. Declared before /:id for the same reason /mine above and
 // /applications/for-my-gigs in application.routes.js are: a literal
