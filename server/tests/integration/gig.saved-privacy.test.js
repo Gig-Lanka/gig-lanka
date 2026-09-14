@@ -134,4 +134,53 @@ describe('gig saved-by privacy', () => {
     expect(otherSeekerRes.body.data.gigs).toEqual([]);
     expectNoSavedByAnywhere(otherSeekerRes.body);
   });
+
+  // The three tests above go through the HTTP surface, which in this
+  // codebase happens to make the two schema guards mutually redundant: every
+  // current reader either never asks for `+savedBy` (so select:false alone
+  // already hides it, whether or not toJSON also deletes it) or calls
+  // `.toJSON()` before a response is sent (so the transform alone already
+  // strips it, whether or not select:false already excluded it from the
+  // query). Removing either guard *alone* leaves every HTTP-level test above
+  // passing — only removing both together makes them fail. That means an
+  // HTTP-only suite cannot actually tell the difference between "both guards
+  // are intact" and "exactly one was quietly deleted," which is precisely
+  // the gap this story's done-when clause ("confirm the suite fails if
+  // either guard is removed") is guarding against. These two tests pin each
+  // guard directly at the model layer instead, independent of whether any
+  // current controller happens to lean on the other one for cover.
+  describe('each schema guard, pinned independently of the other', () => {
+    it('select: false keeps savedBy out of a default query, with no explicit select and no toJSON call involved', async () => {
+      const owner = await registerBusiness('saved-privacy-guard-select-owner@example.com');
+      const gig = await createGig(owner.accessToken, { title: 'Guard: select false' });
+      await Gig.updateOne({ _id: gig.id }, { $set: { savedBy: [owner.userId] } });
+
+      const defaultLoad = await Gig.findById(gig.id);
+
+      // Undefined, not an empty array: select:false means the path was never
+      // fetched at all, not fetched-and-happened-to-be-empty. Removing
+      // `select: false` from the schema turns this into a populated array
+      // and fails the assertion, with no toJSON transform anywhere in the
+      // path to obscure the regression.
+      expect(defaultLoad.savedBy).toBeUndefined();
+    });
+
+    it('the toJSON transform strips savedBy even when a query explicitly loads it with +savedBy', async () => {
+      const owner = await registerBusiness('saved-privacy-guard-tojson-owner@example.com');
+      const gig = await createGig(owner.accessToken, { title: 'Guard: toJSON deletion' });
+      await Gig.updateOne({ _id: gig.id }, { $set: { savedBy: [owner.userId] } });
+
+      const explicitLoad = await Gig.findById(gig.id).select('+savedBy');
+      // Sanity check first: the field must actually be loaded here, or the
+      // assertion below would pass for the wrong reason (nothing to strip)
+      // rather than because the transform did its job.
+      expect(explicitLoad.savedBy).toHaveLength(1);
+
+      // select:false is irrelevant to this assertion — `+savedBy` bypassed
+      // it on purpose. Only the transform's own `delete ret.savedBy` stands
+      // between this loaded array and the object below; removing that line
+      // fails this assertion regardless of select:false's state.
+      expect(explicitLoad.toJSON()).not.toHaveProperty('savedBy');
+    });
+  });
 });
