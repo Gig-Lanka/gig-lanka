@@ -10,6 +10,7 @@ import {
   deleteGig as deleteGigService,
   saveGig as saveGigService,
   unsaveGig as unsaveGigService,
+  listSavedGigs,
 } from '../services/gig.service.js';
 import { getViewerApplication } from '../services/application.service.js';
 
@@ -72,4 +73,10 @@ export const unsaveGig = asyncHandler(async (req, res) => {
   await unsaveGigService(req.params.id, req.user.id);
 
   sendSuccess(res, null, 200);
+});
+
+export const getSavedGigs = asyncHandler(async (req, res) => {
+  const result = await listSavedGigs(req.user.id);
+
+  sendSuccess(res, result, 200);
 });

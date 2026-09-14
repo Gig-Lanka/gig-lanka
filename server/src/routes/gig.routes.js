@@ -9,6 +9,7 @@ import {
   deleteGig,
   saveGig,
   unsaveGig,
+  getSavedGigs,
 } from '../controllers/gig.controller.js';
 import { getGigApplications } from '../controllers/application.controller.js';
 import { validate, validateQuery } from '../middleware/validate.middleware.js';
@@ -20,6 +21,11 @@ const router = Router();
 router.post('/', requireAuth, requireRole('business'), validate(createGigSchema), createGig);
 router.get('/', validateQuery(listGigsQuerySchema), listGigs);
 router.get('/mine', requireAuth, requireRole('business'), getMyGigs);
+// GL-332. Declared before /:id for the same reason /mine above and
+// /applications/for-my-gigs in application.routes.js are: a literal
+// segment placed after a `/:id` route gets swallowed as an id instead of
+// matching, and this project has hit that trap before.
+router.get('/saved', requireAuth, requireRole('seeker'), getSavedGigs);
 router.get('/:id', optionalAuth, getGig);
 router.put('/:id', requireAuth, requireRole('business'), validate(updateGigSchema), updateGig);
 router.patch('/:id/close', requireAuth, requireRole('business'), closeGig);

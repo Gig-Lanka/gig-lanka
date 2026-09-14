@@ -209,6 +209,32 @@ export const listMyGigs = async (userId) => {
   return { gigs };
 };
 
+// GL-332. Same bulk-correction shape as listMyGigs above, but matched
+// against savedBy instead of postedBy — a saved gig whose deadline has
+// quietly passed must read back 'closed' here too, not just on the poster's
+// own list. Status is otherwise left untouched: a saved gig that closed,
+// filled, or whose poster deactivated stays in the list with its real
+// status rather than disappearing, so no status filter is applied to the
+// find() below.
+//
+// Sort key is updatedAt, not a dedicated "saved at" timestamp — savedBy is
+// a plain id array with select:false and no per-save time, and $addToSet /
+// $pull both go through Gig.updateOne, which (schema `timestamps: true`)
+// bumps this same gig's updatedAt as a side effect. That makes it the only
+// available proxy for "newest-saved first" without a model change, which is
+// out of this sub-task's scope.
+export const listSavedGigs = async (userId) => {
+  const today = new Date().toISOString().slice(0, 10);
+  await Gig.updateMany(
+    { savedBy: userId, status: 'open', applicationsCloseDate: { $lt: today } },
+    { $set: { status: 'closed' } },
+  );
+
+  const gigs = await Gig.find({ savedBy: userId }).sort({ updatedAt: -1, _id: -1 });
+
+  return { gigs };
+};
+
 // skillTrial is deliberately not in UPDATABLE_FIELDS: that list is a blind
 // full-replace, and a client that never renders the trial section (an older
 // build, or GL-343's EditGigScreen disabling it once the gig has applicants)

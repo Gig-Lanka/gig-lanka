@@ -200,3 +200,112 @@ describe('PUT/DELETE /api/gigs/:id/save', () => {
     expect(afterSave.applicantCount).toBe(0);
   });
 });
+
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+describe('GET /api/gigs/saved', () => {
+  it('resolves as the literal route rather than being swallowed as :id', async () => {
+    const seeker = await registerSeeker('saved-list-literal-seeker@example.com');
+
+    const res = await request(app)
+      .get('/api/gigs/saved')
+      .set('Authorization', `Bearer ${seeker.accessToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.gigs).toEqual([]);
+  });
+
+  it('refuses a business and an admin with 403', async () => {
+    const business = await registerBusiness('saved-list-refuse-business@example.com');
+    const adminToken = await createAdminAccessToken('saved-list-refuse-admin@example.com');
+
+    const businessRes = await request(app)
+      .get('/api/gigs/saved')
+      .set('Authorization', `Bearer ${business.accessToken}`);
+    const adminRes = await request(app)
+      .get('/api/gigs/saved')
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(businessRes.status).toBe(403);
+    expect(adminRes.status).toBe(403);
+  });
+
+  it('returns only the caller saves, newest-saved first, and no parameter reaches another seeker’s list', async () => {
+    const business = await registerBusiness('saved-list-scope-business@example.com');
+    const seeker = await registerSeeker('saved-list-scope-seeker@example.com');
+    const otherSeeker = await registerSeeker('saved-list-scope-other-seeker@example.com');
+
+    const gigA = await createGigDoc(business.userId, { title: 'Gig A' });
+    const gigB = await createGigDoc(business.userId, { title: 'Gig B' });
+    const otherSeekerGig = await createGigDoc(business.userId, { title: 'Not this caller' });
+
+    await request(app)
+      .put(`/api/gigs/${gigA.id}/save`)
+      .set('Authorization', `Bearer ${seeker.accessToken}`);
+    await wait(20);
+    await request(app)
+      .put(`/api/gigs/${gigB.id}/save`)
+      .set('Authorization', `Bearer ${seeker.accessToken}`);
+    await request(app)
+      .put(`/api/gigs/${otherSeekerGig.id}/save`)
+      .set('Authorization', `Bearer ${otherSeeker.accessToken}`);
+
+    const res = await request(app)
+      .get('/api/gigs/saved')
+      .set('Authorization', `Bearer ${seeker.accessToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.gigs.map((gig) => gig.id)).toEqual([gigB.id.toString(), gigA.id.toString()]);
+
+    // Nothing in the request (query string, body) can widen the scope past
+    // the authenticated caller's own saves.
+    const scopedRes = await request(app)
+      .get(`/api/gigs/saved?userId=${otherSeeker.userId}`)
+      .set('Authorization', `Bearer ${seeker.accessToken}`);
+    expect(scopedRes.body.data.gigs.map((gig) => gig.id)).toEqual([
+      gigB.id.toString(),
+      gigA.id.toString(),
+    ]);
+  });
+
+  it.each(['closed', 'filled'])(
+    'still includes a saved gig that has since been marked %s, carrying its real status',
+    async (status) => {
+      const business = await registerBusiness(`saved-list-${status}-business@example.com`);
+      const seeker = await registerSeeker(`saved-list-${status}-seeker@example.com`);
+      const gig = await createGigDoc(business.userId);
+
+      await request(app)
+        .put(`/api/gigs/${gig.id}/save`)
+        .set('Authorization', `Bearer ${seeker.accessToken}`);
+      await Gig.updateOne({ _id: gig.id }, { $set: { status } });
+
+      const res = await request(app)
+        .get('/api/gigs/saved')
+        .set('Authorization', `Bearer ${seeker.accessToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.gigs).toHaveLength(1);
+      expect(res.body.data.gigs[0].status).toBe(status);
+    },
+  );
+
+  it('still includes a saved gig whose deadline has passed, corrected to closed', async () => {
+    const business = await registerBusiness('saved-list-expired-business@example.com');
+    const seeker = await registerSeeker('saved-list-expired-seeker@example.com');
+    const gig = await createGigDoc(business.userId);
+
+    await request(app)
+      .put(`/api/gigs/${gig.id}/save`)
+      .set('Authorization', `Bearer ${seeker.accessToken}`);
+    await Gig.updateOne({ _id: gig.id }, { $set: { applicationsCloseDate: '2000-01-01' } });
+
+    const res = await request(app)
+      .get('/api/gigs/saved')
+      .set('Authorization', `Bearer ${seeker.accessToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.gigs).toHaveLength(1);
+    expect(res.body.data.gigs[0].status).toBe('closed');
+  });
+});
