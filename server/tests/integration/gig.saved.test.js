@@ -309,3 +309,138 @@ describe('GET /api/gigs/saved', () => {
     expect(res.body.data.gigs[0].status).toBe('closed');
   });
 });
+
+describe('viewerSaved', () => {
+  describe('GET /api/gigs/:id', () => {
+    it('is true for the seeker who saved the gig', async () => {
+      const business = await registerBusiness('viewer-saved-detail-true-business@example.com');
+      const seeker = await registerSeeker('viewer-saved-detail-true-seeker@example.com');
+      const gig = await createGigDoc(business.userId);
+      await request(app)
+        .put(`/api/gigs/${gig.id}/save`)
+        .set('Authorization', `Bearer ${seeker.accessToken}`);
+
+      const res = await request(app)
+        .get(`/api/gigs/${gig.id}`)
+        .set('Authorization', `Bearer ${seeker.accessToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.viewerSaved).toBe(true);
+    });
+
+    it('is false for a different seeker who has not saved it', async () => {
+      const business = await registerBusiness('viewer-saved-detail-other-business@example.com');
+      const seeker = await registerSeeker('viewer-saved-detail-other-saver@example.com');
+      const otherSeeker = await registerSeeker('viewer-saved-detail-other-seeker@example.com');
+      const gig = await createGigDoc(business.userId);
+      await request(app)
+        .put(`/api/gigs/${gig.id}/save`)
+        .set('Authorization', `Bearer ${seeker.accessToken}`);
+
+      const res = await request(app)
+        .get(`/api/gigs/${gig.id}`)
+        .set('Authorization', `Bearer ${otherSeeker.accessToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.viewerSaved).toBe(false);
+    });
+
+    it('is false for the business that posted it, even though it was saved', async () => {
+      const business = await registerBusiness('viewer-saved-detail-business-business@example.com');
+      const seeker = await registerSeeker('viewer-saved-detail-business-seeker@example.com');
+      const gig = await createGigDoc(business.userId);
+      await request(app)
+        .put(`/api/gigs/${gig.id}/save`)
+        .set('Authorization', `Bearer ${seeker.accessToken}`);
+
+      const res = await request(app)
+        .get(`/api/gigs/${gig.id}`)
+        .set('Authorization', `Bearer ${business.accessToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.viewerSaved).toBe(false);
+    });
+
+    it('is false for an admin', async () => {
+      const business = await registerBusiness('viewer-saved-detail-admin-business@example.com');
+      const seeker = await registerSeeker('viewer-saved-detail-admin-seeker@example.com');
+      const gig = await createGigDoc(business.userId);
+      await request(app)
+        .put(`/api/gigs/${gig.id}/save`)
+        .set('Authorization', `Bearer ${seeker.accessToken}`);
+      const adminToken = await createAdminAccessToken('viewer-saved-detail-admin@example.com');
+
+      const res = await request(app)
+        .get(`/api/gigs/${gig.id}`)
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.viewerSaved).toBe(false);
+    });
+
+    it('is false for a guest', async () => {
+      const business = await registerBusiness('viewer-saved-detail-guest-business@example.com');
+      const seeker = await registerSeeker('viewer-saved-detail-guest-seeker@example.com');
+      const gig = await createGigDoc(business.userId);
+      await request(app)
+        .put(`/api/gigs/${gig.id}/save`)
+        .set('Authorization', `Bearer ${seeker.accessToken}`);
+
+      const res = await request(app).get(`/api/gigs/${gig.id}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.viewerSaved).toBe(false);
+    });
+  });
+
+  describe('GET /api/gigs', () => {
+    it('carries viewerSaved true only on the saved gig, for a signed-in seeker', async () => {
+      const business = await registerBusiness('viewer-saved-list-business@example.com');
+      const seeker = await registerSeeker('viewer-saved-list-seeker@example.com');
+      const savedGig = await createGigDoc(business.userId, { title: 'Saved in the list' });
+      const unsavedGig = await createGigDoc(business.userId, { title: 'Not saved in the list' });
+      await request(app)
+        .put(`/api/gigs/${savedGig.id}/save`)
+        .set('Authorization', `Bearer ${seeker.accessToken}`);
+
+      const res = await request(app)
+        .get('/api/gigs')
+        .set('Authorization', `Bearer ${seeker.accessToken}`);
+
+      expect(res.status).toBe(200);
+      const byId = new Map(res.body.data.gigs.map((gig) => [gig.id, gig]));
+      expect(byId.get(savedGig.id.toString()).viewerSaved).toBe(true);
+      expect(byId.get(unsavedGig.id.toString()).viewerSaved).toBe(false);
+    });
+
+    it('is false throughout for a guest, with no lookup performed', async () => {
+      const business = await registerBusiness('viewer-saved-list-guest-business@example.com');
+      const seeker = await registerSeeker('viewer-saved-list-guest-seeker@example.com');
+      const gig = await createGigDoc(business.userId);
+      await request(app)
+        .put(`/api/gigs/${gig.id}/save`)
+        .set('Authorization', `Bearer ${seeker.accessToken}`);
+
+      const res = await request(app).get('/api/gigs');
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.gigs.every((g) => g.viewerSaved === false)).toBe(true);
+    });
+
+    it('is false throughout for a business, even for a gig it posted and someone saved', async () => {
+      const business = await registerBusiness('viewer-saved-list-business-role-business@example.com');
+      const seeker = await registerSeeker('viewer-saved-list-business-role-seeker@example.com');
+      const gig = await createGigDoc(business.userId);
+      await request(app)
+        .put(`/api/gigs/${gig.id}/save`)
+        .set('Authorization', `Bearer ${seeker.accessToken}`);
+
+      const res = await request(app)
+        .get('/api/gigs')
+        .set('Authorization', `Bearer ${business.accessToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.gigs.every((g) => g.viewerSaved === false)).toBe(true);
+    });
+  });
+});

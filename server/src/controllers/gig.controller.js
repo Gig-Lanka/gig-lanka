@@ -11,6 +11,7 @@ import {
   saveGig as saveGigService,
   unsaveGig as unsaveGigService,
   listSavedGigs,
+  getViewerSaved,
 } from '../services/gig.service.js';
 import { getViewerApplication } from '../services/application.service.js';
 
@@ -20,8 +21,11 @@ export const createGig = asyncHandler(async (req, res) => {
   sendSuccess(res, { gig }, 201);
 });
 
+// optionalAuth (GL-333) sits on this route so listOpenGigs can batch a
+// signed-in seeker's viewerSaved flags onto the page; a guest leaves
+// req.user unset and the service skips the lookup entirely.
 export const listGigs = asyncHandler(async (req, res) => {
-  const result = await listOpenGigs(req.query);
+  const result = await listOpenGigs(req.query, req.user);
 
   sendSuccess(res, result, 200);
 });
@@ -35,8 +39,9 @@ export const listGigs = asyncHandler(async (req, res) => {
 export const getGig = asyncHandler(async (req, res) => {
   const result = await getGigById(req.params.id);
   const viewerApplication = await getViewerApplication(req.params.id, req.user);
+  const viewerSaved = await getViewerSaved(req.params.id, req.user);
 
-  sendSuccess(res, { ...result, viewerApplication }, 200);
+  sendSuccess(res, { ...result, viewerApplication, viewerSaved }, 200);
 });
 
 export const getMyGigs = asyncHandler(async (req, res) => {
