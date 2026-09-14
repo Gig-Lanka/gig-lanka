@@ -8,6 +8,8 @@ import {
   updateGig as updateGigService,
   closeGig as closeGigService,
   deleteGig as deleteGigService,
+  saveGig as saveGigService,
+  unsaveGig as unsaveGigService,
 } from '../services/gig.service.js';
 import { getViewerApplication } from '../services/application.service.js';
 
@@ -56,6 +58,18 @@ export const closeGig = asyncHandler(async (req, res) => {
 
 export const deleteGig = asyncHandler(async (req, res) => {
   await deleteGigService(req.params.id, req.user.id);
+
+  sendSuccess(res, null, 200);
+});
+
+export const saveGig = asyncHandler(async (req, res) => {
+  await saveGigService(req.params.id, req.user.id);
+
+  sendSuccess(res, null, 200);
+});
+
+export const unsaveGig = asyncHandler(async (req, res) => {
+  await unsaveGigService(req.params.id, req.user.id);
 
   sendSuccess(res, null, 200);
 });

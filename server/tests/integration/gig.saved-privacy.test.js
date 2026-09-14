@@ -27,6 +27,16 @@ const registerBusiness = async (email) => {
   return { accessToken: res.body.data.accessToken, userId: res.body.data.user.id };
 };
 
+const registerSeeker = async (email) => {
+  const res = await request(app).post('/api/auth/register').send({
+    email,
+    password: validPassword,
+    role: 'seeker',
+  });
+
+  return { accessToken: res.body.data.accessToken, userId: res.body.data.user.id };
+};
+
 const createGig = async (token, overrides = {}) => {
   const res = await request(app)
     .post('/api/gigs')
@@ -57,6 +67,42 @@ describe('gig saved-by privacy', () => {
 
     const detailRes = await request(app).get(`/api/gigs/${gig.id}`);
     expectNoSavedByAnywhere(detailRes.body);
+
+    const mineRes = await request(app)
+      .get('/api/gigs/mine')
+      .set('Authorization', `Bearer ${owner.accessToken}`);
+    expectNoSavedByAnywhere(mineRes.body);
+  });
+
+  // GL-331: the case the above test could only simulate — savedBy is now
+  // actually written by PUT /api/gigs/:id/save, not seeded directly through
+  // the model. This is the case select: false and the toJSON deletion were
+  // guarding two sprints ahead of. If either guard were removed, the saver's
+  // own id would surface in the save response, the detail read, and the
+  // public list — this asserts none of them do.
+  it('stays hidden from every response once a real save has written it, including to the saver', async () => {
+    const owner = await registerBusiness('saved-privacy-real-owner@example.com');
+    const seeker = await registerSeeker('saved-privacy-real-seeker@example.com');
+    const gig = await createGig(owner.accessToken, { title: 'Really has a saver' });
+
+    const saveRes = await request(app)
+      .put(`/api/gigs/${gig.id}/save`)
+      .set('Authorization', `Bearer ${seeker.accessToken}`);
+    expect(saveRes.status).toBe(200);
+    expectNoSavedByAnywhere(saveRes.body);
+
+    const listRes = await request(app).get('/api/gigs');
+    expectNoSavedByAnywhere(listRes.body);
+
+    const detailAsSaverRes = await request(app)
+      .get(`/api/gigs/${gig.id}`)
+      .set('Authorization', `Bearer ${seeker.accessToken}`);
+    expectNoSavedByAnywhere(detailAsSaverRes.body);
+
+    const detailAsOwnerRes = await request(app)
+      .get(`/api/gigs/${gig.id}`)
+      .set('Authorization', `Bearer ${owner.accessToken}`);
+    expectNoSavedByAnywhere(detailAsOwnerRes.body);
 
     const mineRes = await request(app)
       .get('/api/gigs/mine')
