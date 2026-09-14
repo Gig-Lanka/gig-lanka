@@ -83,6 +83,7 @@ Every error response — regardless of cause — returns the same outer shape:
 |---|---|
 | `VALIDATION_ERROR` | Request body/params/query failed schema validation. |
 | `INVALID_CREDENTIALS` | Login email/password combination doesn't match. |
+| `ACCOUNT_DEACTIVATED` | `POST /api/auth/login` with correct credentials for a deactivated account (§5.2). Always `403`, and deliberately distinguishable from `INVALID_CREDENTIALS` — the caller has already proven they hold the right credentials. `requireAuth` refuses a deactivated user's still-valid access token too (§5.8), but reuses `TOKEN_INVALID` for that rather than this code. |
 | `INVALID_CURRENT_PASSWORD` | `POST /api/auth/change-password` called with a `currentPassword` that doesn't match the stored hash. Always `401`, distinguishable from `TOKEN_EXPIRED`/`TOKEN_INVALID` so the client shows a field error instead of re-authenticating. |
 | `PASSWORD_UNCHANGED` | `POST /api/auth/change-password` called with a `newPassword` identical to the current password. Always `400`. |
 | `EMAIL_ALREADY_EXISTS` | Register called with an email already in the database. |
@@ -234,6 +235,18 @@ Creates a new user account.
   "error": {
     "code": "INVALID_CREDENTIALS",
     "message": "Email or password is incorrect."
+  }
+}
+```
+
+**Failure — `403 Forbidden`** (correct credentials, but the account has been deactivated — deliberately distinguishable from a wrong password, since the enumeration rule above only protects unknown accounts)
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "ACCOUNT_DEACTIVATED",
+    "message": "This account has been deactivated."
   }
 }
 ```
@@ -444,7 +457,7 @@ Sets `isActive` to `false` and revokes every refresh token belonging to the user
 
 `server/src/middleware/auth.middleware.js` exports three middleware:
 
-- **`requireAuth`** — rejects. No token, a malformed header, an expired token, an invalid/tampered token, or a token whose user no longer exists each 401 with one of `AUTH_HEADER_MISSING`, `AUTH_HEADER_MALFORMED`, `TOKEN_EXPIRED`, `TOKEN_INVALID`. A valid token loads the user from the database and sets `req.user`. Used on every endpoint that requires a signed-in caller.
+- **`requireAuth`** — rejects. No token, a malformed header, an expired token, an invalid/tampered token, a token whose user no longer exists, or a token whose user has since been deactivated each 401 with one of `AUTH_HEADER_MISSING`, `AUTH_HEADER_MALFORMED`, `TOKEN_EXPIRED`, `TOKEN_INVALID`. The deactivated case reuses `TOKEN_INVALID` rather than `ACCOUNT_DEACTIVATED` (§3) — that code is reserved for the login refusal (§5.2), and the user is reloaded from the database rather than trusted from the token's claim so this catches an access token minted before deactivation and still inside its expiry window. A valid token loads the user from the database and sets `req.user`. Used on every endpoint that requires a signed-in caller.
 - **`optionalAuth`** — never rejects. A valid token sets `req.user` exactly as `requireAuth` does. Every other case — no header, a malformed header, an expired token, an invalid/tampered token, or a token whose user no longer exists — leaves `req.user` undefined and calls `next()` with no error. For a public endpoint that wants to know who's asking without requiring anyone to be. The only endpoint using it is `GET /api/gigs/:id` (§10.5).
 - **`requireRole(...roles)`** — placed after `requireAuth` or `optionalAuth`. Fails closed: `401 UNAUTHENTICATED` if `req.user` is absent, `403 FORBIDDEN` if `req.user.role` isn't in the allowed list.
 
