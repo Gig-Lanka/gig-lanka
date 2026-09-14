@@ -100,7 +100,7 @@ Every error response — regardless of cause — returns the same outer shape:
 | `FILE_TOO_LARGE` | An uploaded file exceeds the 5MB limit. |
 | `STORAGE_UNAVAILABLE` | The storage backend (Supabase) failed or was unreachable. Always `502`. |
 | `GIG_CLOSED` | Attempted to apply to or save a gig whose status isn't `open`. Always `409`. |
-| `GIG_HAS_APPLICANTS` | `PUT /api/gigs/:id` attempted to add, change or remove `skillTrial` on a gig that has ever had an application (§10.7, §10.10). Always `409`. Keyed on an existence check against `Application`, not `applicantCount` — that count falls when applicants withdraw or are rejected, and the terms must not change underneath someone who already applied even after they leave. |
+| `GIG_HAS_APPLICANTS` | `PUT /api/gigs/:id` attempted to add, change or remove `skillTrial` on a gig that has ever had an application (§10.7, §10.13). Always `409`. Keyed on an existence check against `Application`, not `applicantCount` — that count falls when applicants withdraw or are rejected, and the terms must not change underneath someone who already applied even after they leave. |
 | `APPLICATION_ALREADY_EXISTS` | `POST /api/gigs/:gigId/applications` for a `(gig, applicant)` pair that already has an application (§11.7). Always `409`; the duplicate-key error from the unique index (§11.1) is translated here rather than surfacing as `500` — the same trap GL-15 hit with duplicate emails. Holds whether the earlier application is live, withdrawn or rejected. |
 | `TRIAL_ALREADY_SUBMITTED` | `POST /api/gigs/:gigId/applications` for a `(gig, applicant)` pair whose existing application already carries a skill trial submission — submitted, skipped, passed or not passed (§11.7). Always `409`; replaces `APPLICATION_ALREADY_EXISTS` for that specific case, since a submission cannot be edited after it is made. |
 | `INVALID_APPLICATION_TRANSITION` | Attempted to move an application to a status not reachable from its current status (§11.3). Always `409`, and the message names both the current and the attempted status. Withdrawing a `hired` application (§11.10) surfaces through this same code — Hired's only outgoing move is to `completed`, so a withdraw is refused by the transition table itself, not by a withdraw-specific check. Marking anything other than a `hired` application complete (§11.11) is refused the same way. |
@@ -1110,7 +1110,7 @@ A `502` means the file itself may have been fine — try again. A `400` means th
 
 ## 10. Gig endpoints (Sprint 1)
 
-`server/src/models/gig.model.js`. The gig is what a business posts and a seeker browses; applications, saves and reviews all point back at one. `GET /api/gigs` and `GET /api/gigs/:id` are the only two public endpoints in this project — no `Authorization` header required, browsing without an account is deliberate. Every other gig endpoint requires a **business** token; a seeker token gets `403`, no token gets `401`.
+`server/src/models/gig.model.js`, `server/src/routes/gig.routes.js`, `server/src/controllers/gig.controller.js`, `server/src/services/gig.service.js`. The gig is what a business posts and a seeker browses; applications, saves and reviews all point back at one. `GET /api/gigs` and `GET /api/gigs/:id` are the only two public endpoints in this project — no `Authorization` header required, browsing without an account is deliberate — though a signed-in seeker calling either also gets `viewerSaved` layered on top (§10.4, §10.5). The rest split by role, not uniformly: `POST`, `GET /mine`, `PUT`, `PATCH .../close` and `DELETE` require a **business** token, a seeker token getting `403`; `PUT .../save`, `DELETE .../save` and `GET /saved` (§10.10–§10.12, GL-331–GL-332) require a **seeker** token instead, a business or admin token getting `403`. Every one of the ten endpoints gets `401` with no token at all, except the two public reads.
 
 ### 10.1 Gig shape
 
@@ -1155,7 +1155,7 @@ Returned under `data.gig` (single) or `data.gigs` (list), everywhere a gig appea
 - `postedBy` is a user id, taken from the caller's token on create and never from the request body.
 - `applicantCount` defaults to `0`. It is owned by Application & Hiring (GL-110 and later); this component only declares and defaults it, never writes it.
 - **`skillTrial` is optional and, when the gig has none, omitted entirely — never an empty object.** `requirement` is one of `none` or `optional` (§6.12; the Application & Hiring brief's original third value, `required`, was a considered-and-rejected product decision — a skill trial is never mandatory to apply, in no case). `taskTitle` (max 80 characters) and `taskBrief` (20–1,000 characters) are required whenever `requirement` is `optional`; `submissionType` and `effortEstimate` are each one of the closed vocabularies at §6.12. When `requirement` is `none`, none of the other four fields may be present. Reaches every read that returns a gig — §10.4 (list), §10.5 (single) and §10.6 (mine) — because a seeker must see the task and its effort estimate before deciding to apply.
-- **`savedBy` is never present in any response, for anyone, including the gig's own owner** — not even once Sprint 2 starts writing saver ids to it. A business learns how many people applied (`applicantCount`), never who saved.
+- **`savedBy` is never present in any response, for anyone, including the gig's own owner.** `select: false` on the schema path keeps it out of every default query, and the `toJSON` transform deletes it again as a second guard — two independent defences, both still in place now that `PUT /api/gigs/:id/save` (§10.10) actually writes to it. `gig.saved-privacy.test.js` pins that either guard's removal breaks the suite. There is no save-count field anywhere — deliberately asymmetric with `applicantCount`: a business learns how many people applied, never how many, or which, people saved a gig of theirs. The only thing anyone ever learns about saving is their own: `viewerSaved` (§10.4, §10.5), a boolean computed fresh per request from a match check, never the array itself, and never anyone else's.
 - Optional fields (`area`, `startDate`, `applicationsCloseDate`) are omitted, not null, when unset — same convention as profiles (§8.1).
 
 ### 10.2 Business block
@@ -1313,13 +1313,15 @@ Every sort carries a secondary `_id` tiebreak in the same direction as the prima
 
 `gigs`, `page` and `limit` (`10`) are unchanged in shape from Sprint 1. `sort`, `page` and every filter compose freely — pagination and sorting are always applied on top of the filtered set, never the other way round.
 
+**Each gig in `gigs` carries `viewerSaved`** (GL-333) — `true` when the caller is a signed-in seeker who has saved that gig, `false` in every other case: a guest, a signed-in business or admin, or a signed-in seeker who hasn't saved it. Unlike `viewerApplication` on §10.5, which sits beside `gig` in the envelope, `viewerSaved` here sits inside each item of `gigs`, since the page has many gigs and one caller. For a guest (or any non-seeker) it is `false` on every row and costs nothing extra — no lookup runs at all. For a signed-in seeker it costs exactly one extra query for the whole page (the caller's saved ids among just this page's gigs, `savedBy: user.id` matched against the page's own `_id`s), never one query per row.
+
 No failure modes beyond the `400` above — an empty result set is still `200` with `"gigs": []`.
 
 ### 10.5 Read a gig — `GET /api/gigs/:id`
 
 Public — no `Authorization` header required, and none of the behaviour below changes that. Returns one gig **at any status** to anyone, so a link to a since-closed gig still resolves.
 
-An `Authorization` header is read if present (optional authentication), purely to compute `viewerApplication`. A missing header, a malformed one, or an expired or invalid token all fall through to exactly the same response a guest gets — this endpoint never 401s.
+An `Authorization` header is read if present (optional authentication), purely to compute `viewerApplication` and `viewerSaved`. A missing header, a malformed one, or an expired or invalid token all fall through to exactly the same response a guest gets — this endpoint never 401s.
 
 **Success — `200 OK`**
 
@@ -1329,12 +1331,15 @@ An `Authorization` header is read if present (optional authentication), purely t
   "data": {
     "gig": { /* 10.1 */ },
     "business": { /* 10.2 */ },
-    "viewerApplication": { "id": "...", "status": "shortlisted" }
+    "viewerApplication": { "id": "...", "status": "shortlisted" },
+    "viewerSaved": false
   }
 }
 ```
 
 `viewerApplication` is `{ id, status }` for a signed-in seeker who has an application against this gig, **at any status** — applied, viewed, shortlisted, hired, completed, rejected or withdrawn all carry it. It is `null` in every other case: a guest, a signed-in business, or a signed-in seeker who has never applied to this gig. A seeker whose access token has expired is treated as a guest here and also gets `null`. Nothing beyond `id` and `status` is included — the profile snapshot, the rejection reason and every timestamp live on `GET /api/applications/:id` (§11.9), not here.
+
+`viewerSaved` (GL-333) is a plain boolean, computed the same way and behind the same `optionalAuth`: `true` when the caller is a signed-in seeker who has saved this gig, `false` for a guest, a signed-in business or admin, or a seeker who hasn't saved it — never `null`, unlike `viewerApplication`, since "have I saved this" has no third state to represent. Answered with an existence check against `savedBy` (`Gig.exists`), not a read of the array — nothing about who *else* has saved the gig, or how many, is ever derivable from this field or any other response (§10.1).
 
 This endpoint calls `closeIfExpired` on every read, which moves a gig whose `applicationsCloseDate` has passed from `open` to `closed` (GL-283) — but only from `open`: its guard is `gig.status === 'open'`, so a gig already `filled` (§10.1, GL-328) is returned exactly as stored even when its deadline has since passed. A filled gig with a past deadline is an entirely ordinary state, not a bug — silently rewriting it to `closed` would lose the more specific fact that it was filled. `GET /api/gigs/mine`'s own expired-`open` sweep (§10.6) uses the same `status: 'open'` filter and leaves a filled gig untouched for the same reason.
 
@@ -1411,15 +1416,90 @@ Only the owner. Permanently deletes the gig. There is no soft delete and no undo
 
 **Ownership check order (10.7–10.9):** the owner check runs **after** the existence check. A gig that doesn't exist (or has a malformed id) is `404`, before the caller's identity is even considered; a gig that exists but belongs to someone else is `403`. The two are never conflated into a single `403`-or-`404` — doing that would let a caller learn which ids exist by noticing which refusal they got instead.
 
-### 10.10 Error codes for these endpoints
+### 10.10 Save a gig — `PUT /api/gigs/:id/save`
+
+Seekers only (GL-331) — a business or admin token gets `403`. No request body; anything sent is ignored rather than validated.
+
+**A `PUT`/`DELETE` pair on a sub-path, not a single `PATCH .../save` toggle.** A toggle's result depends on which state it found the gig in, which is exactly what breaks under the client's optimistic double-tap this endpoint is built for: two rapid taps must never leave the gig in the opposite state from what the user intended. `PUT` and `DELETE` each have one fixed outcome regardless of starting state, so they compose safely under a retry or a race.
+
+**Idempotent by construction, not by a pre-check.** The write is `$addToSet` on `savedBy`, straight from the route — never a read, a mutate and a save. Saving a gig that's already saved matches the existing entry and adds nothing, so two concurrent taps can't produce two rows, and neither can a client retry after a dropped response.
+
+**Gated by the same `assertGigIsOpen` guard GL-110's apply endpoint calls (§10.13)** — a `closed`, `filled`, or deadline-expired gig is refused with `409 GIG_CLOSED` before `savedBy` is touched at all. No new status rule exists for saving; this is apply's existing rule, reused.
+
+**Never touches `applicantCount`.** Saving is not applying, and must not move any count a business can see.
+
+**Success — `200 OK`**
+
+```json
+{ "success": true, "data": null }
+```
+
+**Failure — `401 Unauthorized`** (guest) — as in §10.3.
+
+**Failure — `403 Forbidden`** (a business or admin token) — `FORBIDDEN`, as in §10.3.
+
+**Failure — `404 Not Found`** — no gig with that id, or the id is malformed.
+
+**Failure — `409 Conflict`** (`GIG_CLOSED`) — the gig is not `open`. See §10.13.
+
+### 10.11 Unsave a gig — `DELETE /api/gigs/:id/save`
+
+Seekers only (GL-331) — a business or admin token gets `403`. No request body.
+
+**Deliberately not gated by `assertGigIsOpen`.** A seeker must always be able to remove a gig from their own saved list, whatever has happened to it since — closed, filled, or deleted entirely. This is the one asymmetry between save and unsave: saving is refused on a gig that isn't open; unsaving never is.
+
+**Idempotent for the same reason as save:** `$pull` on `savedBy` matching zero entries is not an error, so unsaving a gig that was never saved, or unsaving the same gig twice, both succeed identically to the first real unsave. A gig that doesn't exist at all is still `404` — existence is checked, saved-state never is.
+
+**Success — `200 OK`**
+
+```json
+{ "success": true, "data": null }
+```
+
+**Failure — `401 Unauthorized`** (guest) — as in §10.3.
+
+**Failure — `403 Forbidden`** (a business or admin token) — `FORBIDDEN`, as in §10.3.
+
+**Failure — `404 Not Found`** — no gig with that id, or the id is malformed.
+
+### 10.12 Saved gigs list — `GET /api/gigs/saved`
+
+Seekers only (GL-332) — a business or admin token gets `403`. Returns the signed-in seeker's own saved gigs, newest-saved first, **at any status**.
+
+**Declared before `GET /api/gigs/:id` in `gig.routes.js`**, the same reason `GET /api/gigs/mine` (§10.6) is declared before it and `GET /api/applications/for-my-gigs` (§11.13) is ordered the way it is: a literal path segment declared after a `:id` route on the same router is swallowed as an id instead of matching its own handler — this project has hit that trap before and guards against it explicitly at both call sites.
+
+**A saved gig that has since closed, filled, or whose poster deactivated still appears here, carrying its real current status**, rather than silently vanishing — the client renders the existing status badge's closed treatment for it. No status filter is applied to the underlying query; before reading, this endpoint sweeps its own saved-but-expired-`open` gigs to `closed` in one `updateMany`, the same bulk-correction shape `GET /api/gigs/mine` (§10.6) uses for a business's own gigs, just matched against `savedBy` instead of `postedBy`.
+
+**Scoped strictly to the caller.** The query is `savedBy: <caller's id>` with no other input accepted — there is no parameter, on this or any other endpoint, that reaches a different seeker's saved list.
+
+**Success — `200 OK`**
+
+```json
+{
+  "success": true,
+  "data": {
+    "gigs": [ /* gig shapes, §10.1, newest-saved first, every status */ ]
+  }
+}
+```
+
+No pagination — like `GET /api/gigs/mine` (§10.6), a seeker's own saved list is expected to return in full.
+
+**Sort key is each gig's `updatedAt`, not a dedicated "saved at" timestamp.** `savedBy` (§10.1) is a plain array of ids with no per-save time recorded, and the schema's `timestamps: true` option bumps a gig's `updatedAt` as a side effect of *any* write to it, including the `$addToSet`/`$pull` behind save and unsave — the only ordering signal available here without a model change. The known consequence: an unrelated edit to a saved gig (its posting business changing the title or pay, say) can reorder the seeker's list without a re-save. This is an accepted limitation of the current shape, not a bug to chase inside this story's scope.
+
+**Failure — `401 Unauthorized`** (guest) — as in §10.3.
+
+**Failure — `403 Forbidden`** (a business or admin token) — `FORBIDDEN`, as in §10.3.
+
+### 10.13 Error codes for these endpoints
 
 | Status | Code | When |
 |---|---|---|
 | `400` | `VALIDATION_ERROR` | Body failed create/update validation (§10.3). Always carries `errors`. |
 | `401` | `AUTH_HEADER_MISSING` / `AUTH_HEADER_MALFORMED` / `TOKEN_EXPIRED` / `TOKEN_INVALID` | No/malformed/expired/invalid token on a route that requires one. Never returned by `GET /api/gigs` or `GET /api/gigs/:id` — both are public. |
-| `403` | `FORBIDDEN` | Authenticated but not a business (`POST`, `GET /mine`, `PUT`, `PATCH .../close`, `DELETE`), **or** a business token that isn't the gig's owner (`PUT`, `PATCH .../close`, `DELETE`). Same code, same shape, both cases — the distinction is which endpoint and whether the gig exists (see 10.9's ordering). |
-| `404` | `NOT_FOUND` | `GET /api/gigs/:id` for a gig that doesn't exist, or `PUT` / `PATCH .../close` / `DELETE` for a gig that doesn't exist or has a malformed id — checked before ownership. |
-| `409` | `GIG_CLOSED` | **Not returned by any endpoint in this section.** None of the seven gig endpoints reject on gig status. `GIG_CLOSED` is the guard (`assertGigIsOpen` in `gig.service.js`) that GL-110's apply endpoint and Sprint 2's save endpoint call before acting on a gig — documented here because it is this component's error code, first surfaced through theirs. See §3 for the shared definition. |
+| `403` | `FORBIDDEN` | Authenticated but not a business (`POST`, `GET /mine`, `PUT`, `PATCH .../close`, `DELETE`), **or** a business token that isn't the gig's owner (`PUT`, `PATCH .../close`, `DELETE`), **or** not a seeker (`PUT .../save`, `DELETE .../save`, `GET /saved` — §10.10–§10.12). Same code, same shape, every case — the distinction is which endpoint and, for the ownership case, whether the gig exists (see 10.9's ordering). |
+| `404` | `NOT_FOUND` | `GET /api/gigs/:id` for a gig that doesn't exist, or `PUT` / `PATCH .../close` / `DELETE` / `PUT .../save` / `DELETE .../save` for a gig that doesn't exist or has a malformed id — checked before ownership where an ownership check exists (save and unsave have none; see §10.10–§10.11). |
+| `409` | `GIG_CLOSED` | `PUT /api/gigs/:id/save` (§10.10) when the gig is not `open` — the same guard (`assertGigIsOpen` in `gig.service.js`) GL-110's apply endpoint calls before acting on a gig. Never returned by `DELETE /api/gigs/:id/save` (§10.11), which is deliberately ungated, or by `GET /api/gigs/saved` (§10.12), which never rejects on status. See §3 for the shared definition. |
 | `409` | `GIG_HAS_APPLICANTS` | `PUT /api/gigs/:id` attempted to add, change or remove `skillTrial` on a gig that has ever had an application (§10.7). See §3 for the shared definition. |
 
 ---
