@@ -303,6 +303,37 @@ export const deleteGig = async (id, userId) => {
   await gig.deleteOne();
 };
 
+// GL-331. $addToSet rather than read-modify-write: saving an already-saved
+// gig is then a no-op at the database level, not just a no-op the client
+// happens not to notice, so two quick taps racing each other can't produce
+// two entries either. Gated through assertGigIsOpen — the same "not open"
+// error apply already surfaces — so a closed, filled or deadline-expired
+// gig is refused before savedBy is touched. applicantCount is never part of
+// this write: saving is not applying.
+export const saveGig = async (id, userId) => {
+  await assertGigIsOpen(id);
+
+  await Gig.updateOne({ _id: id }, { $addToSet: { savedBy: userId } });
+};
+
+// Deliberately not gated by assertGigIsOpen: a seeker must always be able to
+// remove something from their own saved list regardless of what happened to
+// the gig afterwards (closed, filled, deleted). $pull is idempotent on its
+// own, so unsaving something never saved — or unsaving twice — just matches
+// zero array entries and still succeeds. matchedCount distinguishes "gig
+// doesn't exist" (404) from "gig exists but wasn't saved" (silent success).
+export const unsaveGig = async (id, userId) => {
+  if (!mongoose.isValidObjectId(id)) {
+    throw new ApiError(404, 'NOT_FOUND', 'Gig not found.');
+  }
+
+  const result = await Gig.updateOne({ _id: id }, { $pull: { savedBy: userId } });
+
+  if (result.matchedCount === 0) {
+    throw new ApiError(404, 'NOT_FOUND', 'Gig not found.');
+  }
+};
+
 // Applying and saving both act on a gig that must still be open. GL-110
 // (apply) and Sprint 2's save endpoint call this before writing anything,
 // so the "not open" case always surfaces as GIG_CLOSED instead of a generic
