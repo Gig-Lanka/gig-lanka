@@ -26,6 +26,7 @@ import RateFlowNavigator from '../screens/shared/rate/RateFlowNavigator';
 import PublicProfileScreen from '../screens/shared/PublicProfileScreen';
 import ReviewsScreen from '../screens/shared/ReviewsScreen';
 import SkillTrialScreen from '../screens/seeker/SkillTrialScreen';
+import TrialReviewScreen from '../screens/business/TrialReviewScreen';
 import useAuth from '../hooks/useAuth';
 import { AUTH_STATUS } from '../store/AuthContext';
 
@@ -64,6 +65,7 @@ function AppStack({ role }) {
               gig-scoped instance (GL-257). */}
           <Stack.Screen name="GigApplicants" component={ApplicantsScreen} />
           <Stack.Screen name="ApplicantDetail" component={ApplicantDetailScreen} />
+          <Stack.Screen name="TrialReview" component={TrialReviewScreen} />
         </>
       ) : (
         <>
