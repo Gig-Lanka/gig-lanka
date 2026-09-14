@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import { Gig } from '../models/gig.model.js';
 import { Application } from '../models/application.model.js';
+import { User } from '../models/user.model.js';
 import { ApiError } from '../utils/ApiError.js';
 import { getPublicIdentity, getPublicIdentities } from './profile.service.js';
 
@@ -14,15 +15,27 @@ const SORT_SPECS = {
   highest_pay: { payAmount: -1, _id: -1 },
 };
 
+// GL-316: gigs posted by a deactivated business narrow out of the public
+// listing (User & Profile brief §9). A $nin of deactivated poster ids rather
+// than a $lookup — listByStartingSoon below runs its own aggregation, and a
+// $lookup here would have to be kept in step with it forever. $nin against
+// an empty array excludes nothing, so this is safe to apply unconditionally.
+const getDeactivatedPosterIds = () => User.find({ isActive: false }).distinct('_id');
+
 // Builds the filter for the public listing only — status: 'open' is fixed
 // here and never derived from `query`, so no combination of parameters can
 // widen the result past open gigs. applicationsCloseDate is excluded here
 // too: a gig whose deadline has passed but hasn't been read (and lazily
 // closed, see closeIfExpired) since must still not appear as browsable.
 // $not/$lt also matches a missing field, so gigs with no deadline pass through.
-const buildOpenGigFilter = (query) => {
+const buildOpenGigFilter = async (query) => {
   const today = new Date().toISOString().slice(0, 10);
-  const filter = { status: 'open', applicationsCloseDate: { $not: { $lt: today } } };
+  const deactivatedPosterIds = await getDeactivatedPosterIds();
+  const filter = {
+    status: 'open',
+    applicationsCloseDate: { $not: { $lt: today } },
+    postedBy: { $nin: deactivatedPosterIds },
+  };
 
   if (query.q) {
     // Metacharacters must be escaped before building the RegExp: an
@@ -141,7 +154,7 @@ export const createGig = async (body, postedBy) => {
 
 export const listOpenGigs = async (query) => {
   const page = Math.max(1, parseInt(query.page, 10) || 1);
-  const filter = buildOpenGigFilter(query);
+  const filter = await buildOpenGigFilter(query);
   const sort = query.sort ?? 'newest';
 
   const [gigs, total] = await Promise.all([
@@ -308,6 +321,16 @@ export const assertGigIsOpen = async (id) => {
   await closeIfExpired(gig);
 
   if (gig.status !== 'open') {
+    throw new ApiError(409, 'GIG_CLOSED', 'This gig is no longer open.');
+  }
+
+  // GL-316 criterion 7: a deactivated business's gig still resolves by direct
+  // link (GET /api/gigs/:id), but applying to it is refused the same way a
+  // closed gig is — the existing code, not a new one, so the client's
+  // existing message still explains it.
+  const poster = await User.findById(gig.postedBy).select('isActive').lean();
+
+  if (poster?.isActive === false) {
     throw new ApiError(409, 'GIG_CLOSED', 'This gig is no longer open.');
   }
 
