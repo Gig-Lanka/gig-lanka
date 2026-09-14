@@ -131,6 +131,20 @@ async function rejectApplication(id, { reasonCode, note } = {}) {
   return response.data.data;
 }
 
+/**
+ * `PATCH /api/applications/:id/trial-review` - mark a submitted skill trial
+ * `passed` or `not_passed` (§11.18). Business-only, and only once - a
+ * second call for the same trial answers `409 TRIAL_ALREADY_REVIEWED`
+ * rather than a status precondition, since a review is a result, not a
+ * status (§6.12). `resultNote` is optional, up to 300 characters, sent
+ * exactly as written - the server stores it verbatim for the seeker to
+ * read, the same rule `rejectApplication`'s `note` follows.
+ */
+async function reviewSkillTrial(id, { result, resultNote } = {}) {
+  const response = await client.patch(`/applications/${id}/trial-review`, { result, resultNote });
+  return response.data.data;
+}
+
 export default {
   getMyApplications,
   getApplication,
@@ -143,4 +157,5 @@ export default {
   shortlistApplication,
   hireApplication,
   rejectApplication,
+  reviewSkillTrial,
 };
