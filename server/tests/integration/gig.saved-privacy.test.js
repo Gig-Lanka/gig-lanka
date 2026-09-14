@@ -108,5 +108,30 @@ describe('gig saved-by privacy', () => {
       .get('/api/gigs/mine')
       .set('Authorization', `Bearer ${owner.accessToken}`);
     expectNoSavedByAnywhere(mineRes.body);
+
+    const savedListRes = await request(app)
+      .get('/api/gigs/saved')
+      .set('Authorization', `Bearer ${seeker.accessToken}`);
+    expectNoSavedByAnywhere(savedListRes.body);
+    expect(savedListRes.body.data.gigs.map((g) => g.id)).toEqual([gig.id.toString()]);
+  });
+
+  it('never lets one seeker read another seeker’s saved list through GET /api/gigs/saved', async () => {
+    const owner = await registerBusiness('saved-privacy-cross-owner@example.com');
+    const saver = await registerSeeker('saved-privacy-cross-saver@example.com');
+    const otherSeeker = await registerSeeker('saved-privacy-cross-other@example.com');
+    const gig = await createGig(owner.accessToken, { title: 'Saved by someone else' });
+
+    await request(app)
+      .put(`/api/gigs/${gig.id}/save`)
+      .set('Authorization', `Bearer ${saver.accessToken}`);
+
+    const otherSeekerRes = await request(app)
+      .get('/api/gigs/saved')
+      .set('Authorization', `Bearer ${otherSeeker.accessToken}`);
+
+    expect(otherSeekerRes.status).toBe(200);
+    expect(otherSeekerRes.body.data.gigs).toEqual([]);
+    expectNoSavedByAnywhere(otherSeekerRes.body);
   });
 });
