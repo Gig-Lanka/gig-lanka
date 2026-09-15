@@ -9,8 +9,7 @@ import {
   deactivate,
 } from '../controllers/auth.controller.js';
 import { validate } from '../middleware/validate.middleware.js';
-import { requireAuth, requireRole } from '../middleware/auth.middleware.js';
-import { sendSuccess } from '../utils/response.js';
+import { requireAuth } from '../middleware/auth.middleware.js';
 import {
   registerSchema,
   loginSchema,
@@ -28,11 +27,5 @@ router.post('/logout', validate(logoutSchema), requireAuth, logout);
 router.get('/me', requireAuth, me);
 router.post('/change-password', validate(changePasswordSchema), requireAuth, changePassword);
 router.post('/deactivate', requireAuth, deactivate);
-
-// Temporary smoke-test route for GL-60 — proves requireRole works end to end
-// (seeker token -> 403, admin token -> 200). Remove once GL-17 covers this with tests.
-router.get('/admin-smoke-test', requireAuth, requireRole('admin'), (req, res) => {
-  sendSuccess(res, { message: 'You are authenticated as an admin.' });
-});
 
 export default router;
