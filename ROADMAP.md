@@ -245,19 +245,20 @@ screening questions and years-of-experience fields anywhere
   button (GL-122 AC7, GL-123 AC1) and the business-block rating (GL-122 AC6). Both arose the same
   way: a story shipped with explicit licence to leave something inert until a later story landed,
   and the later story read that inertness as pre-existing context. Watch for it wherever a ticket
-  says "until X lands". **GL-236 closed the first. The second is still open** — `GigBusinessBlock`
-  still carries its "No rating slot" comment and `GET /api/gigs/:id` still sends no rating — and it
-  is still Sprint 3. Sprint 2 added a third instance of the same pattern: `RatingSummary`'s "See all
-  N reviews" button, left `disabled` for a reviews list screen that did not arrive. **The third is
-  now closed** — GL-303 (its GL-376 sub-task) gave the button its `onPress` to the new
+  says "until X lands". **GL-236 closed the first. The second is now closed too** — GL-304 (its
+  GL-377–GL-379 sub-tasks) widened `getPublicIdentity` with `ratingSummary`, gave `RatingSummary` a
+  compact variant, and rendered it in `GigBusinessBlock`, deleting the stale "No rating slot"
+  comment. Sprint 2 added a third instance of the same pattern: `RatingSummary`'s "See all N
+  reviews" button, left `disabled` for a reviews list screen that did not arrive. **The third is
+  also closed** — GL-303 (its GL-376 sub-task) gave the button its `onPress` to the new
   `ReviewsScreen` and deleted the stale comment.
   **Sprint 3 breaks the pattern deliberately for the first time.** The report/complaint flow would
   have been the fifth instance — a Report button writing into a queue with no reader until Sprint 4
   — so E6's open-reports list is pulled forward to ship alongside it. The rule this establishes: a
   feature that writes something a human is supposed to act on does not ship before the screen that
   shows it. That is narrower than "no inert code" and is the part worth holding to.
-  **Of the two instances still open at ticketing, one is now closed** — GL-303 closed the disabled
-  "See all N reviews" button; GL-304 still owes GL-122 AC6 — and GL-301/GL-306 keep the report flow
+  **Of the two instances still open at ticketing, both are now closed** — GL-303 closed the disabled
+  "See all N reviews" button, and GL-304 closed GL-122 AC6 — and GL-301/GL-306 keep the report flow
   from becoming a fourth. **One new instance is accepted deliberately, with eyes open:** GL-297 writes
   `skillTrialResults` onto the seeker's profile and the story that renders those badges is deferred
   to Sprint 4, so a passed trial is stored and public in the API but invisible in the app until then.

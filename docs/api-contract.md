@@ -1179,11 +1179,12 @@ Returned under `data.gig` (single) or `data.gigs` (list), everywhere a gig appea
 {
   "id": "64f1a2b3c4d5e6f7a8b9c0d4",
   "name": "Kandy Coffee Co",
-  "photo": "https://cdn.giglanka.test/u/kandy.jpg"
+  "photo": "https://cdn.giglanka.test/u/kandy.jpg",
+  "ratingSummary": { "averageRating": 4.6, "reviewCount": 12, "topCategories": ["communication", "punctuality"], "distribution": { "1": 0, "2": 0, "3": 1, "4": 3, "5": 8 } }
 }
 ```
 
-`id` matches the gig's `postedBy`. `name` and `photo` come from the business's profile (§8.1), not the `User` record. If the business has never filled in a profile, both read back as `null` rather than the request failing.
+`id` matches the gig's `postedBy`. `name`, `photo` and `ratingSummary` come from the business's profile (§8.1), not the `User` record. If the business has never filled in a profile, `name` and `photo` read back as `null` rather than the request failing, and so does `ratingSummary` — a business with no profile document reads back `ratingSummary: null`, never a fabricated zeroed aggregate (§6.10's shape, once a profile and at least one review both exist). Distinct from a business that *has* a profile but no reviews yet, where `ratingSummary` is the real zeroed aggregate stored on that profile (`averageRating: 0`, `reviewCount: 0`, …). The client treats both cases the same way: no rating renders on the business block either way (GL-379).
 
 ### 10.3 Create a gig — `POST /api/gigs`
 
