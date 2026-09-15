@@ -10,6 +10,8 @@ const requireEnv = (key) => {
   return value;
 };
 
+const emailTransport = process.env.EMAIL_TRANSPORT === 'resend' ? 'resend' : 'noop';
+
 export const env = {
   nodeEnv: process.env.NODE_ENV || 'development',
   port: process.env.PORT || 3000,
@@ -21,4 +23,7 @@ export const env = {
   supabaseUrl: requireEnv('SUPABASE_URL'),
   supabaseServiceRoleKey: requireEnv('SUPABASE_SERVICE_ROLE_KEY'),
   supabaseBucketName: requireEnv('SUPABASE_BUCKET_NAME'),
+  emailTransport,
+  emailFrom: process.env.EMAIL_FROM,
+  resendApiKey: emailTransport === 'resend' ? requireEnv('RESEND_API_KEY') : process.env.RESEND_API_KEY,
 };
