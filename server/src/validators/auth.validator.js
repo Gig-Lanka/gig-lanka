@@ -29,3 +29,14 @@ export const changePasswordSchema = Joi.object({
   currentPassword: Joi.string().required(),
   newPassword: Joi.string().min(PASSWORD_MIN_LENGTH).required(),
 });
+
+export const forgotPasswordSchema = Joi.object({
+  email: Joi.string()
+    .email({ tlds: { allow: false } })
+    .required(),
+});
+
+export const resetPasswordSchema = Joi.object({
+  token: Joi.string().required(),
+  newPassword: Joi.string().min(PASSWORD_MIN_LENGTH).required(),
+});

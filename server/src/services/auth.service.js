@@ -1,6 +1,14 @@
+import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
+import { env } from '../config/env.js';
 import { User } from '../models/user.model.js';
+import {
+  PasswordResetToken,
+  PASSWORD_RESET_TOKEN_TTL_MINUTES,
+  hashPasswordResetToken,
+} from '../models/passwordResetToken.model.js';
 import { ApiError } from '../utils/ApiError.js';
+import { sendEmail } from './email.service.js';
 import {
   issueTokens,
   rotateRefreshToken,
@@ -81,6 +89,75 @@ export const changeUserPassword = async (user, { currentPassword, newPassword })
   await revokeAllRefreshTokensForUser(user._id);
 
   return issueTokens(user);
+};
+
+// Always returns nothing distinguishable to the caller: the controller sends
+// the same 200 body regardless of whether an account was found, is active,
+// or an email went out. The account-exists branch below does strictly more
+// work (a token write plus a provider call) than the no-op branch, so this
+// is a deliberately accepted timing difference rather than a constant-time
+// implementation — there is no rate-limiting layer in this project to pair
+// a stricter mitigation with, and the branch itself cannot be removed
+// without skipping the reset-email send entirely.
+export const requestPasswordReset = async ({ email }) => {
+  const user = await User.findOne({ email });
+
+  if (!user || user.isActive === false) {
+    return;
+  }
+
+  const rawToken = crypto.randomBytes(32).toString('hex');
+  const tokenHash = hashPasswordResetToken(rawToken);
+  const expiresAt = new Date(Date.now() + PASSWORD_RESET_TOKEN_TTL_MINUTES * 60 * 1000);
+
+  // Only the most recent link should ever work, so any earlier unused token
+  // for this account is invalidated before the new one is issued.
+  await PasswordResetToken.deleteMany({ user: user._id });
+  await PasswordResetToken.create({ user: user._id, tokenHash, expiresAt });
+
+  const resetLink = `${env.passwordResetUrlBase}?token=${rawToken}`;
+
+  // Placeholder copy: the real reset-link template belongs in
+  // email.templates.js per GL-324, which hasn't landed yet. This keeps the
+  // send path wired end-to-end against the no-op transport without writing
+  // into that sibling sub-task's file.
+  await sendEmail({
+    to: user.email,
+    subject: 'Reset your Gig Lanka password',
+    html: `<p>Use the link below to reset your password. It expires in ${PASSWORD_RESET_TOKEN_TTL_MINUTES} minutes and can only be used once.</p><p>${resetLink}</p>`,
+    text: `Use this link to reset your password (expires in ${PASSWORD_RESET_TOKEN_TTL_MINUTES} minutes, single use): ${resetLink}`,
+  });
+};
+
+// An expired, already-used, unknown or malformed token must be
+// indistinguishable to the caller, so every failure path here throws the
+// same RESET_TOKEN_INVALID — never a reason why.
+const resetTokenInvalid = () =>
+  new ApiError(400, 'RESET_TOKEN_INVALID', 'This reset link is invalid or has expired. Request a new one.');
+
+export const resetPassword = async ({ token, newPassword }) => {
+  const tokenHash = hashPasswordResetToken(token);
+  const resetToken = await PasswordResetToken.findOne({ tokenHash });
+
+  if (!resetToken || resetToken.usedAt || resetToken.expiresAt.getTime() <= Date.now()) {
+    throw resetTokenInvalid();
+  }
+
+  const user = await User.findById(resetToken.user);
+
+  if (!user) {
+    throw resetTokenInvalid();
+  }
+
+  user.passwordHash = await bcrypt.hash(newPassword, SALT_ROUNDS);
+  await user.save();
+
+  resetToken.usedAt = new Date();
+  await resetToken.save();
+
+  // The person resetting isn't signed in anywhere, unlike change-password,
+  // so there is no acting session to preserve — every refresh token dies.
+  await revokeAllRefreshTokensForUser(user._id);
 };
 
 export const deactivateOwnAccount = async (user) => {

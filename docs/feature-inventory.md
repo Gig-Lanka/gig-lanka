@@ -213,15 +213,15 @@ were reachable.
 | Admin navigation surface | ⬜ | **Nothing exists, and the fallthrough is wrong.** [`RootNavigator.js:32`](../app/src/navigation/RootNavigator.js) is `role === 'business' ? BusinessTabs : SeekerTabs`, so an admin signing in lands in the *seeker* tabs and hits a 403 wall, since admins have no profile. No `screens/admin/` directory, no admin branch, and the only `'admin'` string in `app/src` is a seeded mock account. §7.12. |
 | Open reports list | ⬜ | Sprint 3 — **pulled forward from Sprint 4** so the report/complaint flow ships with a reader rather than writing into a queue nobody can open. Read-only; every action on a report stays Sprint 4. It is the row that has to build the admin surface above. |
 | Admin screens & APIs | ⬜ | Sprint 4, split four ways. Disputes, moderation queue actions, account status. Nothing exists. |
-| Leftover smoke-test route | ⚠️ | `GET /api/auth/admin-smoke-test` is **still mounted** ([`auth.routes.js:32`](../server/src/routes/auth.routes.js)) — leftover from Sprint 0's GL-60, named for the GL-209 budget and not reached. It leaks nothing (a fixed string behind an admin-only gate) but it should be deleted. §7.9. |
+| Leftover smoke-test route | ✅ | `GET /api/auth/admin-smoke-test`, a Sprint 0 leftover from GL-60, is deleted. **GL-320.** §7.9. |
 
 ---
 
 ## 4. API surface
 
-34 routes, up from 25 at the end of Sprint 1. Everything except the two public gig reads requires a
-bearer token. The count includes two deliberate non-features: the leftover smoke-test route and the
-always-403 `PUT /api/profiles/:userId`.
+33 routes (down from 34: the leftover smoke-test route is deleted, §7.9 item 1), up from 25 at the
+end of Sprint 1. Everything except the two public gig reads requires a bearer token. The count
+includes one remaining deliberate non-feature: the always-403 `PUT /api/profiles/:userId`.
 
 | Method | Path | Auth | Status |
 |---|---|---|---|
@@ -231,8 +231,7 @@ always-403 `PUT /api/profiles/:userId`.
 | POST | `/api/auth/refresh` | — | ✅ |
 | POST | `/api/auth/logout` | access token | ✅ |
 | GET | `/api/auth/me` | access token | ✅ |
-| POST | `/api/auth/change-password` | access token | ✅ **new** — revokes other sessions; untested (§7.4) |
-| GET | `/api/auth/admin-smoke-test` | admin | ⚠️ temporary, still not deleted |
+| POST | `/api/auth/change-password` | access token | ✅ **new** — revokes other sessions; covered by `auth.change-password.test.js` (§7.4) |
 | GET | `/api/profiles/me` | seeker/business | ✅ |
 | PUT | `/api/profiles/me` | seeker/business | ✅ |
 | GET | `/api/profiles/:userId` | seeker/business | ✅ |
@@ -361,22 +360,24 @@ screen is entirely inert on a default checkout. Now unowned — §7.9.
 **Ticketed for Sprint 3 as GL-285**, off the cleanup budget. That story inverts the default and adds
 the missing `changePassword` mock stub.
 
-### 7.4 🔴 Open — no client-side tests, and change-password has no server tests either
+### 7.4 ✅ Closed (server half) / 🔴 Open (client half) — no client-side tests, and change-password had no server tests either
 `app/package.json` still has no `test` script, so CI's `npm test --if-present` remains a no-op.
 There is not one test in `app/`. **Still Sprint 4** — Sprint 2 added no client-side test
 infrastructure, by plan.
 
-**New in Sprint 2, and not by plan:** `POST /api/auth/change-password` has **no automated
-coverage**. Nothing under `server/tests/` references the route, `changePassword` or `newPassword`.
-It is the only endpoint added in Sprint 2 with no test — every other one (the applicant endpoints,
-the transitions, `/complete`, `/reviews/mine`, the search parameters, `optionalAuth`) got a suite.
-GL-230 covered the refusal paths and the second-device logout as *device* verification only. Given
-that the endpoint changes credentials and revokes sessions, this is the highest-value missing test
-in the server suite. Unowned.
+**The server half is closed.** `POST /api/auth/change-password` had **no automated coverage** —
+nothing under `server/tests/` referenced the route, `changePassword` or `newPassword`, the only
+Sprint 2 endpoint in that state. GL-230 had covered the refusal paths and the second-device logout
+as *device* verification only. **GL-288**, split across three sub-tasks, closed it: **GL-318** added
+`server/tests/integration/auth.change-password.test.js` (happy path, wrong-current-password
+refusal, the three validation refusals, and the three access-token failure modes); **GL-319** added
+the direct assertion of the other-session revocation (register, sign in twice, change the password
+on one session, assert the other session's refresh token is dead and the acting session's still
+works — through the API, not by reading `RefreshToken`); **GL-320** deleted the Sprint 0
+`admin-smoke-test` route the sub-tasks below also concerned themselves with and closed out this
+entry and §7.9 item 1.
 
-**Ticketed for Sprint 3 as GL-288**, off the cleanup budget — the suite plus a direct assertion of
-the other-session revocation, which has only ever been checked by hand on two devices. The
-client-side half (no `test` script in `app/`) stays Sprint 4 and is untouched by GL-288.
+The client-side half (no `test` script in `app/`) stays Sprint 4 and is untouched by GL-288.
 
 ### 7.5 ✅ Closed — profiles and uploads had no integration tests
 **GL-212 (GL-231/232/233).** Three suites: `profile.me.test.js` (own-profile read/update,
@@ -428,11 +429,11 @@ GL-209 closed Done with its 13 points fully spent on eleven sub-tasks, every one
 during the sweep (see §2). These five were named for that budget in advance, in this document, and
 were never ticketed. **All five verified still present at `be92b4d`. No sprint owns them.**
 
-1. **`GET /api/auth/admin-smoke-test` is still mounted** —
-   [`server/src/routes/auth.routes.js:32`](../server/src/routes/auth.routes.js). Sprint 0 leftover.
-   Note the test suite still exercises it, so deleting the route means deleting those assertions too.
-   **GL-288** — which requires the RBAC coverage those assertions carried to be re-expressed against
-   a real endpoint rather than simply lost.
+1. ✅ Closed — **`GET /api/auth/admin-smoke-test` is deleted.** **GL-320** removed the route (and
+   the now-unused `requireRole` import) from `auth.routes.js`, and re-expressed the two RBAC
+   assertions it carried — a seeker token refused, an admin token let through — against
+   `GET /api/admin/reports` in `auth.rbac.test.js`. Total RBAC coverage is unchanged: two assertions
+   removed, two added.
 2. **`EXPO_PUBLIC_USE_MOCK` still defaults to the mock** —
    [`app/src/constants/config.js:2`](../app/src/constants/config.js). Full detail in §7.3. **GL-285.**
 3. **The em-dash→hyphen copy regression is still in three rendered strings** — introduced by
@@ -591,14 +592,12 @@ can be built at all.
 
 ## 9. Verification performed for this document
 
-- `npm test` in `server/` — **26 suites, 322 tests, all passing** (`--runInBand`; the default
+- `npm test` in `server/` — **37 suites, 491 tests, all passing** (`--runInBand`; the default
   parallel run hits concurrent `mongodb-memory-server` startup contention across suites, which is
-  environmental, not a defect). Up from 22 suites / 295 tests mid-sprint and 14 / 143 at the end of
-  Sprint 1. The suites added in Sprint 2 are `auth.optional`, `gig.search`,
-  `gig.viewer-application`, `application.business-lists`, `application.business-transitions`,
-  `application.complete`, `review.mine`, `review.rating-aggregate` and `profile.service`.
+  environmental, not a defect), as of GL-320. Up from 26 suites / 322 tests at the end of Sprint 2,
+  22 / 295 mid-Sprint-2, and 14 / 143 at the end of Sprint 1. `auth.change-password.test.js` (GL-318,
+  GL-319) is the suite that closed the §7.4 server-side gap.
 - No test run for `app/` — there is still nothing to run (§7.4).
-- `server/tests/` grepped for change-password coverage: **none found** (§7.4).
 - Every route, model, service, validator and middleware in `server/src` read.
 - Every screen, navigator, component and API module in `app/src` read.
 - Jira cross-checked for GL-209–GL-283: 15 stories and 60 sub-tasks, **all Done**, 67 points
