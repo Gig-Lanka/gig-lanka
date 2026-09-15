@@ -100,6 +100,7 @@ Every error response — regardless of cause — returns the same outer shape:
 | `FILE_TYPE_MISMATCH` | An uploaded file's extension doesn't match its reported MIME type. |
 | `FILE_TOO_LARGE` | An uploaded file exceeds the 5MB limit. |
 | `STORAGE_UNAVAILABLE` | The storage backend (Supabase) failed or was unreachable. Always `502`. |
+| `EMAIL_UNAVAILABLE` | The transactional email provider failed or was unreachable while sending. Always `502`. |
 | `GIG_CLOSED` | Attempted to apply to or save a gig whose status isn't `open`. Always `409`. |
 | `GIG_HAS_APPLICANTS` | `PUT /api/gigs/:id` attempted to add, change or remove `skillTrial` on a gig that has ever had an application (§10.7, §10.13). Always `409`. Keyed on an existence check against `Application`, not `applicantCount` — that count falls when applicants withdraw or are rejected, and the terms must not change underneath someone who already applied even after they leave. |
 | `APPLICATION_ALREADY_EXISTS` | `POST /api/gigs/:gigId/applications` for a `(gig, applicant)` pair that already has an application (§11.7). Always `409`; the duplicate-key error from the unique index (§11.1) is translated here rather than surfacing as `500` — the same trap GL-15 hit with duplicate emails. Holds whether the earlier application is live, withdrawn or rejected. |
