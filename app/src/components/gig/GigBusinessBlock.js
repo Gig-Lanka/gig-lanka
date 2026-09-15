@@ -1,6 +1,7 @@
 import { Pressable, Text, View } from 'react-native';
 
 import Avatar from '../ui/Avatar';
+import RatingSummary from '../review/RatingSummary';
 import { formatRelativeTime } from '../../utils/format';
 
 // The posting business's identity, as returned under `data.business`
@@ -10,11 +11,6 @@ import { formatRelativeTime } from '../../utils/format';
 // navigate to actually exists (GL-155's public profile) - see
 // GigDetailScreen, which is what keeps a tap inert rather than crashing on
 // an unregistered screen while that story hasn't landed.
-//
-// No rating slot: GET /api/gigs/:id never sends a rating for the business
-// (only id/name/photo), and RatingSummary (GL-116) has no compact form
-// built for a strip this size even once it does - so nothing is rendered
-// here rather than a guessed score or the component's full breakdown.
 export default function GigBusinessBlock({ business, postedAt, onPress, className }) {
   const Container = onPress ? Pressable : View;
 
@@ -33,6 +29,7 @@ export default function GigBusinessBlock({ business, postedAt, onPress, classNam
         <Text className="text-[13.5px] font-bold text-ink" numberOfLines={1}>
           {business?.name ?? 'Business'}
         </Text>
+        <RatingSummary rating={business?.ratingSummary} variant="compact" className="mt-[2px]" />
         <Text className="mt-[2px] text-[12px] text-muted">
           Posted {formatRelativeTime(postedAt)}
         </Text>

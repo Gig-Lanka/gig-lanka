@@ -144,3 +144,56 @@ describe('GET /api/gigs/:id — viewerApplication', () => {
     expect(res.body.data.viewerApplication).toBeNull();
   });
 });
+
+// GL-379: the business block's rating slot, widened by GL-377
+// (getPublicIdentity) and rendered compactly by GL-378. Checked for a
+// business with reviews and one without, and as a guest specifically —
+// GET /api/gigs/:id is public through optionalAuth, and a rating is public
+// information.
+describe('GET /api/gigs/:id — business.ratingSummary', () => {
+  const postReview = async (applicationId, accessToken, body) =>
+    request(app)
+      .post(`/api/applications/${applicationId}/reviews`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ text: 'Paid on time and communicated clearly throughout the gig.', ...body });
+
+  it('carries the real aggregate for a business with reviews, for a guest viewer', async () => {
+    const business = await registerBusiness('rating-block-reviewed-business@example.com');
+    const seeker = await registerSeeker('rating-block-reviewed-seeker@example.com');
+    const gig = await createGigDoc(business.userId);
+    const application = await createApplicationDoc(gig.id, seeker.userId, {
+      status: 'completed',
+      completedAt: new Date(),
+    });
+
+    const reviewRes = await postReview(application.id, seeker.accessToken, {
+      rating: 5,
+      categories: ['fair_payment'],
+    });
+    expect(reviewRes.status).toBe(201);
+
+    const res = await request(app).get(`/api/gigs/${gig.id}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.business.ratingSummary).toEqual({
+      averageRating: 5,
+      reviewCount: 1,
+      topCategories: ['fair_payment'],
+      distribution: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 1 },
+    });
+  });
+
+  it('reads back null for a business with no profile and no reviews, for a guest viewer', async () => {
+    const business = await registerBusiness('rating-block-unreviewed-business@example.com');
+    const gig = await createGigDoc(business.userId);
+
+    const res = await request(app).get(`/api/gigs/${gig.id}`);
+
+    expect(res.status).toBe(200);
+    // No reviews means no aggregate was ever written, and this business has
+    // never touched its own profile either — so there is no profile document
+    // to read ratingSummary from, and it comes back null rather than a
+    // fabricated zeroed aggregate (same contract as name and photo).
+    expect(res.body.data.business.ratingSummary).toBeNull();
+  });
+});
