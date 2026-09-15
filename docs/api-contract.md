@@ -86,6 +86,7 @@ Every error response — regardless of cause — returns the same outer shape:
 | `ACCOUNT_DEACTIVATED` | `POST /api/auth/login` with correct credentials for a deactivated account (§5.2). Always `403`, and deliberately distinguishable from `INVALID_CREDENTIALS` — the caller has already proven they hold the right credentials. `requireAuth` refuses a deactivated user's still-valid access token too (§5.8), but reuses `TOKEN_INVALID` for that rather than this code. |
 | `INVALID_CURRENT_PASSWORD` | `POST /api/auth/change-password` called with a `currentPassword` that doesn't match the stored hash. Always `401`, distinguishable from `TOKEN_EXPIRED`/`TOKEN_INVALID` so the client shows a field error instead of re-authenticating. |
 | `PASSWORD_UNCHANGED` | `POST /api/auth/change-password` called with a `newPassword` identical to the current password. Always `400`. |
+| `RESET_TOKEN_INVALID` | `POST /api/auth/reset-password` (§5.10) with a token that's expired, already used, unknown or malformed. Always `400`, and deliberately the same code and message for all four cases — distinguishing them would tell an attacker holding a stale token which state it's in. |
 | `EMAIL_ALREADY_EXISTS` | Register called with an email already in the database. |
 | `UNAUTHENTICATED` | Reached a role check with no authenticated user. |
 | `AUTH_HEADER_MISSING` | No `Authorization` header on a request that requires one. |
@@ -461,6 +462,99 @@ Sets `isActive` to `false` and revokes every refresh token belonging to the user
 - **`requireAuth`** — rejects. No token, a malformed header, an expired token, an invalid/tampered token, a token whose user no longer exists, or a token whose user has since been deactivated each 401 with one of `AUTH_HEADER_MISSING`, `AUTH_HEADER_MALFORMED`, `TOKEN_EXPIRED`, `TOKEN_INVALID`. The deactivated case reuses `TOKEN_INVALID` rather than `ACCOUNT_DEACTIVATED` (§3) — that code is reserved for the login refusal (§5.2), and the user is reloaded from the database rather than trusted from the token's claim so this catches an access token minted before deactivation and still inside its expiry window. A valid token loads the user from the database and sets `req.user`. Used on every endpoint that requires a signed-in caller.
 - **`optionalAuth`** — never rejects. A valid token sets `req.user` exactly as `requireAuth` does. Every other case — no header, a malformed header, an expired token, an invalid/tampered token, or a token whose user no longer exists — leaves `req.user` undefined and calls `next()` with no error. For a public endpoint that wants to know who's asking without requiring anyone to be. The only endpoint using it is `GET /api/gigs/:id` (§10.5).
 - **`requireRole(...roles)`** — placed after `requireAuth` or `optionalAuth`. Fails closed: `401 UNAUTHENTICATED` if `req.user` is absent, `403 FORBIDDEN` if `req.user.role` isn't in the allowed list.
+
+### 5.9 Forgot password — `POST /api/auth/forgot-password`
+
+Requests a password reset link for the given email. No `Authorization` header — a locked-out user has none.
+
+**Always returns `200` with the same body** whether the address matches an active account, a deactivated account, or no account at all — the same anti-enumeration rule login already follows (§5.2). When the address matches an active account, a reset email is sent through the transactional email provider carrying a single-use link that expires after **thirty minutes**. A deactivated account receives no email — deactivation means the account cannot be signed into, and a reset must not be a way around that. Requesting again before an earlier link is used invalidates it, so only the most recent link for an account ever works.
+
+**Request body**
+
+```json
+{
+  "email": "ashan.perera@gmail.com"
+}
+```
+
+**Success — `200 OK`** (identical regardless of whether the address matches an account)
+
+```json
+{
+  "success": true,
+  "data": {
+    "message": "If that email is registered, a password reset link has been sent."
+  }
+}
+```
+
+**Failure — `400 Bad Request`** (`email` missing or not a valid address)
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Request validation failed.",
+    "errors": [
+      { "field": "email", "message": "must be a valid email" }
+    ]
+  }
+}
+```
+
+### 5.10 Reset password — `POST /api/auth/reset-password`
+
+Sets a new password from a reset link's token. No `Authorization` header — the person resetting isn't signed in anywhere.
+
+On success, marks the token used, sets the new password, and revokes **every** refresh token belonging to the account — not every other, unlike §5.6, because there is no acting session here to preserve. Returns a success envelope only; it does not sign the caller in or issue a token pair, the client routes to Login.
+
+An expired, already-used, unknown or malformed token all return the same `400 RESET_TOKEN_INVALID` refusal with the same message — distinguishing "expired" from "already used" would tell an attacker holding a stale token which state it's in, and the user's remedy is identical either way: request a new link.
+
+**Request body**
+
+```json
+{
+  "token": "3f9a1c7e2b...",
+  "newPassword": "NewPassword456!"
+}
+```
+
+**Success — `200 OK`**
+
+```json
+{
+  "success": true,
+  "data": null
+}
+```
+
+**Failure — `400 Bad Request`** (token expired, already used, unknown or malformed)
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "RESET_TOKEN_INVALID",
+    "message": "This reset link is invalid or has expired. Request a new one."
+  }
+}
+```
+
+**Failure — `400 Bad Request`** (`newPassword` shorter than the minimum registration enforces)
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Request validation failed.",
+    "errors": [
+      { "field": "newPassword", "message": "must be at least 8 characters" }
+    ]
+  }
+}
+```
 
 ---
 
