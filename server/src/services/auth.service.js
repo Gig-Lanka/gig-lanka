@@ -129,6 +129,37 @@ export const requestPasswordReset = async ({ email }) => {
   });
 };
 
+// An expired, already-used, unknown or malformed token must be
+// indistinguishable to the caller, so every failure path here throws the
+// same RESET_TOKEN_INVALID — never a reason why.
+const resetTokenInvalid = () =>
+  new ApiError(400, 'RESET_TOKEN_INVALID', 'This reset link is invalid or has expired. Request a new one.');
+
+export const resetPassword = async ({ token, newPassword }) => {
+  const tokenHash = hashPasswordResetToken(token);
+  const resetToken = await PasswordResetToken.findOne({ tokenHash });
+
+  if (!resetToken || resetToken.usedAt || resetToken.expiresAt.getTime() <= Date.now()) {
+    throw resetTokenInvalid();
+  }
+
+  const user = await User.findById(resetToken.user);
+
+  if (!user) {
+    throw resetTokenInvalid();
+  }
+
+  user.passwordHash = await bcrypt.hash(newPassword, SALT_ROUNDS);
+  await user.save();
+
+  resetToken.usedAt = new Date();
+  await resetToken.save();
+
+  // The person resetting isn't signed in anywhere, unlike change-password,
+  // so there is no acting session to preserve — every refresh token dies.
+  await revokeAllRefreshTokensForUser(user._id);
+};
+
 export const deactivateOwnAccount = async (user) => {
   user.isActive = false;
   await user.save();

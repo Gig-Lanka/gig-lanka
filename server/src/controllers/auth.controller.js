@@ -7,6 +7,7 @@ import {
   logoutUser,
   changeUserPassword,
   requestPasswordReset,
+  resetPassword,
   deactivateOwnAccount,
 } from '../services/auth.service.js';
 
@@ -48,6 +49,12 @@ export const forgotPassword = asyncHandler(async (req, res) => {
   await requestPasswordReset(req.body);
 
   sendSuccess(res, { message: 'If that email is registered, a password reset link has been sent.' }, 200);
+});
+
+export const resetUserPassword = asyncHandler(async (req, res) => {
+  await resetPassword(req.body);
+
+  sendSuccess(res, null, 200);
 });
 
 export const deactivate = asyncHandler(async (req, res) => {
