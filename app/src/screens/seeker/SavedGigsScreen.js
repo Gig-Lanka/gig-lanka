@@ -27,7 +27,11 @@ export default function SavedGigsScreen() {
 
   const fetchSavedGigs = useCallback(async () => {
     const { gigs: fetched } = await gigApi.getSavedGigs();
-    setGigs(fetched);
+    // GET /gigs/saved doesn't send viewerSaved per item the way listGigs and
+    // getGig do (docs/api-contract.md §10.12) - everything it returns is
+    // saved by definition, so that's filled in here rather than leaving
+    // GigCard's star to fall back to its unsaved default.
+    setGigs(fetched.map((gig) => ({ ...gig, viewerSaved: true })));
     hasLoadedRef.current = true;
   }, []);
 
