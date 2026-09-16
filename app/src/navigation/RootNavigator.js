@@ -149,10 +149,10 @@ export default function RootNavigator() {
   // Browse - a screen outside the tab navigator itself.
   if (guestMode) {
     // Only GigDetail's own Apply action has a gig to remember - the "Sign
-    // in" prompts SeekerTabs shows on My Applications/Profile go through
-    // Button's onPress, which is called with the press event, not a gig id,
-    // so that path is wired through the plain no-arg form below instead of
-    // handleGuestSignIn directly.
+    // in" prompts SeekerTabs shows on Saved/My Applications/Profile go
+    // through Button's onPress, which is called with the press event, not a
+    // gig id, so that path is wired through the plain no-arg form below
+    // instead of handleGuestSignIn directly.
     const handleGuestSignIn = (gigId) => {
       pendingGigIdRef.current = gigId ?? null;
       setGuestMode(false);
