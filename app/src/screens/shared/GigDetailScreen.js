@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 
 import gigApi from '../../api/gigApi';
+import reportApi from '../../api/reportApi';
 import GigBusinessBlock from '../../components/gig/GigBusinessBlock';
 import GigDetailList from '../../components/gig/GigDetailList';
 import ReportSheet from '../../components/report/ReportSheet';
@@ -13,6 +14,7 @@ import Button from '../../components/ui/Button';
 import EmptyState from '../../components/ui/EmptyState';
 import HeroHeader, { HeroSheet, HeroStickyBar } from '../../components/ui/HeroHeader';
 import Loader from '../../components/ui/Loader';
+import Notice from '../../components/ui/Notice';
 import ScreenHeader from '../../components/ui/ScreenHeader';
 import SectionLabel from '../../components/ui/SectionLabel';
 import useAuth from '../../hooks/useAuth';
@@ -31,6 +33,7 @@ import { formatDeadline, formatLocation, formatPay, formatShortDate } from '../.
 const STATUS = { LOADING: 'loading', READY: 'ready', ERROR: 'error', NOT_FOUND: 'not_found' };
 
 const LOAD_ERROR_MESSAGE = 'Could not load this gig. Check your connection and try again.';
+const GENERIC_REPORT_ERROR = 'Could not submit your report. Check your connection and try again.';
 
 // Same status → Badge variant mapping as BusinessGigCard, kept in sync so a
 // gig's status pill reads identically wherever it appears.
@@ -113,6 +116,9 @@ export default function GigDetailScreen({ onSignIn }) {
   const [reloadToken, setReloadToken] = useState(0);
   const [reportSheetVisible, setReportSheetVisible] = useState(false);
   const [reportSheetKey, setReportSheetKey] = useState(0);
+  const [reportSubmitting, setReportSubmitting] = useState(false);
+  const [reportError, setReportError] = useState(null);
+  const [reportNotice, setReportNotice] = useState(null);
 
   // Refetches on every focus, not just on mount - same rationale as the
   // profile screens (GL-145's edit screen calls goBack() rather than
@@ -150,6 +156,46 @@ export default function GigDetailScreen({ onSignIn }) {
   );
 
   const handleBack = () => navigation.goBack();
+
+  function handleCancelReport() {
+    if (reportSubmitting) return;
+    setReportSheetVisible(false);
+  }
+
+  async function handleReportConfirm({ reasonCode, note }) {
+    setReportSubmitting(true);
+    setReportError(null);
+    try {
+      await reportApi.createReport({ targetType: 'gig', targetId: gigId, reasonCode, note });
+      setReportSheetVisible(false);
+      setReportNotice('Your report has been received. The team will look into it.');
+    } catch (error) {
+      const apiError = error.response?.data?.error;
+      if (apiError?.code === 'REPORT_ALREADY_EXISTS') {
+        // AC10: this is information, not a failure - the reporter already
+        // did the right thing once, so the sheet closes the same way a
+        // successful submit does, just with different copy.
+        setReportSheetVisible(false);
+        setReportNotice("You've already reported this gig.");
+      } else if (error.response?.status === 404) {
+        // The gig vanished between opening this screen and submitting the
+        // report - reuse the same "no longer exists" screen the initial
+        // load already falls back to, rather than inventing a second way
+        // to say it.
+        setReportSheetVisible(false);
+        setStatus(STATUS.NOT_FOUND);
+      } else {
+        // 400 (a self-report, if it's somehow reached) and a network
+        // failure both land here: the sheet stays open, the typed note is
+        // untouched since `note` lives in ReportSheet's own state and
+        // neither `visible` nor `key` changed, and Submit is enabled again
+        // for a retry.
+        setReportError(apiError?.message || GENERIC_REPORT_ERROR);
+      }
+    } finally {
+      setReportSubmitting(false);
+    }
+  }
 
   if (status === STATUS.LOADING) {
     return <Loader fullScreen />;
@@ -332,6 +378,7 @@ export default function GigDetailScreen({ onSignIn }) {
         </View>
 
         <HeroSheet className="px-[22px] pb-8 pt-[22px]">
+          {reportNotice ? <Notice className="mb-4">{reportNotice}</Notice> : null}
           {saveConflictMessage ? (
             <Text className="mb-4 text-[13.5px] font-medium text-danger-ink">
               {saveConflictMessage}
@@ -396,6 +443,8 @@ export default function GigDetailScreen({ onSignIn }) {
             <Pressable
               onPress={() => {
                 setReportSheetKey((key) => key + 1);
+                setReportError(null);
+                setReportNotice(null);
                 setReportSheetVisible(true);
               }}
               className="mt-5 items-center py-2"
@@ -437,11 +486,10 @@ export default function GigDetailScreen({ onSignIn }) {
           visible={reportSheetVisible}
           targetType="gig"
           targetName={title}
-          // GL-381 covers the entry point only - submitting to the report
-          // API and the success/duplicate Notice land with reportApi.js in
-          // a later subtask. For now this just closes the sheet.
-          onConfirm={() => setReportSheetVisible(false)}
-          onCancel={() => setReportSheetVisible(false)}
+          submitting={reportSubmitting}
+          error={reportError}
+          onConfirm={handleReportConfirm}
+          onCancel={handleCancelReport}
         />
       ) : null}
     </View>
