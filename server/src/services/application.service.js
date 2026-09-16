@@ -6,7 +6,7 @@ import {
   APPLICATION_STATUSES,
   REJECTION_REASON_CODES,
 } from '../models/application.model.js';
-import { assertGigIsOpen, findOwnedGig } from './gig.service.js';
+import { assertGigIsOpen, findOwnedGig, markGigFilled } from './gig.service.js';
 import { getMyProfile, addSkillTrialResult } from './profile.service.js';
 import { isStorageUrl } from './storage.service.js';
 
@@ -70,6 +70,11 @@ const DECIDED_STATUSES = ['hired', 'completed', 'rejected', 'withdrawn', 'closed
 // gig's applicantCount must not fall when hire -> complete happens. A count
 // that drops when a job is done reads as a bug.
 const LIVE_STATUSES = ['applied', 'viewed', 'shortlisted', 'hired', 'completed'];
+// GL-345: what counts as "holding a position" on the gig. Mirrors
+// LIVE_STATUSES in keeping `completed` counted — finishing the work does not
+// free the position back up — but excludes `applied`, `viewed` and
+// `shortlisted`, which haven't been given one yet.
+const POSITION_HOLDING_STATUSES = ['hired', 'completed'];
 
 // The two Skill Trial reason codes only make sense once a gig can carry a
 // trial, which arrives in Sprint 3. `gig.skillTrial` does not exist on the
@@ -374,6 +379,25 @@ export const transitionApplicationStatus = async (application, targetStatus, act
     }
   }
 
+  // GL-345 §9: a business cannot hire more people than the gig has
+  // positions. Checked here, after assertActorPermitted has already fetched
+  // `gig` for this business actor, so a business hiring into someone else's
+  // full gig still gets 403 rather than this 409 leaking the gig's state.
+  if (targetStatus === 'hired') {
+    const positionsHeld = await Application.countDocuments({
+      gig: application.gig,
+      status: { $in: POSITION_HOLDING_STATUSES },
+    });
+
+    if (positionsHeld >= gig.positions) {
+      throw new ApiError(
+        409,
+        'GIG_POSITIONS_FILLED',
+        `This gig only has ${gig.positions} position(s) and they are all filled.`,
+      );
+    }
+  }
+
   const wasLive = LIVE_STATUSES.includes(currentStatus);
   const isLive = LIVE_STATUSES.includes(targetStatus);
 
@@ -402,6 +426,20 @@ export const transitionApplicationStatus = async (application, targetStatus, act
   // the same operation as the status change that caused it.
   if (wasLive && !isLive) {
     await adjustGigApplicantCount(application.gig, -1);
+  }
+
+  // GL-345: when this hire takes the gig's last open position, the fill
+  // sequence runs in the same request. This only calls markGigFilled —
+  // E3's writer for `gig.status` — never sets the field directly.
+  if (targetStatus === 'hired') {
+    const positionsHeld = await Application.countDocuments({
+      gig: application.gig,
+      status: { $in: POSITION_HOLDING_STATUSES },
+    });
+
+    if (positionsHeld >= gig.positions) {
+      await markGigFilled(application.gig);
+    }
   }
 
   return application;
