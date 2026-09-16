@@ -4,6 +4,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import BrowseGigsScreen from '../screens/seeker/BrowseGigsScreen';
 import MyApplicationsScreen from '../screens/seeker/MyApplicationsScreen';
 import ProfileScreen from '../screens/seeker/ProfileScreen';
+import SavedGigsScreen from '../screens/seeker/SavedGigsScreen';
 import EmptyState from '../components/ui/EmptyState';
 import Screen from '../components/ui/Screen';
 import { TAB_BAR_SCREEN_OPTIONS } from './tabBarTheme';
@@ -12,17 +13,25 @@ const Tab = createBottomTabNavigator();
 
 const ICONS = {
   Browse: 'search',
+  Saved: 'star',
   'My Applications': 'document-text',
   Profile: 'person',
 };
 
-// Browse is the one public surface - the other two tabs assume a signed-in
+// Browse is the one public surface - the other three tabs assume a signed-in
 // user, so guest mode swaps them for a sign-in prompt instead of rendering
 // screens that have nothing to show without an account.
+//
+// `onAction={() => onSignIn?.()}`, not `onAction={onSignIn}`: Button's
+// onPress calls it with the press event, and onSignIn here is the same
+// callback Browse's star calls as `onSignIn(gigId)` - passing the event
+// straight through would land it in RootNavigator's pendingGigIdRef as a
+// bogus "gig id". Calling it explicitly with no arguments keeps this site
+// safe regardless of what the star's call site does.
 function SignInGate({ message, onSignIn }) {
   return (
     <Screen>
-      <EmptyState message={message} actionLabel="Sign in" onAction={onSignIn} />
+      <EmptyState message={message} actionLabel="Sign in" onAction={() => onSignIn?.()} />
     </Screen>
   );
 }
@@ -42,7 +51,21 @@ export default function SeekerTabs({ guest = false, onSignIn }) {
         ),
       })}
     >
-      <Tab.Screen name="Browse" component={BrowseGigsScreen} />
+      {/* Route name stays "Browse" - MyApplicationsScreen navigates here by
+          name (navigation.navigate('Browse')). Only the displayed label
+          changes to match the frames. */}
+      <Tab.Screen name="Browse" options={{ tabBarLabel: 'Gigs' }}>
+        {() => <BrowseGigsScreen guest={guest} onSignIn={onSignIn} />}
+      </Tab.Screen>
+      <Tab.Screen name="Saved">
+        {() =>
+          guest ? (
+            <SignInGate message="Sign in to save gigs." onSignIn={onSignIn} />
+          ) : (
+            <SavedGigsScreen />
+          )
+        }
+      </Tab.Screen>
       <Tab.Screen name="My Applications">
         {() =>
           guest ? (
