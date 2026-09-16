@@ -1262,6 +1262,7 @@ Returned under `data.gig` (single) or `data.gigs` (list), everywhere a gig appea
 - **`filled` is written only by `markGigFilled` in `gig.service.js` (GL-328)** — a system transition with no request behind it and no HTTP route, mirroring `closeIfExpired` below. It moves an `open` gig to `filled`, is idempotent on a gig already `filled`, and refuses a `closed` or `draft` one, so a business's own decision to close early can never be overwritten by a later hire. The only intended caller is the positions-filled auto-close story, once hires reach `positions` — this component only declares the write. `closed`, by contrast, is written either by the owner through `PATCH .../close` (§10.8) or by `closeIfExpired`'s deadline rule (GL-283) — a different rule that only ever fires on a gig still `open`, so it never contends with an already-`filled` one (see §10.5).
 - `postedBy` is a user id, taken from the caller's token on create and never from the request body.
 - `applicantCount` defaults to `0`. It is owned by Application & Hiring (GL-110 and later); this component only declares and defaults it, never writes it.
+- **`waitingOnYouCount` is not part of this base shape** — it appears only on `GET /api/gigs/mine` (§10.6), the one read where it's needed and the one caller allowed to see it.
 - **`skillTrial` is optional and, when the gig has none, omitted entirely — never an empty object.** `requirement` is one of `none` or `optional` (§6.12; the Application & Hiring brief's original third value, `required`, was a considered-and-rejected product decision — a skill trial is never mandatory to apply, in no case). `taskTitle` (max 80 characters) and `taskBrief` (20–1,000 characters) are required whenever `requirement` is `optional`; `submissionType` and `effortEstimate` are each one of the closed vocabularies at §6.12. When `requirement` is `none`, none of the other four fields may be present. Reaches every read that returns a gig — §10.4 (list), §10.5 (single) and §10.6 (mine) — because a seeker must see the task and its effort estimate before deciding to apply.
 - **`savedBy` is never present in any response, for anyone, including the gig's own owner.** `select: false` on the schema path keeps it out of every default query, and the `toJSON` transform deletes it again as a second guard — two independent defences, both still in place now that `PUT /api/gigs/:id/save` (§10.10) actually writes to it. `gig.saved-privacy.test.js` pins that either guard's removal breaks the suite. There is no save-count field anywhere — deliberately asymmetric with `applicantCount`: a business learns how many people applied, never how many, or which, people saved a gig of theirs. The only thing anyone ever learns about saving is their own: `viewerSaved` (§10.4, §10.5), a boolean computed fresh per request from a match check, never the array itself, and never anyone else's.
 - Optional fields (`area`, `startDate`, `applicationsCloseDate`) are omitted, not null, when unset — same convention as profiles (§8.1).
@@ -1474,12 +1475,14 @@ Businesses only. Returns the signed-in business's own gigs **at every status**, 
 {
   "success": true,
   "data": {
-    "gigs": [ /* gig shapes, 10.1, newest first, every status, includes applicantCount */ ]
+    "gigs": [ /* gig shapes, 10.1, newest first, every status, includes applicantCount, plus waitingOnYouCount below */ ]
   }
 }
 ```
 
 Unlike 10.4, there is no pagination or `total` here — a business's own list is expected to be small enough to return in full.
+
+**Each gig also carries `waitingOnYouCount`** (Application & Hiring §6) — the number of applications on it still owed a personal answer: those `shortlisted`, plus any carrying a skill trial submission that hasn't been reviewed yet (a reviewed trial, `passed` or `not_passed`, no longer counts, even if the application's own status hasn't moved on). Computed by `getWaitingOnYouCounts` in `application.service.js` and composed onto this response in `gig.controller.js`, the same way §10.5's `viewerApplication` is — never inside `gig.service.js` itself, which would close an import cycle. It does not expire and is not specific to `filled` gigs, though the business's My Gigs prompt only surfaces it once a gig is `filled`.
 
 **Failure — `401 Unauthorized`, `403 Forbidden`** — as in 10.3.
 
@@ -1663,7 +1666,7 @@ No pagination — like `GET /api/gigs/mine` (§10.6), a seeker's own saved list 
 - `appliedAt` — set once, at creation.
 - `viewedAt`, `decidedAt`, `completedAt` — `null` until set by a transition (§11.3), never cleared or overwritten afterwards. Present as `null` rather than omitted, unlike the optional-field convention elsewhere in this document (§8.1) — these are always-present timestamps that happen to start empty, not optional data.
 - `completedAt` — the moment the business marked the work finished, set the first time `completed` is reached. Separate from `decidedAt`, which is already occupied by the hire and guarded against being overwritten: one application carries both, and they are different moments.
-- `rejectionReasonCode`, `rejectionNote` — absent until the application is rejected. `rejectionReasonCode` is one of §11.4's codes. `rejectionNote` is free text up to 300 characters, stored exactly as written, shown to the applicant verbatim.
+- `rejectionReasonCode`, `rejectionNote` — absent until the application is rejected **or** auto-closed for `positions_filled` (§11.3, §11.4) — the same field carries both, since the seeker's tracker renders them identically. `rejectionReasonCode` is one of §11.4's codes. `rejectionNote` is free text up to 300 characters, stored exactly as written, shown to the applicant verbatim; a system auto-close never sets one.
 - `skillTrialSubmission` — present only when the gig carries a skill trial (`optional`, §6.12); absent entirely for a gig with no trial, the same "stores nothing" rule `Gig.skillTrial` itself follows. Set once, at apply time (§11.7):
 
   ```json
@@ -1712,6 +1715,8 @@ Separately from reachability, five statuses are **decided** — `hired`, `comple
 
 `hired -> completed` is the **only** outgoing move Hired has, and the only way into `completed`. Hiring still requires shortlisting first: `applied -> hired` and `viewed -> hired` are absent from this table and stay refused, so the chain a seeker sees in the tracker is real.
 
+**`-> closed_filled`'s system caller is the positions-filled auto-close sweep** (`sweepPositionsFilledApplications` in `application.service.js`), triggered from inside `transitionApplicationStatus` itself the moment a hire (§11.16) takes a gig's last open position — `applied` and `viewed` applications on that gig are moved to `closed_filled` with the reason code `positions_filled` (§11.4); `shortlisted` is never a candidate, which is why it has no `closed_filled` row above. Neither closing a gig early (§10.8) nor a deadline passing (§10.5's `closeIfExpired`) triggers this sweep — the only trigger is a hire reaching the position count.
+
 Every move not in this table — including any move out of a status that has no outgoing row, and any move backwards (a `shortlisted` application can never return to `viewed`) — is rejected with `409 INVALID_APPLICATION_TRANSITION`, naming the current and attempted status.
 
 "The business that posted the gig" is checked by ownership, not just role: a business token belonging to a different business gets `403 FORBIDDEN`, the same as a seeker token. "The applicant" is checked the same way: a seeker token that isn't the one who submitted the application gets `403 FORBIDDEN`. "System only" means no HTTP-authenticated actor at all — a request from a business (or anyone else) attempting `closed_filled` gets `403 FORBIDDEN`; only an internal call with no `actor` succeeds.
@@ -1729,6 +1734,8 @@ Marking an application complete takes **no reason** — `reason` is inspected on
 - `skill_trial_not_passed` or `skill_trial_not_attempted` while the gig did not carry a skill trial — `400 VALIDATION_ERROR`. Skill Trials arrive in Sprint 3; until a gig can carry one, these two codes are always refused.
 
 `reason.note`, when supplied, is stored on `rejectionNote` exactly as given (§11.1).
+
+**`positions_filled` is now produced** — by the positions-filled auto-close sweep (§11.3, §11.16), never by a rejection request. Every application it moves to `closed_filled` carries `rejectionReasonCode: "positions_filled"` (§11.1) with no note, through the same `transitionApplicationStatus` reason handling a rejection uses, just without the business-selectable check above: a business still cannot reach this code through `PATCH .../reject` (`400 VALIDATION_ERROR`, unchanged), and an authenticated caller still cannot reach `closed_filled` directly (`403 FORBIDDEN`, §11.3).
 
 ### 11.5 Applicant count
 
@@ -2116,13 +2123,24 @@ Only the business that posted the gig (GL-253). Moves the application from `view
 
 Only the business that posted the gig (GL-253). Moves the application from `shortlisted` to `hired` (§11.3), through `transitionApplicationStatus`. `applied -> hired` and `viewed -> hired` are both absent from §11.3's table and stay refused — hiring always requires shortlisting first.
 
+**A business cannot hire more people than the gig has `positions` (§10.1).** Before the move, `hired` and `completed` applications on the gig (`completed` still counts — finishing the work does not free the position) are compared against `positions`; once they meet it, a further hire is refused with `409 GIG_POSITIONS_FILLED`, naming the position count, and nothing about the application changes.
+
+**The fill sequence.** When this hire is the one that takes the last open position, two things happen inside the same request, after the application is saved as `hired`:
+
+1. The gig is moved to `filled` by calling `markGigFilled` (§10.1) — this endpoint never writes `gig.status` itself.
+2. The positions-filled auto-close sweep runs (§11.3): every `applied` or `viewed` application on the gig, except one carrying a submitted skill trial, is moved to `closed_filled` with reason code `positions_filled` (§11.4). `shortlisted` applications, and any application carrying a submitted skill trial regardless of status, are left untouched — they still need a personal decision.
+
+Neither step runs when the hire leaves the gig only partially filled.
+
 **Request body:** none.
 
-**Success — `200 OK`** — same shape as §11.9, with `status: "hired"` and `decidedAt` now set.
+**Success — `200 OK`** — same shape as §11.9, with `status: "hired"` and `decidedAt` now set. `data.application.gig` reflects `filled` when this hire completed the fill sequence.
 
 **Failure — `401`, `403`, `404`** — as in §11.14.
 
 **Failure — `409 Conflict`** (the application isn't `shortlisted`) — as in §11.14.
+
+**Failure — `409 Conflict`** (`GIG_POSITIONS_FILLED` — every position is already held) — see above.
 
 ### 11.17 Reject an application — `PATCH /api/applications/:id/reject`
 
@@ -2229,6 +2247,7 @@ Only the business that posted the gig (GL-352), checked by ownership the same wa
 | `409` | `TRIAL_ALREADY_SUBMITTED` | §11.7 for a `(gig, applicant)` pair whose existing application already carries a skill trial submission. See §3 for the shared definition. |
 | `409` | `INVALID_APPLICATION_TRANSITION` | §11.10 for an application that isn't `applied`, `viewed` or `shortlisted`. §11.11 for an application that isn't `hired`. §11.14 for an application that isn't `applied`. §11.15 for an application that isn't `viewed`. §11.16 for an application that isn't `shortlisted`. §11.17 for an application that isn't `applied`, `viewed` or `shortlisted`. |
 | `409` | `TRIAL_ALREADY_REVIEWED` | §11.18 for a trial that is already marked, or was never submitted or was skipped. See §3 for the shared definition. |
+| `409` | `GIG_POSITIONS_FILLED` | §11.16 for a hire attempted once `hired` plus `completed` applications already meet the gig's `positions`. |
 
 ---
 
