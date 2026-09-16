@@ -1,9 +1,10 @@
 import { useCallback, useState } from 'react';
-import { Animated, Text, View } from 'react-native';
+import { Animated, Pressable, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 
 import { profileApi } from '../../api';
+import ReportSheet from '../../components/report/ReportSheet';
 import Avatar from '../../components/ui/Avatar';
 import Chip from '../../components/ui/Chip';
 import EmptyState from '../../components/ui/EmptyState';
@@ -14,6 +15,7 @@ import ProfileSectionHeader from '../../components/profile/ProfileSectionHeader'
 import ScreenHeader from '../../components/ui/ScreenHeader';
 import RatingSummary from '../../components/review/RatingSummary';
 import SkillsRow from '../../components/profile/SkillsRow';
+import useAuth from '../../hooks/useAuth';
 import useHeroScroll from '../../hooks/useHeroScroll';
 import { formatDateRange } from '../../utils/format';
 
@@ -26,10 +28,13 @@ export default function PublicProfileScreen() {
   const { params } = useRoute();
   const { userId } = params;
   const hero = useHeroScroll();
+  const { user } = useAuth();
 
   const [profile, setProfile] = useState(null);
   const [status, setStatus] = useState(STATUS.LOADING);
   const [reloadToken, setReloadToken] = useState(0);
+  const [reportSheetVisible, setReportSheetVisible] = useState(false);
+  const [reportSheetKey, setReportSheetKey] = useState(0);
 
   // Same retry mechanism as GigDetailScreen: bumping reloadToken changes
   // this callback's identity, which is what makes useFocusEffect refetch
@@ -113,6 +118,12 @@ export default function PublicProfileScreen() {
     education = [],
   } = profile;
   const isBusinessSubject = !Array.isArray(profile.skills);
+
+  // GL-382: this screen is only reachable signed in today, but branch on
+  // `user` explicitly rather than leaning on that - same discipline as
+  // GigDetailScreen's Report action. Also absent on your own profile.
+  const canReport = Boolean(user) && user.id !== userId;
+  const reportLabel = isBusinessSubject ? 'Report this business' : 'Report this person';
 
   return (
     <View className="flex-1 bg-ink">
@@ -224,6 +235,18 @@ export default function PublicProfileScreen() {
               <RatingSummary rating={ratingSummary} userId={userId} className="mt-5" />
             </>
           )}
+
+          {canReport ? (
+            <Pressable
+              onPress={() => {
+                setReportSheetKey((key) => key + 1);
+                setReportSheetVisible(true);
+              }}
+              className="mt-5 items-center py-2"
+            >
+              <Text className="text-[12.5px] font-semibold text-muted">{reportLabel}</Text>
+            </Pressable>
+          ) : null}
         </HeroSheet>
       </Animated.ScrollView>
 
@@ -242,6 +265,21 @@ export default function PublicProfileScreen() {
           />
         </SafeAreaView>
       </Animated.View>
+
+      {canReport ? (
+        <ReportSheet
+          key={reportSheetKey}
+          visible={reportSheetVisible}
+          targetType={isBusinessSubject ? 'business' : 'person'}
+          targetName={name}
+          // GL-382 covers the entry point only - submitting to the report
+          // API and the success/duplicate Notice land with reportApi.js in
+          // a later subtask, same as GigDetailScreen's Report action. For
+          // now this just closes the sheet.
+          onConfirm={() => setReportSheetVisible(false)}
+          onCancel={() => setReportSheetVisible(false)}
+        />
+      ) : null}
     </View>
   );
 }
