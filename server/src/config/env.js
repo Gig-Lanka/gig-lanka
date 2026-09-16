@@ -10,7 +10,7 @@ const requireEnv = (key) => {
   return value;
 };
 
-const emailTransport = process.env.EMAIL_TRANSPORT === 'resend' ? 'resend' : 'noop';
+const emailTransport = process.env.EMAIL_TRANSPORT === 'brevo' ? 'brevo' : 'noop';
 
 export const env = {
   nodeEnv: process.env.NODE_ENV || 'development',
@@ -25,5 +25,5 @@ export const env = {
   supabaseBucketName: requireEnv('SUPABASE_BUCKET_NAME'),
   emailTransport,
   emailFrom: process.env.EMAIL_FROM,
-  resendApiKey: emailTransport === 'resend' ? requireEnv('RESEND_API_KEY') : process.env.RESEND_API_KEY,
+  brevoApiKey: emailTransport === 'brevo' ? requireEnv('BREVO_API_KEY') : process.env.BREVO_API_KEY,
 };
