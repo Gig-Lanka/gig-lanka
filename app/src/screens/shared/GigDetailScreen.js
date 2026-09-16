@@ -1,20 +1,25 @@
-import { useCallback, useState } from 'react';
-import { Animated, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useCallback, useEffect, useState } from 'react';
+import { Animated, Pressable, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 
 import gigApi from '../../api/gigApi';
+import reportApi from '../../api/reportApi';
 import GigBusinessBlock from '../../components/gig/GigBusinessBlock';
 import GigDetailList from '../../components/gig/GigDetailList';
+import ReportSheet from '../../components/report/ReportSheet';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import EmptyState from '../../components/ui/EmptyState';
 import HeroHeader, { HeroSheet, HeroStickyBar } from '../../components/ui/HeroHeader';
 import Loader from '../../components/ui/Loader';
+import Notice from '../../components/ui/Notice';
 import ScreenHeader from '../../components/ui/ScreenHeader';
 import SectionLabel from '../../components/ui/SectionLabel';
 import useAuth from '../../hooks/useAuth';
 import useHeroScroll from '../../hooks/useHeroScroll';
+import useSavedToggle from '../../hooks/useSavedToggle';
 import {
   COMMITMENT_LENGTHS,
   GIG_CATEGORIES,
@@ -28,6 +33,7 @@ import { formatDeadline, formatLocation, formatPay, formatShortDate } from '../.
 const STATUS = { LOADING: 'loading', READY: 'ready', ERROR: 'error', NOT_FOUND: 'not_found' };
 
 const LOAD_ERROR_MESSAGE = 'Could not load this gig. Check your connection and try again.';
+const GENERIC_REPORT_ERROR = 'Could not submit your report. Check your connection and try again.';
 
 // Same status → Badge variant mapping as BusinessGigCard, kept in sync so a
 // gig's status pill reads identically wherever it appears.
@@ -37,6 +43,11 @@ const BADGE_VARIANT_BY_STATUS = {
   closed: 'muted',
   draft: 'neutral',
 };
+
+// Ionicons takes a literal color, not a className - mirrors the `signal` /
+// `star-off` tokens in tailwind.config.js, same as GigCard's own star.
+const SIGNAL_HEX = '#FF4A1C';
+const STAR_OFF_HEX = '#C6C7CF';
 
 function labelFor(list, value) {
   return list.find((entry) => entry.value === value)?.label ?? value;
@@ -62,6 +73,34 @@ const ALREADY_APPLIED_LABEL_BY_STATUS = {
   withdrawn: "You withdrew — you can't apply to this gig again",
 };
 
+// A separate component, not inline in GigDetailScreen, so useSavedToggle's
+// own first-mount lazy init captures the real `initialSaved` value: this
+// only mounts once `gig` has actually loaded (it's built from state that's
+// still null during STATUS.LOADING), unlike GigDetailScreen itself, which
+// stays mounted across that transition and would otherwise lock the hook's
+// initial state to the pre-load "false".
+function GigDetailSaveStar({ gigId, initialSaved, onConflict }) {
+  const { saved, toggle, conflictMessage } = useSavedToggle(gigId, initialSaved);
+
+  useEffect(() => {
+    onConflict?.(conflictMessage);
+  }, [conflictMessage, onConflict]);
+
+  return (
+    <Pressable
+      onPress={toggle}
+      hitSlop={10}
+      className="h-[34px] w-[34px] items-center justify-center"
+    >
+      <Ionicons
+        name={saved ? 'star' : 'star-outline'}
+        size={24}
+        color={saved ? SIGNAL_HEX : STAR_OFF_HEX}
+      />
+    </Pressable>
+  );
+}
+
 export default function GigDetailScreen({ onSignIn }) {
   const navigation = useNavigation();
   const { params } = useRoute();
@@ -73,7 +112,13 @@ export default function GigDetailScreen({ onSignIn }) {
   const [business, setBusiness] = useState(null);
   const [viewerApplication, setViewerApplication] = useState(null);
   const [status, setStatus] = useState(STATUS.LOADING);
+  const [saveConflictMessage, setSaveConflictMessage] = useState(null);
   const [reloadToken, setReloadToken] = useState(0);
+  const [reportSheetVisible, setReportSheetVisible] = useState(false);
+  const [reportSheetKey, setReportSheetKey] = useState(0);
+  const [reportSubmitting, setReportSubmitting] = useState(false);
+  const [reportError, setReportError] = useState(null);
+  const [reportNotice, setReportNotice] = useState(null);
 
   // Refetches on every focus, not just on mount - same rationale as the
   // profile screens (GL-145's edit screen calls goBack() rather than
@@ -111,6 +156,46 @@ export default function GigDetailScreen({ onSignIn }) {
   );
 
   const handleBack = () => navigation.goBack();
+
+  function handleCancelReport() {
+    if (reportSubmitting) return;
+    setReportSheetVisible(false);
+  }
+
+  async function handleReportConfirm({ reasonCode, note }) {
+    setReportSubmitting(true);
+    setReportError(null);
+    try {
+      await reportApi.createReport({ targetType: 'gig', targetId: gigId, reasonCode, note });
+      setReportSheetVisible(false);
+      setReportNotice('Your report has been received. The team will look into it.');
+    } catch (error) {
+      const apiError = error.response?.data?.error;
+      if (apiError?.code === 'REPORT_ALREADY_EXISTS') {
+        // AC10: this is information, not a failure - the reporter already
+        // did the right thing once, so the sheet closes the same way a
+        // successful submit does, just with different copy.
+        setReportSheetVisible(false);
+        setReportNotice("You've already reported this gig.");
+      } else if (error.response?.status === 404) {
+        // The gig vanished between opening this screen and submitting the
+        // report - reuse the same "no longer exists" screen the initial
+        // load already falls back to, rather than inventing a second way
+        // to say it.
+        setReportSheetVisible(false);
+        setStatus(STATUS.NOT_FOUND);
+      } else {
+        // 400 (a self-report, if it's somehow reached) and a network
+        // failure both land here: the sheet stays open, the typed note is
+        // untouched since `note` lives in ReportSheet's own state and
+        // neither `visible` nor `key` changed, and Submit is enabled again
+        // for a retry.
+        setReportError(apiError?.message || GENERIC_REPORT_ERROR);
+      }
+    } finally {
+      setReportSubmitting(false);
+    }
+  }
 
   if (status === STATUS.LOADING) {
     return <Loader fullScreen />;
@@ -215,6 +300,12 @@ export default function GigDetailScreen({ onSignIn }) {
   const isOwner = user?.role === 'business' && business?.id === user?.id;
   const isSeeker = user?.role === 'seeker';
 
+  // GL-381: a guest sees no Report action at all - reporting is not
+  // something to nudge an anonymous visitor into, and this screen already
+  // knows guest state from `user` rather than needing a routeNames lookup.
+  // A business reporting its own gig makes no sense either.
+  const canReport = Boolean(user) && !isOwner;
+
   let primaryAction = null;
   if (isOwner) {
     primaryAction = {
@@ -257,7 +348,18 @@ export default function GigDetailScreen({ onSignIn }) {
         contentContainerClassName="grow"
       >
         <View onLayout={hero.onHeroLayout}>
-          <HeroHeader onBack={handleBack}>
+          <HeroHeader
+            onBack={handleBack}
+            rightSlot={
+              isSeeker ? (
+                <GigDetailSaveStar
+                  gigId={gigId}
+                  initialSaved={gig.viewerSaved}
+                  onConflict={setSaveConflictMessage}
+                />
+              ) : undefined
+            }
+          >
             <Text className="font-display text-[25px] leading-[29px] tracking-[-0.025em] text-paper">
               {title}
             </Text>
@@ -276,6 +378,13 @@ export default function GigDetailScreen({ onSignIn }) {
         </View>
 
         <HeroSheet className="px-[22px] pb-8 pt-[22px]">
+          {reportNotice ? <Notice className="mb-4">{reportNotice}</Notice> : null}
+          {saveConflictMessage ? (
+            <Text className="mb-4 text-[13.5px] font-medium text-danger-ink">
+              {saveConflictMessage}
+            </Text>
+          ) : null}
+
           {deadline ? (
             <View
               className={[
@@ -298,7 +407,7 @@ export default function GigDetailScreen({ onSignIn }) {
             business={business}
             postedAt={createdAt}
             onPress={handleViewBusiness}
-            className={deadline ? 'mt-4' : undefined}
+            className={deadline || saveConflictMessage ? 'mt-4' : undefined}
           />
 
           <View className="mt-5">
@@ -329,6 +438,20 @@ export default function GigDetailScreen({ onSignIn }) {
             <SectionLabel>Details</SectionLabel>
             <GigDetailList rows={detailRows} className="mt-2" />
           </View>
+
+          {canReport ? (
+            <Pressable
+              onPress={() => {
+                setReportSheetKey((key) => key + 1);
+                setReportError(null);
+                setReportNotice(null);
+                setReportSheetVisible(true);
+              }}
+              className="mt-5 items-center py-2"
+            >
+              <Text className="text-[12.5px] font-semibold text-muted">Report this gig</Text>
+            </Pressable>
+          ) : null}
         </HeroSheet>
       </Animated.ScrollView>
 
@@ -356,6 +479,19 @@ export default function GigDetailScreen({ onSignIn }) {
           <HeroStickyBar title={title} onBack={handleBack} visible />
         </SafeAreaView>
       </Animated.View>
+
+      {canReport ? (
+        <ReportSheet
+          key={reportSheetKey}
+          visible={reportSheetVisible}
+          targetType="gig"
+          targetName={title}
+          submitting={reportSubmitting}
+          error={reportError}
+          onConfirm={handleReportConfirm}
+          onCancel={handleCancelReport}
+        />
+      ) : null}
     </View>
   );
 }

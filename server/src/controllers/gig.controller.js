@@ -13,7 +13,7 @@ import {
   listSavedGigs,
   getViewerSaved,
 } from '../services/gig.service.js';
-import { getViewerApplication } from '../services/application.service.js';
+import { getViewerApplication, getWaitingOnYouCounts } from '../services/application.service.js';
 
 export const createGig = asyncHandler(async (req, res) => {
   const gig = await createGigService(req.body, req.user.id);
@@ -44,10 +44,24 @@ export const getGig = asyncHandler(async (req, res) => {
   sendSuccess(res, { ...result, viewerApplication, viewerSaved }, 200);
 });
 
+// GL-347: composes gig.service.js's list with application.service.js's
+// waiting-on-you counts here, the same reason getGig composes
+// viewerApplication here rather than gig.service.js importing the
+// application service — that import would close a cycle, since
+// application.service.js already imports gig.service.js for assertGigIsOpen.
 export const getMyGigs = asyncHandler(async (req, res) => {
-  const result = await listMyGigs(req.user.id);
+  const { gigs } = await listMyGigs(req.user.id);
+  const waitingCounts = await getWaitingOnYouCounts(gigs.map((gig) => gig.id));
 
-  sendSuccess(res, result, 200);
+  const gigsWithWaitingCount = gigs.map((gig) => {
+    const gigJson = gig.toJSON();
+    return {
+      ...gigJson,
+      waitingOnYouCount: waitingCounts.get(gigJson.id.toString()) ?? 0,
+    };
+  });
+
+  sendSuccess(res, { gigs: gigsWithWaitingCount }, 200);
 });
 
 export const updateGig = asyncHandler(async (req, res) => {

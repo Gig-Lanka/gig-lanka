@@ -202,7 +202,7 @@ were reachable.
 | Rate flow | ✅ | `shared/rate/` — `RateFlowNavigator` + `RateFlowProvider` + four steps (subject & stars → categories → written review → confirmation). Direction and subject are derived once in the provider from the application and the signed-in user, so the seeker and business sides can never disagree. Double-submit guard, draft preserved on failure, 20–1000 character validation. **Now reachable** via Completed Gigs. |
 | Rating entry point | ✅ | GL-223/GL-271. `shared/CompletedGigsScreen` + `CompletedGigCard`, registered in `RootNavigator` and reached from both My Gigs and My Applications (GL-272). The card has three states — `awaiting` (shows "Nd left" and the only action), `rated` ("Rated ✓") and `closed` ("Rating closed", the 14-day window expired). Expired and rated cards deliberately offer **no** action rather than a dead button. |
 | Reviews list screen | ✅ | GL-303 (GL-373–GL-376). Was Bineth's designated pull-forward, delivered Sprint 3 — see §7.6. |
-| Inline rating on the gig detail business block | ⬜ | Sprint 3. GL-122 AC6 is still unmet — see §7.10. |
+| Inline rating on the gig detail business block | ✅ | GL-304 (GL-377–GL-379). GL-122 AC6 finally met — see §7.10. |
 | Report / moderation | ⬜ | Sprint 3. |
 
 ### E6 · Admin & Moderation
@@ -460,18 +460,22 @@ thirteen points. Either ticket these separately outside the budget, or stop nami
 it. This is recorded in `ROADMAP.md` under E1. **Sprint 3 does both: separate tickets for all five,
 and nothing pre-named for GL-286.**
 
-### 7.10 🔴 Open — the business-block rating is still unmet (GL-122 AC6)
-[`GigBusinessBlock.js:14`](../app/src/components/gig/GigBusinessBlock.js) still carries its
-`// No rating slot` comment and `gig.service.js` still sends no rating for the business, so the gig
-detail business block shows no rating. Deferred deliberately — closing it costs work in two epics
-and the information is one tap away on the public profile — and it pairs with the reviews list in
-Sprint 3. Worth noting it is the **second** of three instances of the same pattern: something left
-inert pending a later story (the Apply button was the first, `RatingSummary`'s disabled button is
-the third).
-
-**Ticketed for Sprint 3 as GL-304**, sequenced after GL-303 so a tapped-through rating has a real
-destination. The only server change is one field on `getPublicIdentity` in `profile.service.js` —
-`gig.service.js` already passes that shape straight through, so E3 is untouched.
+### 7.10 ✅ Closed — the business-block rating was unmet (GL-122 AC6)
+**GL-304 resolved it in full, across three sub-tasks.** GL-377 widened `getPublicIdentity` in
+`profile.service.js` by one field — `ratingSummary` alongside `name` and `photo` — staying
+read-only and non-creating, since the function is called by public, unauthenticated endpoints. A
+business with no profile document reads back `ratingSummary: null`, the same contract `name` and
+`photo` already had, rather than a fabricated zeroed aggregate; `gig.service.js` needed no change,
+since it already passes `getPublicIdentity`'s result straight through as `business`. GL-378 gave
+`RatingSummary` a `compact` variant — the average, a small star row and the review count on one
+line, following the `size`/`variant` convention `Button` and `Chip` already use — that renders
+nothing at all at zero reviews rather than a guessed score, the same reasoning
+`GigBusinessBlock`'s old comment gave for leaving the slot empty. GL-379 rendered it beneath the
+business name in `GigBusinessBlock`, deleted the stale `// No rating slot` comment, and confirmed
+the guest path specifically renders it too, since `GET /api/gigs/:id` is public through
+`optionalAuth`. It is the **second** of three instances of the same pattern — something left inert
+pending a later story — to close, after the Apply button (§7.1); `RatingSummary`'s disabled button
+was the third, closed by GL-303/GL-376 (§7.6).
 
 ### 7.11 Smaller items, unchanged
 - `DELETE /api/gigs/:id` has no cascade; applications survive with a dangling `gig` reference and

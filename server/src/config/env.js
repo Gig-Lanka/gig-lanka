@@ -26,4 +26,5 @@ export const env = {
   emailTransport,
   emailFrom: process.env.EMAIL_FROM,
   brevoApiKey: emailTransport === 'brevo' ? requireEnv('BREVO_API_KEY') : process.env.BREVO_API_KEY,
+  passwordResetUrlBase: process.env.PASSWORD_RESET_URL_BASE || 'https://giglanka.app/reset-password',
 };

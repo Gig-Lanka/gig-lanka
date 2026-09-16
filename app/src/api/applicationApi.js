@@ -19,18 +19,22 @@ async function getMyApplications() {
 
 /**
  * `POST /api/gigs/:gigId/applications` - apply to a gig (§11.7). Every field
- * except `skillTrialSubmission` is stripped server-side, whatever the
- * client sends. `skillTrialSubmission` is optional - GL-357: the seeker's
- * skill trial response, `{ textResponse, fileUrl }`, assembled by
+ * except `skillTrialSubmission` and `resumeUrl` is stripped server-side,
+ * whatever the client sends. `skillTrialSubmission` is optional - GL-357: the
+ * seeker's skill trial response, `{ textResponse, fileUrl }`, assembled by
  * SkillTrialScreen and carried here through Apply's navigation params, sent
  * in the same request rather than through a submission endpoint of its own.
- * Resolves to `{ application, profileIncomplete }` - `profileIncomplete`
+ * `resumeUrl` is optional too - GL-363: the URL `POST /api/uploads` (folder
+ * `resumes`) returned for a PDF picked on Apply, or `undefined` when none was
+ * attached, which the server stores as no resume at all rather than an empty
+ * string. Resolves to `{ application, profileIncomplete }` - `profileIncomplete`
  * mirrors the same no-experience-and-no-education check the apply screen
  * runs beforehand, computed again server-side at the moment of submission.
  */
-async function apply(gigId, skillTrialSubmission) {
+async function apply(gigId, skillTrialSubmission, resumeUrl) {
   const response = await client.post(`/gigs/${gigId}/applications`, {
     skillTrialSubmission,
+    resumeUrl,
   });
   return response.data.data;
 }

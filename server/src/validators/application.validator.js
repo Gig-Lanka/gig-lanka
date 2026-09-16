@@ -1,17 +1,21 @@
 import Joi from 'joi';
 
-// `skillTrialSubmission` is the only accepted field — status, appliedAt and
-// the profile snapshot stay server-derived and are stripped (stripUnknown,
-// validate.middleware.js) if a caller sends them. Content validation against
-// the gig's submissionType (text length, file requirement per type) is a
-// sibling sub-task's concern; this only shapes the two client-settable
-// fields — `result`, `submittedAt` etc. are server-derived and stripped the
-// same way if sent here.
+// `skillTrialSubmission` and `resumeUrl` are the only accepted fields —
+// status, appliedAt and the profile snapshot stay server-derived and are
+// stripped (stripUnknown, validate.middleware.js) if a caller sends them.
+// Content validation against the gig's submissionType (text length, file
+// requirement per type) is a sibling sub-task's concern; this only shapes
+// the client-settable fields — `result`, `submittedAt` etc. are
+// server-derived and stripped the same way if sent here. `resumeUrl`'s
+// storage-origin check (GL-362) needs the configured storage host, so it
+// lives in application.service.js, not here — this only shapes it as a
+// string.
 export const applyToGigSchema = Joi.object({
   skillTrialSubmission: Joi.object({
     textResponse: Joi.string(),
     fileUrl: Joi.string(),
   }).optional(),
+  resumeUrl: Joi.string().optional(),
 });
 
 // The four rejection rules — a missing code, a code that isn't

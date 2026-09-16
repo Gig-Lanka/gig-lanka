@@ -112,8 +112,10 @@ export default function RootNavigator() {
   // instead of the tab home once authenticated. A ref, not state - reading
   // it never needs to trigger a render, only the one-shot effect below,
   // and mutating it there would otherwise be a same-effect setState.
-  // Set only by the guest Apply action; untouched by every other sign-in
-  // path, so a guest who never tapped Apply keeps landing on Main as before.
+  // Set by the guest Apply action and by tapping a guest's star on Browse
+  // (both call handleGuestSignIn with a real gig id); every other sign-in
+  // path calls it with none, so a guest who never touched a gig keeps
+  // landing on Main as before.
   const pendingGigIdRef = useRef(null);
 
   if (status !== prevStatus) {
@@ -148,11 +150,12 @@ export default function RootNavigator() {
   // bare, as before GL-122) so a guest can still reach GigDetail from
   // Browse - a screen outside the tab navigator itself.
   if (guestMode) {
-    // Only GigDetail's own Apply action has a gig to remember - the "Sign
-    // in" prompts SeekerTabs shows on My Applications/Profile go through
-    // Button's onPress, which is called with the press event, not a gig id,
-    // so that path is wired through the plain no-arg form below instead of
-    // handleGuestSignIn directly.
+    // Passed straight through to SeekerTabs and GigDetailScreen - both are
+    // safe to call this with or without a gig id. SeekerTabs' own SignInGate
+    // calls it as `onSignIn?.()` (no argument, since Button's onPress would
+    // otherwise hand it the press event); Browse's star and GigDetail's
+    // Apply action each call it with a real gig id, GL-340's "land back on
+    // this gig" case.
     const handleGuestSignIn = (gigId) => {
       pendingGigIdRef.current = gigId ?? null;
       setGuestMode(false);
@@ -161,7 +164,7 @@ export default function RootNavigator() {
     return (
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         <Stack.Screen name="Main">
-          {() => <SeekerTabs guest onSignIn={() => handleGuestSignIn()} />}
+          {() => <SeekerTabs guest onSignIn={handleGuestSignIn} />}
         </Stack.Screen>
         <Stack.Screen name="GigDetail">
           {() => <GigDetailScreen onSignIn={handleGuestSignIn} />}

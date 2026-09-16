@@ -86,6 +86,7 @@ Every error response — regardless of cause — returns the same outer shape:
 | `ACCOUNT_DEACTIVATED` | `POST /api/auth/login` with correct credentials for a deactivated account (§5.2). Always `403`, and deliberately distinguishable from `INVALID_CREDENTIALS` — the caller has already proven they hold the right credentials. `requireAuth` refuses a deactivated user's still-valid access token too (§5.8), but reuses `TOKEN_INVALID` for that rather than this code. |
 | `INVALID_CURRENT_PASSWORD` | `POST /api/auth/change-password` called with a `currentPassword` that doesn't match the stored hash. Always `401`, distinguishable from `TOKEN_EXPIRED`/`TOKEN_INVALID` so the client shows a field error instead of re-authenticating. |
 | `PASSWORD_UNCHANGED` | `POST /api/auth/change-password` called with a `newPassword` identical to the current password. Always `400`. |
+| `RESET_TOKEN_INVALID` | `POST /api/auth/reset-password` (§5.10) with a token that's expired, already used, unknown or malformed. Always `400`, and deliberately the same code and message for all four cases — distinguishing them would tell an attacker holding a stale token which state it's in. |
 | `EMAIL_ALREADY_EXISTS` | Register called with an email already in the database. |
 | `UNAUTHENTICATED` | Reached a role check with no authenticated user. |
 | `AUTH_HEADER_MISSING` | No `Authorization` header on a request that requires one. |
@@ -461,6 +462,99 @@ Sets `isActive` to `false` and revokes every refresh token belonging to the user
 - **`requireAuth`** — rejects. No token, a malformed header, an expired token, an invalid/tampered token, a token whose user no longer exists, or a token whose user has since been deactivated each 401 with one of `AUTH_HEADER_MISSING`, `AUTH_HEADER_MALFORMED`, `TOKEN_EXPIRED`, `TOKEN_INVALID`. The deactivated case reuses `TOKEN_INVALID` rather than `ACCOUNT_DEACTIVATED` (§3) — that code is reserved for the login refusal (§5.2), and the user is reloaded from the database rather than trusted from the token's claim so this catches an access token minted before deactivation and still inside its expiry window. A valid token loads the user from the database and sets `req.user`. Used on every endpoint that requires a signed-in caller.
 - **`optionalAuth`** — never rejects. A valid token sets `req.user` exactly as `requireAuth` does. Every other case — no header, a malformed header, an expired token, an invalid/tampered token, or a token whose user no longer exists — leaves `req.user` undefined and calls `next()` with no error. For a public endpoint that wants to know who's asking without requiring anyone to be. The only endpoint using it is `GET /api/gigs/:id` (§10.5).
 - **`requireRole(...roles)`** — placed after `requireAuth` or `optionalAuth`. Fails closed: `401 UNAUTHENTICATED` if `req.user` is absent, `403 FORBIDDEN` if `req.user.role` isn't in the allowed list.
+
+### 5.9 Forgot password — `POST /api/auth/forgot-password`
+
+Requests a password reset link for the given email. No `Authorization` header — a locked-out user has none.
+
+**Always returns `200` with the same body** whether the address matches an active account, a deactivated account, or no account at all — the same anti-enumeration rule login already follows (§5.2). When the address matches an active account, a reset email is sent through the transactional email provider carrying a single-use link that expires after **thirty minutes**. A deactivated account receives no email — deactivation means the account cannot be signed into, and a reset must not be a way around that. Requesting again before an earlier link is used invalidates it, so only the most recent link for an account ever works.
+
+**Request body**
+
+```json
+{
+  "email": "ashan.perera@gmail.com"
+}
+```
+
+**Success — `200 OK`** (identical regardless of whether the address matches an account)
+
+```json
+{
+  "success": true,
+  "data": {
+    "message": "If that email is registered, a password reset link has been sent."
+  }
+}
+```
+
+**Failure — `400 Bad Request`** (`email` missing or not a valid address)
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Request validation failed.",
+    "errors": [
+      { "field": "email", "message": "must be a valid email" }
+    ]
+  }
+}
+```
+
+### 5.10 Reset password — `POST /api/auth/reset-password`
+
+Sets a new password from a reset link's token. No `Authorization` header — the person resetting isn't signed in anywhere.
+
+On success, marks the token used, sets the new password, and revokes **every** refresh token belonging to the account — not every other, unlike §5.6, because there is no acting session here to preserve. Returns a success envelope only; it does not sign the caller in or issue a token pair, the client routes to Login.
+
+An expired, already-used, unknown or malformed token all return the same `400 RESET_TOKEN_INVALID` refusal with the same message — distinguishing "expired" from "already used" would tell an attacker holding a stale token which state it's in, and the user's remedy is identical either way: request a new link.
+
+**Request body**
+
+```json
+{
+  "token": "3f9a1c7e2b...",
+  "newPassword": "NewPassword456!"
+}
+```
+
+**Success — `200 OK`**
+
+```json
+{
+  "success": true,
+  "data": null
+}
+```
+
+**Failure — `400 Bad Request`** (token expired, already used, unknown or malformed)
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "RESET_TOKEN_INVALID",
+    "message": "This reset link is invalid or has expired. Request a new one."
+  }
+}
+```
+
+**Failure — `400 Bad Request`** (`newPassword` shorter than the minimum registration enforces)
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Request validation failed.",
+    "errors": [
+      { "field": "newPassword", "message": "must be at least 8 characters" }
+    ]
+  }
+}
+```
 
 ---
 
@@ -1045,7 +1139,7 @@ Backs profile photos this sprint; skill trial file submissions and resume PDFs r
 | Field | Rule |
 |---|---|
 | `file` | **Required.** The file itself. PNG, JPG or PDF only, checked against both its MIME type and its extension. Max 5MB. |
-| `folder` | **Required.** A closed list of purposes, not a free path — a caller can't write anywhere else in the bucket. Only `avatars` this sprint. |
+| `folder` | **Required.** A closed list of purposes, not a free path — a caller can't write anywhere else in the bucket: `avatars`, `trials` (a skill trial's file submission, §11.7) or `resumes` (§11.7's `resumeUrl`). All three share the same 5MB cap and PNG/JPG/PDF allow-list below, whatever the calling screen further restricts client-side. |
 
 **Success — `201 Created`**
 
@@ -1069,7 +1163,7 @@ The returned name is generated server-side and unguessable — never the filenam
     "code": "VALIDATION_ERROR",
     "message": "Request validation failed.",
     "errors": [
-      { "field": "folder", "message": "must be one of [avatars]" }
+      { "field": "folder", "message": "must be one of [avatars, trials, resumes]" }
     ]
   }
 }
@@ -1168,6 +1262,7 @@ Returned under `data.gig` (single) or `data.gigs` (list), everywhere a gig appea
 - **`filled` is written only by `markGigFilled` in `gig.service.js` (GL-328)** — a system transition with no request behind it and no HTTP route, mirroring `closeIfExpired` below. It moves an `open` gig to `filled`, is idempotent on a gig already `filled`, and refuses a `closed` or `draft` one, so a business's own decision to close early can never be overwritten by a later hire. The only intended caller is the positions-filled auto-close story, once hires reach `positions` — this component only declares the write. `closed`, by contrast, is written either by the owner through `PATCH .../close` (§10.8) or by `closeIfExpired`'s deadline rule (GL-283) — a different rule that only ever fires on a gig still `open`, so it never contends with an already-`filled` one (see §10.5).
 - `postedBy` is a user id, taken from the caller's token on create and never from the request body.
 - `applicantCount` defaults to `0`. It is owned by Application & Hiring (GL-110 and later); this component only declares and defaults it, never writes it.
+- **`waitingOnYouCount` is not part of this base shape** — it appears only on `GET /api/gigs/mine` (§10.6), the one read where it's needed and the one caller allowed to see it.
 - **`skillTrial` is optional and, when the gig has none, omitted entirely — never an empty object.** `requirement` is one of `none` or `optional` (§6.12; the Application & Hiring brief's original third value, `required`, was a considered-and-rejected product decision — a skill trial is never mandatory to apply, in no case). `taskTitle` (max 80 characters) and `taskBrief` (20–1,000 characters) are required whenever `requirement` is `optional`; `submissionType` and `effortEstimate` are each one of the closed vocabularies at §6.12. When `requirement` is `none`, none of the other four fields may be present. Reaches every read that returns a gig — §10.4 (list), §10.5 (single) and §10.6 (mine) — because a seeker must see the task and its effort estimate before deciding to apply.
 - **`savedBy` is never present in any response, for anyone, including the gig's own owner.** `select: false` on the schema path keeps it out of every default query, and the `toJSON` transform deletes it again as a second guard — two independent defences, both still in place now that `PUT /api/gigs/:id/save` (§10.10) actually writes to it. `gig.saved-privacy.test.js` pins that either guard's removal breaks the suite. There is no save-count field anywhere — deliberately asymmetric with `applicantCount`: a business learns how many people applied, never how many, or which, people saved a gig of theirs. The only thing anyone ever learns about saving is their own: `viewerSaved` (§10.4, §10.5), a boolean computed fresh per request from a match check, never the array itself, and never anyone else's.
 - Optional fields (`area`, `startDate`, `applicationsCloseDate`) are omitted, not null, when unset — same convention as profiles (§8.1).
@@ -1180,11 +1275,12 @@ Returned under `data.gig` (single) or `data.gigs` (list), everywhere a gig appea
 {
   "id": "64f1a2b3c4d5e6f7a8b9c0d4",
   "name": "Kandy Coffee Co",
-  "photo": "https://cdn.giglanka.test/u/kandy.jpg"
+  "photo": "https://cdn.giglanka.test/u/kandy.jpg",
+  "ratingSummary": { "averageRating": 4.6, "reviewCount": 12, "topCategories": ["communication", "punctuality"], "distribution": { "1": 0, "2": 0, "3": 1, "4": 3, "5": 8 } }
 }
 ```
 
-`id` matches the gig's `postedBy`. `name` and `photo` come from the business's profile (§8.1), not the `User` record. If the business has never filled in a profile, both read back as `null` rather than the request failing.
+`id` matches the gig's `postedBy`. `name`, `photo` and `ratingSummary` come from the business's profile (§8.1), not the `User` record. If the business has never filled in a profile, `name` and `photo` read back as `null` rather than the request failing, and so does `ratingSummary` — a business with no profile document reads back `ratingSummary: null`, never a fabricated zeroed aggregate (§6.10's shape, once a profile and at least one review both exist). Distinct from a business that *has* a profile but no reviews yet, where `ratingSummary` is the real zeroed aggregate stored on that profile (`averageRating: 0`, `reviewCount: 0`, …). The client treats both cases the same way: no rating renders on the business block either way (GL-379).
 
 ### 10.3 Create a gig — `POST /api/gigs`
 
@@ -1379,12 +1475,14 @@ Businesses only. Returns the signed-in business's own gigs **at every status**, 
 {
   "success": true,
   "data": {
-    "gigs": [ /* gig shapes, 10.1, newest first, every status, includes applicantCount */ ]
+    "gigs": [ /* gig shapes, 10.1, newest first, every status, includes applicantCount, plus waitingOnYouCount below */ ]
   }
 }
 ```
 
 Unlike 10.4, there is no pagination or `total` here — a business's own list is expected to be small enough to return in full.
+
+**Each gig also carries `waitingOnYouCount`** (Application & Hiring §6) — the number of applications on it still owed a personal answer: those `shortlisted`, plus any carrying a skill trial submission that hasn't been reviewed yet (a reviewed trial, `passed` or `not_passed`, no longer counts, even if the application's own status hasn't moved on). Computed by `getWaitingOnYouCounts` in `application.service.js` and composed onto this response in `gig.controller.js`, the same way §10.5's `viewerApplication` is — never inside `gig.service.js` itself, which would close an import cycle. It does not expire and is not specific to `filled` gigs, though the business's My Gigs prompt only surfaces it once a gig is `filled`.
 
 **Failure — `401 Unauthorized`, `403 Forbidden`** — as in 10.3.
 
@@ -1568,7 +1666,7 @@ No pagination — like `GET /api/gigs/mine` (§10.6), a seeker's own saved list 
 - `appliedAt` — set once, at creation.
 - `viewedAt`, `decidedAt`, `completedAt` — `null` until set by a transition (§11.3), never cleared or overwritten afterwards. Present as `null` rather than omitted, unlike the optional-field convention elsewhere in this document (§8.1) — these are always-present timestamps that happen to start empty, not optional data.
 - `completedAt` — the moment the business marked the work finished, set the first time `completed` is reached. Separate from `decidedAt`, which is already occupied by the hire and guarded against being overwritten: one application carries both, and they are different moments.
-- `rejectionReasonCode`, `rejectionNote` — absent until the application is rejected. `rejectionReasonCode` is one of §11.4's codes. `rejectionNote` is free text up to 300 characters, stored exactly as written, shown to the applicant verbatim.
+- `rejectionReasonCode`, `rejectionNote` — absent until the application is rejected **or** auto-closed for `positions_filled` (§11.3, §11.4) — the same field carries both, since the seeker's tracker renders them identically. `rejectionReasonCode` is one of §11.4's codes. `rejectionNote` is free text up to 300 characters, stored exactly as written, shown to the applicant verbatim; a system auto-close never sets one.
 - `skillTrialSubmission` — present only when the gig carries a skill trial (`optional`, §6.12); absent entirely for a gig with no trial, the same "stores nothing" rule `Gig.skillTrial` itself follows. Set once, at apply time (§11.7):
 
   ```json
@@ -1581,6 +1679,8 @@ No pagination — like `GET /api/gigs/mine` (§10.6), a seeker's own saved list 
     "reviewedAt": null
   }
   ```
+
+- `resumeUrl` — optional, a URL from the project's own storage (§9.1's `resumes` folder). Absent entirely when no resume was attached, the same "stores nothing" convention as `rejectionReasonCode`/`rejectionNote` above — never an empty string. Never copied into `profileSnapshot`: a file uploaded at submission time is already immutable by nature, unlike the profile it snapshots. Never a gate — `profileIncomplete` (§11.7) derives only from `workExperience`/`education` and is unaffected by its presence or absence. Reaches the applicant on §11.9 and the business on §11.9/§11.12/§11.13; never on any profile shape, a gig, or a review.
 
   `result` is one of §6.12's five values: `submitted`/`skipped` are set at apply time (§11.7); `passed`/`not_passed` are set only by the business, once, through the trial review endpoint (§11.18). `resultNote`, like `rejectionNote`, is optional, up to 300 characters, stored exactly as written, shown to the applicant verbatim. `reviewedAt` is `null` until reviewed.
 
@@ -1615,6 +1715,8 @@ Separately from reachability, five statuses are **decided** — `hired`, `comple
 
 `hired -> completed` is the **only** outgoing move Hired has, and the only way into `completed`. Hiring still requires shortlisting first: `applied -> hired` and `viewed -> hired` are absent from this table and stay refused, so the chain a seeker sees in the tracker is real.
 
+**`-> closed_filled`'s system caller is the positions-filled auto-close sweep** (`sweepPositionsFilledApplications` in `application.service.js`), triggered from inside `transitionApplicationStatus` itself the moment a hire (§11.16) takes a gig's last open position — `applied` and `viewed` applications on that gig are moved to `closed_filled` with the reason code `positions_filled` (§11.4); `shortlisted` is never a candidate, which is why it has no `closed_filled` row above. Neither closing a gig early (§10.8) nor a deadline passing (§10.5's `closeIfExpired`) triggers this sweep — the only trigger is a hire reaching the position count.
+
 Every move not in this table — including any move out of a status that has no outgoing row, and any move backwards (a `shortlisted` application can never return to `viewed`) — is rejected with `409 INVALID_APPLICATION_TRANSITION`, naming the current and attempted status.
 
 "The business that posted the gig" is checked by ownership, not just role: a business token belonging to a different business gets `403 FORBIDDEN`, the same as a seeker token. "The applicant" is checked the same way: a seeker token that isn't the one who submitted the application gets `403 FORBIDDEN`. "System only" means no HTTP-authenticated actor at all — a request from a business (or anyone else) attempting `closed_filled` gets `403 FORBIDDEN`; only an internal call with no `actor` succeeds.
@@ -1632,6 +1734,8 @@ Marking an application complete takes **no reason** — `reason` is inspected on
 - `skill_trial_not_passed` or `skill_trial_not_attempted` while the gig did not carry a skill trial — `400 VALIDATION_ERROR`. Skill Trials arrive in Sprint 3; until a gig can carry one, these two codes are always refused.
 
 `reason.note`, when supplied, is stored on `rejectionNote` exactly as given (§11.1).
+
+**`positions_filled` is now produced** — by the positions-filled auto-close sweep (§11.3, §11.16), never by a rejection request. Every application it moves to `closed_filled` carries `rejectionReasonCode: "positions_filled"` (§11.1) with no note, through the same `transitionApplicationStatus` reason handling a rejection uses, just without the business-selectable check above: a business still cannot reach this code through `PATCH .../reject` (`400 VALIDATION_ERROR`, unchanged), and an authenticated caller still cannot reach `closed_filled` directly (`403 FORBIDDEN`, §11.3).
 
 ### 11.5 Applicant count
 
@@ -1663,16 +1767,19 @@ Returned under `data.applications[].gig` (§11.7) and `data.application.gig` (§
 
 Seekers only. A business token gets `403`, a guest gets `401`.
 
-**Request body:** `skillTrialSubmission`, optional — `status`, `appliedAt` and every other field are never accepted from the client, whatever the gig's trial state; sending them has no effect, since the validator strips them.
+**Request body:** `skillTrialSubmission` and `resumeUrl`, both optional — `status`, `appliedAt` and every other field are never accepted from the client, whatever the gig's trial state; sending them has no effect, since the validator strips them.
 
 ```json
 {
   "skillTrialSubmission": {
     "textResponse": "I'd start by confirming stock levels before opening...",
     "fileUrl": null
-  }
+  },
+  "resumeUrl": "https://<project>.supabase.co/storage/v1/object/public/<bucket>/resumes/9b1e3f2a-....pdf"
 }
 ```
+
+`resumeUrl` (GL-362) is validated by **origin only** against the configured storage host — the server never fetches a client-supplied URL to inspect it. A URL from anywhere else is refused with `400 VALIDATION_ERROR`, naming the `resumeUrl` field, so a client can't attach an arbitrary external link and have it rendered as an attachment on a business's screen. It is uploaded through `POST /api/uploads` (§9.1) into the `resumes` folder first, the same two-step pattern `skillTrialSubmission.fileUrl` uses; omitted entirely, the created application stores no resume at all, never an empty string. It is never a gate: `profileIncomplete` below derives only from `workExperience`/`education` and is unaffected by its presence or absence.
 
 | Gig's trial (`skillTrial.requirement`, §6.12) | Body sent | Result |
 |---|---|---|
@@ -1754,6 +1861,19 @@ Seekers only. A business token gets `403`, a guest gets `401`.
     "code": "VALIDATION_ERROR",
     "message": "Skill trial submission is invalid.",
     "errors": [{ "field": "skillTrialSubmission.textResponse", "message": "textResponse is required for this trial" }]
+  }
+}
+```
+
+**Failure — `400 Bad Request`** (`resumeUrl` sent but not from the configured storage host — an off-platform link, or a malformed URL):
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "resumeUrl must be a URL from the platform’s own storage.",
+    "errors": [{ "field": "resumeUrl", "message": "resumeUrl must be a URL from the platform’s own storage" }]
   }
 }
 ```
@@ -1898,7 +2018,7 @@ Only the business that posted the gig (GL-252). Nested under the gig it belongs 
 }
 ```
 
-Every application to this gig, newest first (`createdAt` descending, `_id` descending tiebreak). Each row is the full §11.1 shape — `profileSnapshot`, `status`, `appliedAt`, `viewedAt`, `decidedAt`, and the rejection reason/note once decided — **never the applicant's live profile**: an application records what was true when it was submitted.
+Every application to this gig, newest first (`createdAt` descending, `_id` descending tiebreak). Each row is the full §11.1 shape — `profileSnapshot`, `status`, `appliedAt`, `viewedAt`, `decidedAt`, `resumeUrl` once attached, and the rejection reason/note once decided — **never the applicant's live profile**: an application records what was true when it was submitted.
 
 **Failure — `401 Unauthorized`** (guest) — as in §8.6.
 
@@ -1951,7 +2071,7 @@ Business only (GL-252). Every application across every gig the caller has posted
 }
 ```
 
-Newest first (`createdAt` descending, `_id` descending tiebreak). Found by the caller's own gigs (`postedBy`), then applications by gig `$in` — a business id is never stored on the application itself, so the two can't fall out of step. No pagination, matching `GET /api/gigs/mine` (§10.6) and `GET /api/applications/mine` (§11.8): a business's own applicant list is expected to return in full.
+Newest first (`createdAt` descending, `_id` descending tiebreak). Found by the caller's own gigs (`postedBy`), then applications by gig `$in` — a business id is never stored on the application itself, so the two can't fall out of step. No pagination, matching `GET /api/gigs/mine` (§10.6) and `GET /api/applications/mine` (§11.8): a business's own applicant list is expected to return in full. Each row is the same full §11.1 shape §11.12 returns, `resumeUrl` once attached included.
 
 **Failure — `401 Unauthorized`** (guest) — as in §8.6.
 
@@ -2003,13 +2123,24 @@ Only the business that posted the gig (GL-253). Moves the application from `view
 
 Only the business that posted the gig (GL-253). Moves the application from `shortlisted` to `hired` (§11.3), through `transitionApplicationStatus`. `applied -> hired` and `viewed -> hired` are both absent from §11.3's table and stay refused — hiring always requires shortlisting first.
 
+**A business cannot hire more people than the gig has `positions` (§10.1).** Before the move, `hired` and `completed` applications on the gig (`completed` still counts — finishing the work does not free the position) are compared against `positions`; once they meet it, a further hire is refused with `409 GIG_POSITIONS_FILLED`, naming the position count, and nothing about the application changes.
+
+**The fill sequence.** When this hire is the one that takes the last open position, two things happen inside the same request, after the application is saved as `hired`:
+
+1. The gig is moved to `filled` by calling `markGigFilled` (§10.1) — this endpoint never writes `gig.status` itself.
+2. The positions-filled auto-close sweep runs (§11.3): every `applied` or `viewed` application on the gig, except one carrying a submitted skill trial, is moved to `closed_filled` with reason code `positions_filled` (§11.4). `shortlisted` applications, and any application carrying a submitted skill trial regardless of status, are left untouched — they still need a personal decision.
+
+Neither step runs when the hire leaves the gig only partially filled.
+
 **Request body:** none.
 
-**Success — `200 OK`** — same shape as §11.9, with `status: "hired"` and `decidedAt` now set.
+**Success — `200 OK`** — same shape as §11.9, with `status: "hired"` and `decidedAt` now set. `data.application.gig` reflects `filled` when this hire completed the fill sequence.
 
 **Failure — `401`, `403`, `404`** — as in §11.14.
 
 **Failure — `409 Conflict`** (the application isn't `shortlisted`) — as in §11.14.
+
+**Failure — `409 Conflict`** (`GIG_POSITIONS_FILLED` — every position is already held) — see above.
 
 ### 11.17 Reject an application — `PATCH /api/applications/:id/reject`
 
@@ -2116,6 +2247,7 @@ Only the business that posted the gig (GL-352), checked by ownership the same wa
 | `409` | `TRIAL_ALREADY_SUBMITTED` | §11.7 for a `(gig, applicant)` pair whose existing application already carries a skill trial submission. See §3 for the shared definition. |
 | `409` | `INVALID_APPLICATION_TRANSITION` | §11.10 for an application that isn't `applied`, `viewed` or `shortlisted`. §11.11 for an application that isn't `hired`. §11.14 for an application that isn't `applied`. §11.15 for an application that isn't `viewed`. §11.16 for an application that isn't `shortlisted`. §11.17 for an application that isn't `applied`, `viewed` or `shortlisted`. |
 | `409` | `TRIAL_ALREADY_REVIEWED` | §11.18 for a trial that is already marked, or was never submitted or was skipped. See §3 for the shared definition. |
+| `409` | `GIG_POSITIONS_FILLED` | §11.16 for a hire attempted once `hired` plus `completed` applications already meet the gig's `positions`. |
 
 ---
 
