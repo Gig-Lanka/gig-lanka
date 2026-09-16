@@ -59,6 +59,14 @@ async function deleteGig(id) {
   return response.data.data;
 }
 
+// Saved tab's list, §10.12. No pagination and no status filter: it returns
+// the caller's saved gigs at any status, newest-saved first, in full - same
+// shape as getMyGigs.
+async function getSavedGigs() {
+  const response = await client.get('/gigs/saved');
+  return response.data.data;
+}
+
 export default {
   createGig,
   listGigs,
@@ -67,4 +75,5 @@ export default {
   updateGig,
   closeGig,
   deleteGig,
+  getSavedGigs,
 };
