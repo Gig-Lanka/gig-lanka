@@ -379,6 +379,17 @@ export const transitionApplicationStatus = async (application, targetStatus, act
     }
   }
 
+  // GL-347: `closed_filled` is system-only (TRANSITION_RULES above); the
+  // GL-346 sweep always supplies `positions_filled`, but a reason stays
+  // optional here — unlike `rejected`, nothing validates it, since this
+  // path is never reachable from a business request. Reuses
+  // `rejectionReasonCode` rather than a second field: the schema's
+  // REJECTION_REASON_CODES already carries `positions_filled` for exactly
+  // this write, and the seeker's tracker reads the same field either way.
+  if (targetStatus === 'closed_filled' && reason?.code) {
+    application.rejectionReasonCode = reason.code;
+  }
+
   // GL-345 §9: a business cannot hire more people than the gig has
   // positions. Checked here, after assertActorPermitted has already fetched
   // `gig` for this business actor, so a business hiring into someone else's
@@ -482,6 +493,37 @@ export const sweepPositionsFilledApplications = async (gigId) => {
       code: 'positions_filled',
     });
   }
+};
+
+// GL-347 / Application & Hiring brief §6: how many applications on a gig
+// are still owed a personal answer — `shortlisted`, or carrying a skill
+// trial submission that hasn't been reviewed yet. Once a trial is reviewed
+// (`passed`/`not_passed`) the business has already given that answer, even
+// if the application's own status hasn't moved on, so it drops out here —
+// unlike the sweep's exemption above, which keeps a reviewed trial
+// untouched for a different reason (the application itself still needs a
+// decision, not just the trial). Batched across a whole gig list — one
+// aggregate rather than one query per gig, the same shape as
+// gig.service.js's getSavedGigIdSet and getGigSummariesByIds. Composed onto
+// the business's My Gigs read at the controller layer, not here in
+// gig.service.js, for the same import-cycle reason GL-245's
+// viewerApplication is (gig.controller.js, not gig.service.js).
+export const getWaitingOnYouCounts = async (gigIds) => {
+  const uniqueIds = [...new Set(gigIds.map((id) => id.toString()))];
+
+  if (uniqueIds.length === 0) return new Map();
+
+  const rows = await Application.aggregate([
+    {
+      $match: {
+        gig: { $in: uniqueIds.map((id) => new mongoose.Types.ObjectId(id)) },
+        $or: [{ status: 'shortlisted' }, { 'skillTrialSubmission.result': 'submitted' }],
+      },
+    },
+    { $group: { _id: '$gig', count: { $sum: 1 } } },
+  ]);
+
+  return new Map(rows.map((row) => [row._id.toString(), row.count]));
 };
 
 // The read side of the boundary with Reviews (GL-195): a review is created
