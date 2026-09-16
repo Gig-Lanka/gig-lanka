@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Animated, Pressable, Text, View } from 'react-native';
+import { Animated, Linking, Pressable, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 
@@ -66,6 +66,19 @@ function formatRating(rating) {
   const { averageRating = 0, reviewCount = 0 } = rating ?? {};
   if (reviewCount === 0) return 'No ratings yet';
   return `★ ${averageRating.toFixed(1)} (${reviewCount})`;
+}
+
+// GL-364 - the server only ever returns `resumeUrl` (§11.1) - no stored
+// display name - so the file's name is read off its own URL, the same way
+// TrialReviewScreen.js's fileNameFromUrl reads a trial attachment's name.
+// Duplicated rather than shared, the same rule formatRating above follows.
+function fileNameFromUrl(url) {
+  if (!url) return '';
+  try {
+    return decodeURIComponent(url).split('/').pop();
+  } catch {
+    return url.split('/').pop();
+  }
 }
 
 const SHORTLIST_ERROR_MESSAGE = 'Could not shortlist this applicant. Try again.';
@@ -336,6 +349,7 @@ export default function ApplicantDetailScreen() {
     rejectionReasonCode,
     rejectionNote,
     skillTrialSubmission,
+    resumeUrl,
   } = application;
   const isRejected = applicationStatus === 'rejected';
   const experience = profileSnapshot?.experience ?? [];
@@ -443,6 +457,23 @@ export default function ApplicantDetailScreen() {
             Frozen as it stood when they applied on {formatShortDate(new Date(appliedAt))}. Later
             profile edits don&apos;t change this.
           </Text>
+
+          {resumeUrl ? (
+            <View className="mt-5">
+              <SectionLabel>Resume</SectionLabel>
+              <Pressable
+                onPress={() => Linking.openURL(resumeUrl)}
+                className="mt-2 flex-row items-center gap-[13px] rounded-ds-lg border-[1.5px] border-line bg-haze px-[18px] py-[14px]"
+              >
+                <View className="flex-1">
+                  <Text className="text-body font-medium text-ink" numberOfLines={1}>
+                    {fileNameFromUrl(resumeUrl)}
+                  </Text>
+                  <Text className="mt-0.5 text-[12px] text-muted">Tap to open</Text>
+                </View>
+              </Pressable>
+            </View>
+          ) : null}
         </HeroSheet>
       </Animated.ScrollView>
 
