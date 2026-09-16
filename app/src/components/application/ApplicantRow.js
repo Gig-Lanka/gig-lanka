@@ -19,6 +19,17 @@ const BADGE_VARIANT_BY_STATUS = {
   closed_filled: 'muted',
 };
 
+// Application & Hiring brief §12: exactly these three states get a badge on
+// this row - `not_passed` isn't in the brief's list (or GL-299 AC10's) and
+// gets no badge here, same as `not_submitted` or no submission at all. Same
+// colours as the `#applicants` frame's badge-trial-pass/-sub/-skip classes,
+// via the Badge variants already in use elsewhere rather than a new token.
+const TRIAL_BADGE_BY_RESULT = {
+  passed: { label: 'Trial passed', variant: 'positive' },
+  submitted: { label: 'Trial submitted', variant: 'warning' },
+  skipped: { label: 'Trial skipped', variant: 'muted' },
+};
+
 function statusLabel(status) {
   return APPLICATION_STATUSES.find((entry) => entry.value === status)?.label ?? status;
 }
@@ -43,7 +54,8 @@ export default function ApplicantRow({
   onReject,
   className,
 }) {
-  const { profileSnapshot, status, appliedAt, gig } = application;
+  const { profileSnapshot, status, appliedAt, gig, skillTrialSubmission } = application;
+  const trialBadge = TRIAL_BADGE_BY_RESULT[skillTrialSubmission?.result];
 
   return (
     <View
@@ -69,9 +81,12 @@ export default function ApplicantRow({
         </View>
       </View>
 
-      <Text className="mt-3 text-[12.5px] text-muted-dark">
-        Applied {formatRelativeTime(appliedAt)}
-      </Text>
+      <View className="mt-3 flex-row items-center gap-[8px]">
+        {trialBadge ? <Badge variant={trialBadge.variant}>{trialBadge.label}</Badge> : null}
+        <Text className="text-[12.5px] text-muted-dark">
+          Applied {formatRelativeTime(appliedAt)}
+        </Text>
+      </View>
 
       <View className="mt-3 flex-row gap-[10px]">
         <Pressable
