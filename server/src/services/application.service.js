@@ -428,9 +428,10 @@ export const transitionApplicationStatus = async (application, targetStatus, act
     await adjustGigApplicantCount(application.gig, -1);
   }
 
-  // GL-345: when this hire takes the gig's last open position, the fill
-  // sequence runs in the same request. This only calls markGigFilled —
-  // E3's writer for `gig.status` — never sets the field directly.
+  // GL-345/GL-346: when this hire takes the gig's last open position, the
+  // fill sequence runs in the same request — markGigFilled (E3's writer for
+  // `gig.status`, never set directly here) followed by the graded sweep of
+  // the applications left waiting.
   if (targetStatus === 'hired') {
     const positionsHeld = await Application.countDocuments({
       gig: application.gig,
@@ -439,10 +440,48 @@ export const transitionApplicationStatus = async (application, targetStatus, act
 
     if (positionsHeld >= gig.positions) {
       await markGigFilled(application.gig);
+      await sweepPositionsFilledApplications(application.gig);
     }
   }
 
   return application;
+};
+
+// GL-346: whatever their application status, an applicant who submitted a
+// skill trial did the work, so the sweep leaves them for a person to
+// decide — `skipped` and `not_submitted` mean no work was done, and stay
+// eligible. `passed`/`not_passed` still count as submitted: reviewSkillTrial
+// records a result but never moves the application's status (§6.12), so a
+// reviewed trial can still be sitting at `applied` or `viewed` here.
+const TRIAL_DONE_RESULTS = ['submitted', 'passed', 'not_passed'];
+const hasSubmittedSkillTrial = (application) =>
+  TRIAL_DONE_RESULTS.includes(application.skillTrialSubmission?.result);
+
+// GL-296 §6: the graded sweep. Moves every `applied` or `viewed` application
+// on the gig to `closed_filled` through transitionApplicationStatus with a
+// system actor (no HTTP-authenticated caller), except one carrying a
+// submitted skill trial. `shortlisted` is never a candidate at all — it has
+// no `closed_filled` entry in TRANSITION_RULES, deliberately, so that guard
+// is never even reached for it.
+//
+// Several separate writes, not one transaction — the same shape
+// `applyToGig`'s create-plus-count-adjustment already is. A failure partway
+// leaves every application already moved in its new, valid state; re-running
+// this against the same gig only finds what's left, since a moved
+// application no longer matches the applied/viewed filter below.
+export const sweepPositionsFilledApplications = async (gigId) => {
+  const candidates = await Application.find({
+    gig: gigId,
+    status: { $in: ['applied', 'viewed'] },
+  });
+
+  for (const application of candidates) {
+    if (hasSubmittedSkillTrial(application)) continue;
+
+    await transitionApplicationStatus(application, 'closed_filled', null, {
+      code: 'positions_filled',
+    });
+  }
 };
 
 // The read side of the boundary with Reviews (GL-195): a review is created
