@@ -67,15 +67,19 @@ export default function LoginScreen() {
         containerClassName="mb-0"
         disabled={submitting}
       />
-      <Pressable
-        onPress={() => setShowPassword((prev) => !prev)}
-        className="mb-7 mt-3 self-end"
-        disabled={submitting}
-      >
-        <Text className="text-[13px] font-semibold text-ink">
-          {showPassword ? 'Hide password' : 'Show password'}
-        </Text>
-      </Pressable>
+      <View className="mb-7 mt-3 flex-row items-center justify-between">
+        <Pressable
+          onPress={() => navigation.navigate('ForgotPassword')}
+          disabled={submitting}
+        >
+          <Text className="text-[13px] font-semibold text-signal">Forgot password?</Text>
+        </Pressable>
+        <Pressable onPress={() => setShowPassword((prev) => !prev)} disabled={submitting}>
+          <Text className="text-[13px] font-semibold text-ink">
+            {showPassword ? 'Hide password' : 'Show password'}
+          </Text>
+        </Pressable>
+      </View>
 
       {formError ? (
         <Notice variant="error" className="mb-4">
