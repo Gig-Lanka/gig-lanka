@@ -20,7 +20,7 @@ const SEARCH_PLACEHOLDER = 'Search tutoring, delivery, events…';
 const SEARCH_DEBOUNCE_MS = 400;
 const DEFAULT_SORT = 'newest';
 
-export default function BrowseGigsScreen() {
+export default function BrowseGigsScreen({ guest = false, onSignIn }) {
   const navigation = useNavigation();
   const [gigs, setGigs] = useState([]);
   const [total, setTotal] = useState(0);
@@ -316,7 +316,14 @@ export default function BrowseGigsScreen() {
         <FlatList
           data={gigs}
           keyExtractor={(gig) => gig.id}
-          renderItem={({ item }) => <GigCard gig={item} onPress={() => handleCardPress(item)} />}
+          renderItem={({ item }) => (
+            <GigCard
+              gig={item}
+              onPress={() => handleCardPress(item)}
+              guest={guest}
+              onSignIn={onSignIn}
+            />
+          )}
           ListHeaderComponent={
             gigs.length > 0 ? (
               <View className="mb-3 flex-row items-center justify-between gap-3">

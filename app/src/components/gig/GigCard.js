@@ -34,7 +34,7 @@ const BADGE_VARIANT_BY_STATUS = {
   draft: 'neutral',
 };
 
-export default function GigCard({ gig, onPress, className, ...props }) {
+export default function GigCard({ gig, onPress, guest = false, onSignIn, className, ...props }) {
   const {
     id,
     title,
@@ -71,6 +71,14 @@ export default function GigCard({ gig, onPress, className, ...props }) {
   // not-saved, not a crash.
   const { saved, toggle, conflictMessage } = useSavedToggle(id, viewerSaved ?? false);
 
+  // A guest's star always renders outline (the server never sends
+  // viewerSaved: true for a guest) and routes to sign-in instead of calling
+  // the toggle - saving isn't offered without an account, and the API would
+  // just 401. Explicit call with this gig's id, not a passthrough of
+  // whatever onSignIn was given, so it's safe no matter how the caller
+  // wired it up.
+  const handleStarPress = guest ? () => onSignIn?.(id) : toggle;
+
   return (
     <Container
       onPress={onPress}
@@ -93,7 +101,7 @@ export default function GigCard({ gig, onPress, className, ...props }) {
               and Container's onPress never also fires for it. Verified by
               tapping the star repeatedly without gig detail opening. */}
           <Pressable
-            onPress={toggle}
+            onPress={handleStarPress}
             hitSlop={8}
             className="h-7 w-7 items-center justify-center"
           >
