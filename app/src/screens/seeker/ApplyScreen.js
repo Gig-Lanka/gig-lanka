@@ -1,11 +1,12 @@
 import { useCallback, useState } from 'react';
-import { ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
+import * as DocumentPicker from 'expo-document-picker';
 
 import applicationApi from '../../api/applicationApi';
 import gigApi from '../../api/gigApi';
-import { profileApi } from '../../api';
+import { profileApi, uploadApi } from '../../api';
 import Avatar from '../../components/ui/Avatar';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
@@ -23,7 +24,8 @@ import {
   SKILL_TRIAL_RESULTS,
 } from '../../constants/enums';
 import useAuth from '../../hooks/useAuth';
-import { formatDateRange, formatDeadline, formatPay } from '../../utils/format';
+import { formatDateRange, formatDeadline, formatFileSize, formatPay } from '../../utils/format';
+import { validateResumeFile } from '../../utils/validation';
 
 function labelFor(list, value) {
   return list.find((item) => item.value === value)?.label ?? value;
@@ -40,6 +42,14 @@ const BUSINESS_REFUSAL_MESSAGE = 'Only job seekers can apply for gigs.';
 // explicitly in handleSubmit's catch block below.
 const GENERIC_SUBMIT_ERROR =
   'Could not submit your application. Check your connection and try again.';
+
+// GL-363: an upload failure never blocks the application - the seeker can
+// still submit without the attachment - so this only ever surfaces inline
+// next to the attach row, the same pattern SkillTrialScreen's
+// GENERIC_UPLOAD_ERROR uses for its own attachment.
+const RESUME_DOCUMENT_PICKER_TYPES = ['application/pdf'];
+const GENERIC_RESUME_UPLOAD_ERROR =
+  'Could not upload the file. Check your connection and try again.';
 
 // Same signal the server recomputes at submission time (§11.7's
 // `profileIncomplete`) - a profile with neither is thin, and the seeker is
@@ -82,6 +92,12 @@ export default function ApplyScreen() {
   // that has to unlock the trial for editing again - every other apply
   // failure leaves it exactly as submitted, per the frame's finality promise.
   const [trialNeedsRevision, setTrialNeedsRevision] = useState(false);
+  // GL-363 - { name, size, url } once a resume is attached, or null. Never
+  // required: handleSubmit reads `resume?.url` and sends undefined when this
+  // is null, which the server (GL-362) stores as no resume at all.
+  const [resume, setResume] = useState(null);
+  const [resumeUploading, setResumeUploading] = useState(false);
+  const [resumeError, setResumeError] = useState('');
 
   // Same refetch-on-focus pattern as GigDetailScreen/ProfileScreen - bumping
   // reloadToken changes this callback's identity, which is what makes
@@ -124,6 +140,46 @@ export default function ApplyScreen() {
 
   const handleBack = () => navigation.goBack();
 
+  // GL-363 - restricted to PDF at the picker (per-criterion 5, even though
+  // the server's shared upload allow-list is broader) and again by
+  // validateResumeFile in case the OS reports a mismatched mimeType.
+  async function handlePickResume() {
+    setResumeError('');
+
+    const result = await DocumentPicker.getDocumentAsync({
+      type: RESUME_DOCUMENT_PICKER_TYPES,
+      copyToCacheDirectory: true,
+    });
+    if (result.canceled) return;
+
+    const asset = result.assets?.[0];
+    if (!asset) return;
+
+    const validationError = validateResumeFile({ fileSize: asset.size, mimeType: asset.mimeType });
+    if (validationError) {
+      setResumeError(validationError);
+      return;
+    }
+
+    setResumeUploading(true);
+    try {
+      const url = await uploadApi.uploadFile(asset, 'resumes');
+      setResume({ name: asset.name, size: asset.size, url });
+    } catch (error) {
+      setResumeError(error.response?.data?.error?.message || GENERIC_RESUME_UPLOAD_ERROR);
+    } finally {
+      setResumeUploading(false);
+    }
+  }
+
+  // Removing leaves the application with no resume rather than an empty
+  // string (GL-300 AC6) - handleSubmit sends `resume?.url`, so clearing this
+  // state is enough; there is nothing server-side to un-set.
+  function handleRemoveResume() {
+    setResume(null);
+    setResumeError('');
+  }
+
   async function handleSubmit() {
     // Belt-and-braces alongside Button's own `loading` → disabled onPress:
     // the guard that actually has to hold is here, not in the JSX.
@@ -135,6 +191,7 @@ export default function ApplyScreen() {
       const { application } = await applicationApi.apply(
         gigId,
         toSkillTrialSubmissionBody(trialSubmission),
+        resume?.url,
       );
       navigation.replace('ApplicationDetail', { applicationId: application.id });
     } catch (error) {
@@ -371,6 +428,51 @@ export default function ApplyScreen() {
               onAction={() => navigation.navigate('Main', { screen: 'Profile' })}
             />
           ) : null}
+        </View>
+
+        <View className="mt-6">
+          <SectionLabel>Resume (optional)</SectionLabel>
+
+          <View className="mt-2">
+            {resume ? (
+              <View className="flex-row items-center gap-[13px] rounded-ds-lg border-[1.5px] border-line bg-haze px-[18px] py-[14px]">
+                <Pressable onPress={handlePickResume} disabled={resumeUploading} className="flex-1">
+                  <Text className="text-body font-medium text-ink" numberOfLines={1}>
+                    {resume.name}
+                  </Text>
+                  <Text className="mt-0.5 text-[12px] text-muted">
+                    {formatFileSize(resume.size)} · Tap to replace
+                  </Text>
+                </Pressable>
+                <Text
+                  className="text-[13px] font-semibold text-signal"
+                  onPress={handleRemoveResume}
+                >
+                  Remove
+                </Text>
+              </View>
+            ) : (
+              <Pressable
+                onPress={handlePickResume}
+                disabled={resumeUploading}
+                className="flex-row items-center gap-[13px] rounded-ds-lg border-[1.5px] border-dashed border-line bg-haze px-[18px] py-[14px]"
+              >
+                <Text className="text-[17px] text-muted-dark">↑</Text>
+                <View className="flex-1">
+                  <Text className="text-body font-medium text-ink">
+                    {resumeUploading ? 'Uploading…' : 'Attach a PDF'}
+                  </Text>
+                  <Text className="mt-0.5 text-[12px] text-muted">
+                    Up to 5 MB. Your profile is the resume — this is an extra.
+                  </Text>
+                </View>
+              </Pressable>
+            )}
+
+            {resumeError ? (
+              <Text className="mt-1.5 text-[13px] font-medium text-danger">{resumeError}</Text>
+            ) : null}
+          </View>
         </View>
       </ScrollView>
 

@@ -132,6 +132,24 @@ export function validateTrialAttachmentFile({ fileSize, mimeType }) {
   return null;
 }
 
+// GL-300/GL-363: the resume on Apply is PDF only - "one optional PDF" -
+// even though the server's shared upload allow-list also accepts PNG/JPG
+// (upload.middleware.js). Same 5MB cap as the trial attachment above.
+export const MAX_RESUME_FILE_SIZE = 5 * 1024 * 1024;
+const ALLOWED_RESUME_MIME_TYPES = ['application/pdf'];
+
+export function validateResumeFile({ fileSize, mimeType }) {
+  if (mimeType && !ALLOWED_RESUME_MIME_TYPES.includes(mimeType)) {
+    return 'Resume must be a PDF file.';
+  }
+
+  if (typeof fileSize === 'number' && fileSize > MAX_RESUME_FILE_SIZE) {
+    return 'Resume must be 5MB or smaller.';
+  }
+
+  return null;
+}
+
 function parseDateOnly(value) {
   const [year, month, day] = value.split('-').map(Number);
   return new Date(year, month - 1, day);
