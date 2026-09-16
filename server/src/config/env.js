@@ -26,4 +26,5 @@ export const env = {
   emailTransport,
   emailFrom: process.env.EMAIL_FROM,
   resendApiKey: emailTransport === 'resend' ? requireEnv('RESEND_API_KEY') : process.env.RESEND_API_KEY,
+  passwordResetUrlBase: process.env.PASSWORD_RESET_URL_BASE || 'https://giglanka.app/reset-password',
 };
