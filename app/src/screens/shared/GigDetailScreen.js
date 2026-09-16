@@ -1,11 +1,12 @@
 import { useCallback, useState } from 'react';
-import { Animated, Text, View } from 'react-native';
+import { Animated, Pressable, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 
 import gigApi from '../../api/gigApi';
 import GigBusinessBlock from '../../components/gig/GigBusinessBlock';
 import GigDetailList from '../../components/gig/GigDetailList';
+import ReportSheet from '../../components/report/ReportSheet';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import EmptyState from '../../components/ui/EmptyState';
@@ -74,6 +75,8 @@ export default function GigDetailScreen({ onSignIn }) {
   const [viewerApplication, setViewerApplication] = useState(null);
   const [status, setStatus] = useState(STATUS.LOADING);
   const [reloadToken, setReloadToken] = useState(0);
+  const [reportSheetVisible, setReportSheetVisible] = useState(false);
+  const [reportSheetKey, setReportSheetKey] = useState(0);
 
   // Refetches on every focus, not just on mount - same rationale as the
   // profile screens (GL-145's edit screen calls goBack() rather than
@@ -215,6 +218,12 @@ export default function GigDetailScreen({ onSignIn }) {
   const isOwner = user?.role === 'business' && business?.id === user?.id;
   const isSeeker = user?.role === 'seeker';
 
+  // GL-381: a guest sees no Report action at all - reporting is not
+  // something to nudge an anonymous visitor into, and this screen already
+  // knows guest state from `user` rather than needing a routeNames lookup.
+  // A business reporting its own gig makes no sense either.
+  const canReport = Boolean(user) && !isOwner;
+
   let primaryAction = null;
   if (isOwner) {
     primaryAction = {
@@ -329,6 +338,18 @@ export default function GigDetailScreen({ onSignIn }) {
             <SectionLabel>Details</SectionLabel>
             <GigDetailList rows={detailRows} className="mt-2" />
           </View>
+
+          {canReport ? (
+            <Pressable
+              onPress={() => {
+                setReportSheetKey((key) => key + 1);
+                setReportSheetVisible(true);
+              }}
+              className="mt-5 items-center py-2"
+            >
+              <Text className="text-[12.5px] font-semibold text-muted">Report this gig</Text>
+            </Pressable>
+          ) : null}
         </HeroSheet>
       </Animated.ScrollView>
 
@@ -356,6 +377,20 @@ export default function GigDetailScreen({ onSignIn }) {
           <HeroStickyBar title={title} onBack={handleBack} visible />
         </SafeAreaView>
       </Animated.View>
+
+      {canReport ? (
+        <ReportSheet
+          key={reportSheetKey}
+          visible={reportSheetVisible}
+          targetType="gig"
+          targetName={title}
+          // GL-381 covers the entry point only - submitting to the report
+          // API and the success/duplicate Notice land with reportApi.js in
+          // a later subtask. For now this just closes the sheet.
+          onConfirm={() => setReportSheetVisible(false)}
+          onCancel={() => setReportSheetVisible(false)}
+        />
+      ) : null}
     </View>
   );
 }
