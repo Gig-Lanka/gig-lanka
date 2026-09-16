@@ -1,5 +1,6 @@
-import { useCallback, useState } from 'react';
-import { Animated, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useCallback, useEffect, useState } from 'react';
+import { Animated, Pressable, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 
@@ -15,6 +16,7 @@ import ScreenHeader from '../../components/ui/ScreenHeader';
 import SectionLabel from '../../components/ui/SectionLabel';
 import useAuth from '../../hooks/useAuth';
 import useHeroScroll from '../../hooks/useHeroScroll';
+import useSavedToggle from '../../hooks/useSavedToggle';
 import {
   COMMITMENT_LENGTHS,
   GIG_CATEGORIES,
@@ -37,6 +39,11 @@ const BADGE_VARIANT_BY_STATUS = {
   closed: 'muted',
   draft: 'neutral',
 };
+
+// Ionicons takes a literal color, not a className - mirrors the `signal` /
+// `star-off` tokens in tailwind.config.js, same as GigCard's own star.
+const SIGNAL_HEX = '#FF4A1C';
+const STAR_OFF_HEX = '#C6C7CF';
 
 function labelFor(list, value) {
   return list.find((entry) => entry.value === value)?.label ?? value;
@@ -62,6 +69,34 @@ const ALREADY_APPLIED_LABEL_BY_STATUS = {
   withdrawn: "You withdrew — you can't apply to this gig again",
 };
 
+// A separate component, not inline in GigDetailScreen, so useSavedToggle's
+// own first-mount lazy init captures the real `initialSaved` value: this
+// only mounts once `gig` has actually loaded (it's built from state that's
+// still null during STATUS.LOADING), unlike GigDetailScreen itself, which
+// stays mounted across that transition and would otherwise lock the hook's
+// initial state to the pre-load "false".
+function GigDetailSaveStar({ gigId, initialSaved, onConflict }) {
+  const { saved, toggle, conflictMessage } = useSavedToggle(gigId, initialSaved);
+
+  useEffect(() => {
+    onConflict?.(conflictMessage);
+  }, [conflictMessage, onConflict]);
+
+  return (
+    <Pressable
+      onPress={toggle}
+      hitSlop={10}
+      className="h-[34px] w-[34px] items-center justify-center"
+    >
+      <Ionicons
+        name={saved ? 'star' : 'star-outline'}
+        size={24}
+        color={saved ? SIGNAL_HEX : STAR_OFF_HEX}
+      />
+    </Pressable>
+  );
+}
+
 export default function GigDetailScreen({ onSignIn }) {
   const navigation = useNavigation();
   const { params } = useRoute();
@@ -73,6 +108,7 @@ export default function GigDetailScreen({ onSignIn }) {
   const [business, setBusiness] = useState(null);
   const [viewerApplication, setViewerApplication] = useState(null);
   const [status, setStatus] = useState(STATUS.LOADING);
+  const [saveConflictMessage, setSaveConflictMessage] = useState(null);
   const [reloadToken, setReloadToken] = useState(0);
 
   // Refetches on every focus, not just on mount - same rationale as the
@@ -257,7 +293,18 @@ export default function GigDetailScreen({ onSignIn }) {
         contentContainerClassName="grow"
       >
         <View onLayout={hero.onHeroLayout}>
-          <HeroHeader onBack={handleBack}>
+          <HeroHeader
+            onBack={handleBack}
+            rightSlot={
+              isSeeker ? (
+                <GigDetailSaveStar
+                  gigId={gigId}
+                  initialSaved={gig.viewerSaved}
+                  onConflict={setSaveConflictMessage}
+                />
+              ) : undefined
+            }
+          >
             <Text className="font-display text-[25px] leading-[29px] tracking-[-0.025em] text-paper">
               {title}
             </Text>
@@ -276,6 +323,12 @@ export default function GigDetailScreen({ onSignIn }) {
         </View>
 
         <HeroSheet className="px-[22px] pb-8 pt-[22px]">
+          {saveConflictMessage ? (
+            <Text className="mb-4 text-[13.5px] font-medium text-danger-ink">
+              {saveConflictMessage}
+            </Text>
+          ) : null}
+
           {deadline ? (
             <View
               className={[
@@ -298,7 +351,7 @@ export default function GigDetailScreen({ onSignIn }) {
             business={business}
             postedAt={createdAt}
             onPress={handleViewBusiness}
-            className={deadline ? 'mt-4' : undefined}
+            className={deadline || saveConflictMessage ? 'mt-4' : undefined}
           />
 
           <View className="mt-5">

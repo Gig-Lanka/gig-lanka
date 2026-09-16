@@ -67,6 +67,23 @@ async function getSavedGigs() {
   return response.data.data;
 }
 
+// §10.10 - a PUT/DELETE pair, not a single toggle, precisely so the star's
+// optimistic double-tap has something safe to retry against: each call has
+// one fixed outcome no matter the gig's starting state. 409 GIG_CLOSED is
+// the one failure useSavedToggle doesn't revert silently - the caller reads
+// it off error.response.
+async function saveGig(id) {
+  const response = await client.put(`/gigs/${id}/save`);
+  return response.data.data;
+}
+
+// §10.11 - deliberately not gated by gig status, unlike save: a seeker can
+// always remove a gig from their own saved list.
+async function unsaveGig(id) {
+  const response = await client.delete(`/gigs/${id}/save`);
+  return response.data.data;
+}
+
 export default {
   createGig,
   listGigs,
@@ -76,4 +93,6 @@ export default {
   closeGig,
   deleteGig,
   getSavedGigs,
+  saveGig,
+  unsaveGig,
 };
