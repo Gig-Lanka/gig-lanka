@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 
 import AuthShell from '../../components/ui/AuthShell';
 import Brand from '../../components/ui/Brand';
@@ -11,6 +11,7 @@ import useAuth from '../../hooks/useAuth';
 
 export default function LoginScreen() {
   const navigation = useNavigation();
+  const route = useRoute();
   const { login } = useAuth();
 
   const [email, setEmail] = useState('');
@@ -18,6 +19,28 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [formError, setFormError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  // ResetPasswordScreen (GL-327) navigates here with this param to hand off
+  // its confirmation - the API issues no tokens, so this is the only trace
+  // of the reset reaching Login. Latched into state the same way
+  // AccountSettingsScreen does for passwordChanged, so the notice survives
+  // the effect below clearing the param instead of flashing and vanishing.
+  const [passwordResetNotice, setPasswordResetNotice] = useState(false);
+  const [seenPasswordResetParam, setSeenPasswordResetParam] = useState(
+    route.params?.passwordReset,
+  );
+  if (route.params?.passwordReset !== seenPasswordResetParam) {
+    setSeenPasswordResetParam(route.params?.passwordReset);
+    if (route.params?.passwordReset) {
+      setPasswordResetNotice(true);
+    }
+  }
+
+  useEffect(() => {
+    if (route.params?.passwordReset) {
+      navigation.setParams({ passwordReset: undefined });
+    }
+  }, [route.params?.passwordReset, navigation]);
 
   const handleSubmit = async () => {
     setFormError('');
@@ -48,6 +71,10 @@ export default function LoginScreen() {
         </>
       }
     >
+      {passwordResetNotice ? (
+        <Notice className="mb-4">Your password was reset. Log in with your new password.</Notice>
+      ) : null}
+
       <TextInput
         label="Email"
         placeholder="you@example.com"
