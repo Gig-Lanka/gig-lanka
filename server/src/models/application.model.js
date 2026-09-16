@@ -156,6 +156,17 @@ const applicationSchema = new mongoose.Schema(
       type: skillTrialSubmissionSchema,
       required: false,
     },
+    // Optional: an application without a resume stores nothing. Never a
+    // gate — profileIncomplete derives only from experience and education
+    // (GL-300 §15 rule 3) — and never copied into profileSnapshot, which is
+    // frozen against later profile edits; a file uploaded at submission time
+    // is already immutable by nature. Origin-validated against the
+    // configured storage host at apply time (application.service.js), never
+    // fetched to inspect.
+    resumeUrl: {
+      type: String,
+      trim: true,
+    },
   },
   {
     timestamps: true,
