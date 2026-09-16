@@ -1139,7 +1139,7 @@ Backs profile photos this sprint; skill trial file submissions and resume PDFs r
 | Field | Rule |
 |---|---|
 | `file` | **Required.** The file itself. PNG, JPG or PDF only, checked against both its MIME type and its extension. Max 5MB. |
-| `folder` | **Required.** A closed list of purposes, not a free path — a caller can't write anywhere else in the bucket. Only `avatars` this sprint. |
+| `folder` | **Required.** A closed list of purposes, not a free path — a caller can't write anywhere else in the bucket: `avatars`, `trials` (a skill trial's file submission, §11.7) or `resumes` (§11.7's `resumeUrl`). All three share the same 5MB cap and PNG/JPG/PDF allow-list below, whatever the calling screen further restricts client-side. |
 
 **Success — `201 Created`**
 
@@ -1163,7 +1163,7 @@ The returned name is generated server-side and unguessable — never the filenam
     "code": "VALIDATION_ERROR",
     "message": "Request validation failed.",
     "errors": [
-      { "field": "folder", "message": "must be one of [avatars]" }
+      { "field": "folder", "message": "must be one of [avatars, trials, resumes]" }
     ]
   }
 }
@@ -1677,6 +1677,8 @@ No pagination — like `GET /api/gigs/mine` (§10.6), a seeker's own saved list 
   }
   ```
 
+- `resumeUrl` — optional, a URL from the project's own storage (§9.1's `resumes` folder). Absent entirely when no resume was attached, the same "stores nothing" convention as `rejectionReasonCode`/`rejectionNote` above — never an empty string. Never copied into `profileSnapshot`: a file uploaded at submission time is already immutable by nature, unlike the profile it snapshots. Never a gate — `profileIncomplete` (§11.7) derives only from `workExperience`/`education` and is unaffected by its presence or absence. Reaches the applicant on §11.9 and the business on §11.9/§11.12/§11.13; never on any profile shape, a gig, or a review.
+
   `result` is one of §6.12's five values: `submitted`/`skipped` are set at apply time (§11.7); `passed`/`not_passed` are set only by the business, once, through the trial review endpoint (§11.18). `resultNote`, like `rejectionNote`, is optional, up to 300 characters, stored exactly as written, shown to the applicant verbatim. `reviewedAt` is `null` until reviewed.
 
 ### 11.2 Status vocabulary
@@ -1758,16 +1760,19 @@ Returned under `data.applications[].gig` (§11.7) and `data.application.gig` (§
 
 Seekers only. A business token gets `403`, a guest gets `401`.
 
-**Request body:** `skillTrialSubmission`, optional — `status`, `appliedAt` and every other field are never accepted from the client, whatever the gig's trial state; sending them has no effect, since the validator strips them.
+**Request body:** `skillTrialSubmission` and `resumeUrl`, both optional — `status`, `appliedAt` and every other field are never accepted from the client, whatever the gig's trial state; sending them has no effect, since the validator strips them.
 
 ```json
 {
   "skillTrialSubmission": {
     "textResponse": "I'd start by confirming stock levels before opening...",
     "fileUrl": null
-  }
+  },
+  "resumeUrl": "https://<project>.supabase.co/storage/v1/object/public/<bucket>/resumes/9b1e3f2a-....pdf"
 }
 ```
+
+`resumeUrl` (GL-362) is validated by **origin only** against the configured storage host — the server never fetches a client-supplied URL to inspect it. A URL from anywhere else is refused with `400 VALIDATION_ERROR`, naming the `resumeUrl` field, so a client can't attach an arbitrary external link and have it rendered as an attachment on a business's screen. It is uploaded through `POST /api/uploads` (§9.1) into the `resumes` folder first, the same two-step pattern `skillTrialSubmission.fileUrl` uses; omitted entirely, the created application stores no resume at all, never an empty string. It is never a gate: `profileIncomplete` below derives only from `workExperience`/`education` and is unaffected by its presence or absence.
 
 | Gig's trial (`skillTrial.requirement`, §6.12) | Body sent | Result |
 |---|---|---|
@@ -1849,6 +1854,19 @@ Seekers only. A business token gets `403`, a guest gets `401`.
     "code": "VALIDATION_ERROR",
     "message": "Skill trial submission is invalid.",
     "errors": [{ "field": "skillTrialSubmission.textResponse", "message": "textResponse is required for this trial" }]
+  }
+}
+```
+
+**Failure — `400 Bad Request`** (`resumeUrl` sent but not from the configured storage host — an off-platform link, or a malformed URL):
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "resumeUrl must be a URL from the platform’s own storage.",
+    "errors": [{ "field": "resumeUrl", "message": "resumeUrl must be a URL from the platform’s own storage" }]
   }
 }
 ```
@@ -1993,7 +2011,7 @@ Only the business that posted the gig (GL-252). Nested under the gig it belongs 
 }
 ```
 
-Every application to this gig, newest first (`createdAt` descending, `_id` descending tiebreak). Each row is the full §11.1 shape — `profileSnapshot`, `status`, `appliedAt`, `viewedAt`, `decidedAt`, and the rejection reason/note once decided — **never the applicant's live profile**: an application records what was true when it was submitted.
+Every application to this gig, newest first (`createdAt` descending, `_id` descending tiebreak). Each row is the full §11.1 shape — `profileSnapshot`, `status`, `appliedAt`, `viewedAt`, `decidedAt`, `resumeUrl` once attached, and the rejection reason/note once decided — **never the applicant's live profile**: an application records what was true when it was submitted.
 
 **Failure — `401 Unauthorized`** (guest) — as in §8.6.
 
@@ -2046,7 +2064,7 @@ Business only (GL-252). Every application across every gig the caller has posted
 }
 ```
 
-Newest first (`createdAt` descending, `_id` descending tiebreak). Found by the caller's own gigs (`postedBy`), then applications by gig `$in` — a business id is never stored on the application itself, so the two can't fall out of step. No pagination, matching `GET /api/gigs/mine` (§10.6) and `GET /api/applications/mine` (§11.8): a business's own applicant list is expected to return in full.
+Newest first (`createdAt` descending, `_id` descending tiebreak). Found by the caller's own gigs (`postedBy`), then applications by gig `$in` — a business id is never stored on the application itself, so the two can't fall out of step. No pagination, matching `GET /api/gigs/mine` (§10.6) and `GET /api/applications/mine` (§11.8): a business's own applicant list is expected to return in full. Each row is the same full §11.1 shape §11.12 returns, `resumeUrl` once attached included.
 
 **Failure — `401 Unauthorized`** (guest) — as in §8.6.
 
