@@ -9,6 +9,7 @@ import {
 } from '../models/passwordResetToken.model.js';
 import { ApiError } from '../utils/ApiError.js';
 import { sendEmail } from './email.service.js';
+import { passwordResetEmail } from './email.templates.js';
 import {
   issueTokens,
   rotateRefreshToken,
@@ -117,16 +118,7 @@ export const requestPasswordReset = async ({ email }) => {
 
   const resetLink = `${env.passwordResetUrlBase}?token=${rawToken}`;
 
-  // Placeholder copy: the real reset-link template belongs in
-  // email.templates.js per GL-324, which hasn't landed yet. This keeps the
-  // send path wired end-to-end against the no-op transport without writing
-  // into that sibling sub-task's file.
-  await sendEmail({
-    to: user.email,
-    subject: 'Reset your Gig Lanka password',
-    html: `<p>Use the link below to reset your password. It expires in ${PASSWORD_RESET_TOKEN_TTL_MINUTES} minutes and can only be used once.</p><p>${resetLink}</p>`,
-    text: `Use this link to reset your password (expires in ${PASSWORD_RESET_TOKEN_TTL_MINUTES} minutes, single use): ${resetLink}`,
-  });
+  await sendEmail({ to: user.email, ...passwordResetEmail({ resetLink }) });
 };
 
 // An expired, already-used, unknown or malformed token must be
