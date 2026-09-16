@@ -8,6 +8,7 @@ import {
 } from '../models/application.model.js';
 import { assertGigIsOpen, findOwnedGig } from './gig.service.js';
 import { getMyProfile, addSkillTrialResult } from './profile.service.js';
+import { isStorageUrl } from './storage.service.js';
 
 // Source status -> target status -> which kind of actor may trigger that
 // move. Modeled as data, not a chain of conditionals, so Sprint 2's hiring
@@ -200,6 +201,24 @@ const buildSkillTrialSubmission = (gig, submissionBody) => {
   return { ...submissionBody, result: 'submitted', submittedAt: new Date() };
 };
 
+// GL-362: an attached resume must be a file the applicant actually uploaded
+// through POST /api/uploads, never an arbitrary external link rendered as an
+// attachment on a business's screen. Checked by origin only — the server
+// never fetches a client-supplied URL to inspect it. Never a gate: absence
+// is fine, so this only runs when resumeUrl is present at all.
+const assertValidResumeUrl = (resumeUrl) => {
+  if (resumeUrl === undefined) return;
+
+  if (!isStorageUrl(resumeUrl)) {
+    throw new ApiError(
+      400,
+      'VALIDATION_ERROR',
+      'resumeUrl must be a URL from the platform’s own storage.',
+      [{ field: 'resumeUrl', message: 'resumeUrl must be a URL from the platform’s own storage' }],
+    );
+  }
+};
+
 // GL-182: creates the application a seeker submits for a gig. The profile
 // snapshot is read through profile.service.js rather than profile.model.js
 // directly, so the ownership boundary with E2 holds. Status and appliedAt
@@ -211,6 +230,8 @@ export const applyToGig = async (gigId, user, body) => {
   const profileSnapshot = buildProfileSnapshot(profile);
   const profileIncomplete = profile.workExperience.length === 0 && profile.education.length === 0;
   const skillTrialSubmission = buildSkillTrialSubmission(gig, body?.skillTrialSubmission);
+  const resumeUrl = body?.resumeUrl;
+  assertValidResumeUrl(resumeUrl);
 
   let application;
   try {
@@ -219,6 +240,7 @@ export const applyToGig = async (gigId, user, body) => {
       applicant: user._id,
       profileSnapshot,
       skillTrialSubmission,
+      resumeUrl,
     });
   } catch (err) {
     // Same trap GL-15 hit with duplicate emails: the unique (gig, applicant)

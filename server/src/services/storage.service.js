@@ -12,6 +12,19 @@ const EXTENSIONS_BY_MIME_TYPE = {
 };
 
 const PUBLIC_URL_MARKER = `/object/public/${env.supabaseBucketName}/`;
+const STORAGE_ORIGIN = new URL(env.supabaseUrl).origin;
+
+// GL-362: lets a caller check a client-supplied URL (e.g. Application.resumeUrl)
+// against the project's own storage host without downloading it to inspect
+// it — only the origin is compared, never the path or the object's
+// existence. A malformed URL is just "not ours", not a thrown error.
+export const isStorageUrl = (url) => {
+  try {
+    return new URL(url).origin === STORAGE_ORIGIN;
+  } catch {
+    return false;
+  }
+};
 
 // A Supabase outage, a bad key or a network failure must never reach the
 // client as an unhandled rejection or a bare 500 with a stack trace — the
