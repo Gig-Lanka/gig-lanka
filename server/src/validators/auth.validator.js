@@ -35,3 +35,8 @@ export const forgotPasswordSchema = Joi.object({
     .email({ tlds: { allow: false } })
     .required(),
 });
+
+export const resetPasswordSchema = Joi.object({
+  token: Joi.string().required(),
+  newPassword: Joi.string().min(PASSWORD_MIN_LENGTH).required(),
+});

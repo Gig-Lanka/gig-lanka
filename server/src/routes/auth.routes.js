@@ -7,6 +7,7 @@ import {
   me,
   changePassword,
   forgotPassword,
+  resetUserPassword,
   deactivate,
 } from '../controllers/auth.controller.js';
 import { validate } from '../middleware/validate.middleware.js';
@@ -18,6 +19,7 @@ import {
   logoutSchema,
   changePasswordSchema,
   forgotPasswordSchema,
+  resetPasswordSchema,
 } from '../validators/auth.validator.js';
 
 const router = Router();
@@ -29,6 +31,7 @@ router.post('/logout', validate(logoutSchema), requireAuth, logout);
 router.get('/me', requireAuth, me);
 router.post('/change-password', validate(changePasswordSchema), requireAuth, changePassword);
 router.post('/forgot-password', validate(forgotPasswordSchema), forgotPassword);
+router.post('/reset-password', validate(resetPasswordSchema), resetUserPassword);
 router.post('/deactivate', requireAuth, deactivate);
 
 export default router;
