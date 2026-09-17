@@ -1,4 +1,4 @@
-import { Resend } from 'resend';
+import { BrevoClient } from '@getbrevo/brevo';
 import { env } from '../config/env.js';
 import { ApiError } from '../utils/ApiError.js';
 
@@ -8,12 +8,12 @@ import { ApiError } from '../utils/ApiError.js';
 // Constructed lazily, on first real send, rather than at module scope: the
 // SDK itself throws when it can find no API key at all, and this module must
 // stay importable with none of the EMAIL_* vars set (the no-op default).
-let resend;
-const getResendClient = () => {
-  if (!resend) {
-    resend = new Resend(env.resendApiKey);
+let brevo;
+const getBrevoClient = () => {
+  if (!brevo) {
+    brevo = new BrevoClient({ apiKey: env.brevoApiKey });
   }
-  return resend;
+  return brevo;
 };
 
 // A provider outage or bad key must never reach the client as an unhandled
@@ -36,24 +36,24 @@ const sendViaNoop = ({ to, subject, html, text }) => {
   sentEmails.push({ to, subject, html, text });
 };
 
-const sendViaResend = async ({ to, subject, html, text }) => {
-  let result;
+const sendViaBrevo = async ({ to, subject, html, text }) => {
   try {
-    result = await getResendClient().emails.send({ from: env.emailFrom, to, subject, html, text });
+    await getBrevoClient().transactionalEmails.sendTransacEmail({
+      sender: { email: env.emailFrom },
+      to: [{ email: to }],
+      subject,
+      htmlContent: html,
+      textContent: text,
+    });
   } catch (error) {
     console.error('Email provider request failed:', error.message);
-    throw emailError();
-  }
-
-  if (result.error) {
-    console.error('Email provider rejected the send:', result.error.message);
     throw emailError();
   }
 };
 
 export const sendEmail = async ({ to, subject, html, text }) => {
-  if (env.emailTransport === 'resend') {
-    await sendViaResend({ to, subject, html, text });
+  if (env.emailTransport === 'brevo') {
+    await sendViaBrevo({ to, subject, html, text });
     return;
   }
 

@@ -1,14 +1,14 @@
 import { jest } from '@jest/globals';
 
-// CI must never reach a real Resend account. The client is stubbed at the
-// `resend` boundary — one level below email.service.js — so the service's
-// own transport-selection and error-mapping logic still runs for real; only
-// the network call underneath it is replaced.
-const mockSend = jest.fn();
+// CI must never reach a real Brevo account. The client is stubbed at the
+// `@getbrevo/brevo` boundary — one level below email.service.js — so the
+// service's own transport-selection and error-mapping logic still runs for
+// real; only the network call underneath it is replaced.
+const mockSendTransacEmail = jest.fn();
 
-jest.unstable_mockModule('resend', () => ({
-  Resend: jest.fn().mockImplementation(() => ({
-    emails: { send: mockSend },
+jest.unstable_mockModule('@getbrevo/brevo', () => ({
+  BrevoClient: jest.fn().mockImplementation(() => ({
+    transactionalEmails: { sendTransacEmail: mockSendTransacEmail },
   })),
 }));
 
@@ -24,10 +24,10 @@ const importEmailService = async () => {
 
 describe('email.service', () => {
   beforeEach(() => {
-    mockSend.mockReset();
+    mockSendTransacEmail.mockReset();
     delete process.env.EMAIL_TRANSPORT;
     delete process.env.EMAIL_FROM;
-    delete process.env.RESEND_API_KEY;
+    delete process.env.BREVO_API_KEY;
   });
 
   it('the no-op transport records the message it was asked to send and reports success', async () => {
@@ -37,7 +37,7 @@ describe('email.service', () => {
     await expect(sendEmail(message)).resolves.toBeUndefined();
 
     expect(getSentEmails()).toEqual([message]);
-    expect(mockSend).not.toHaveBeenCalled();
+    expect(mockSendTransacEmail).not.toHaveBeenCalled();
   });
 
   it('defaults to the no-op transport when EMAIL_TRANSPORT is unset', async () => {
@@ -49,14 +49,14 @@ describe('email.service', () => {
     await sendEmail(message);
 
     expect(getSentEmails()).toHaveLength(1);
-    expect(mockSend).not.toHaveBeenCalled();
+    expect(mockSendTransacEmail).not.toHaveBeenCalled();
   });
 
   it('surfaces a stubbed provider failure as 502 EMAIL_UNAVAILABLE', async () => {
-    process.env.EMAIL_TRANSPORT = 'resend';
+    process.env.EMAIL_TRANSPORT = 'brevo';
     process.env.EMAIL_FROM = 'no-reply@example.com';
-    process.env.RESEND_API_KEY = 'test-key';
-    mockSend.mockResolvedValue({ data: null, error: { message: 'Invalid API key' } });
+    process.env.BREVO_API_KEY = 'test-key';
+    mockSendTransacEmail.mockRejectedValue(new Error('Invalid API key'));
 
     const { sendEmail } = await importEmailService();
 
