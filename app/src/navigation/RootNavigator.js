@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
+import AdminStack from './AdminStack';
 import AuthStack from './AuthStack';
 import BusinessTabs from './BusinessTabs';
 import SeekerTabs from './SeekerTabs';
@@ -32,6 +33,12 @@ import { AUTH_STATUS } from '../store/AuthContext';
 
 const Stack = createNativeStackNavigator();
 
+// Only ever rendered for 'business' or 'seeker' - the third role branch
+// (GL-384/§7.12) diverts 'admin' to AdminStack before this component is
+// reached at all, rather than adding a third RoleTabs case in here, because
+// every screen below is registered unconditionally for whichever role is
+// passed in, and none of them (AccountSettings, EditProfile, GigDetail,
+// PublicProfile, ...) are safe for an admin, who has no profile.
 function AppStack({ role }) {
   const RoleTabs = role === 'business' ? BusinessTabs : SeekerTabs;
 
@@ -143,6 +150,14 @@ export default function RootNavigator() {
   }
 
   if (status === AUTH_STATUS.AUTHENTICATED) {
+    // An admin has no profile - every profile endpoint 403s them by design -
+    // so AppStack's shared screens (AccountSettings, EditProfile, GigDetail,
+    // PublicProfile, ...) are all wrong for them. AdminStack is a fully
+    // separate branch, not a third RoleTabs case inside AppStack, so none of
+    // those screens are ever registered for an admin (GL-384/§7.12).
+    if (user?.role === 'admin') {
+      return <AdminStack />;
+    }
     return <AppStack role={user?.role} />;
   }
 
