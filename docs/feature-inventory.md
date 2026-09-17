@@ -210,8 +210,8 @@ were reachable.
 | Feature | Status | Scope |
 |---|---|---|
 | Admin role | ✅ | Exists in the `User` enum and is honoured by `requireRole`. Admin accounts are never creatable through the API and have **no profile** — every profile endpoint 403s for them, and an admin's user id is never a valid public-profile target. |
-| Admin navigation surface | ⬜ | **Nothing exists, and the fallthrough is wrong.** [`RootNavigator.js:32`](../app/src/navigation/RootNavigator.js) is `role === 'business' ? BusinessTabs : SeekerTabs`, so an admin signing in lands in the *seeker* tabs and hits a 403 wall, since admins have no profile. No `screens/admin/` directory, no admin branch, and the only `'admin'` string in `app/src` is a seeded mock account. §7.12. |
-| Open reports list | ⬜ | Sprint 3 — **pulled forward from Sprint 4** so the report/complaint flow ships with a reader rather than writing into a queue nobody can open. Read-only; every action on a report stays Sprint 4. It is the row that has to build the admin surface above. |
+| Admin navigation surface | ✅ | **GL-306 (GL-384/GL-385).** `RootNavigator` now diverts `user?.role === 'admin'` to a new `AdminStack` *before* it ever reaches the seeker/business `AppStack`, rather than adding a third case inside `AppStack`'s `RoleTabs` ternary — `AppStack` registers several screens (`AccountSettings`, `EditProfile`, `GigDetail`, `PublicProfile`, ...) unconditionally, and every one of them 403s for an admin. `screens/admin/` exists, organised like `screens/business/` and `screens/seeker/`. Landing decision: a minimal single-route stack, not a tab bar — one screen doesn't justify tabs yet, and Sprint 4's disputes/moderation/account-status rows can add them once there's more than one destination. Sign-out is a header control on `ReportsScreen` itself rather than a reused `AccountSettingsScreen`, which isn't admin-safe — it renders profile nav rows that 403 and round-trips to `GET /auth/me`. §7.12 closed. |
+| Open reports list | ✅ | **GL-306 (GL-386/GL-387).** `screens/admin/ReportsScreen.js` lists `GET /api/admin/reports` — open reports, newest first, ten per page, the same single-in-flight guard and inline "load more" retry `BrowseGigsScreen` uses; `reportApi.getOpenReports(page)` added. Each row shows the reason as a `Badge`, what was reported (a person's name, or a gig's title with its business), the reporter's name, the note in full or truncated with a "Read more" toggle, and the filing time via the existing relative-time formatter. A vanished target (`target: null` for a hard-deleted gig or deactivated user) renders "no longer available" rather than hiding the report. Read-only was verified deliberately (GL-388): no resolve/dismiss/suspend/warn/assign/mark-as-read/swipe control anywhere, not even a disabled one — the fourth instance of that inert-code pattern was not repeated. Every primitive, colour and spacing value comes from the existing design system; nothing new introduced. |
 | Admin screens & APIs | ⬜ | Sprint 4, split four ways. Disputes, moderation queue actions, account status. Nothing exists. |
 | Leftover smoke-test route | ✅ | `GET /api/auth/admin-smoke-test`, a Sprint 0 leftover from GL-60, is deleted. **GL-320.** §7.9. |
 
@@ -500,25 +500,34 @@ was the third, closed by GL-303/GL-376 (§7.6).
   then. Deliberate, and recorded in `ROADMAP.md`'s carried risks.
 - `GIG_SORT_ORDERS` is no longer unused — GL-216 consumes it in `GigFilters`.
 
-### 7.12 🔴 Open — an admin signing in lands in the seeker tabs
-[`RootNavigator.js:32`](../app/src/navigation/RootNavigator.js) chooses between exactly two role
-branches: `const RoleTabs = role === 'business' ? BusinessTabs : SeekerTabs;`. There is no third
-branch, no `screens/admin/` directory, and no `'admin'` anywhere in `app/src` outside a seeded mock
-account. An admin who signs in therefore gets the **seeker** experience, and because admins have no
-profile every profile call behind those tabs 403s — so the Profile tab is a wall and Browse is the
-only thing that works.
+### 7.12 ✅ Closed — an admin signing in lands in the seeker tabs
+**GL-306 resolved it in full, across five sub-tasks.** `RootNavigator.js` no longer chooses between
+exactly two role branches — `user?.role === 'admin'` is diverted to a new `AdminStack` *before*
+`AppStack` is reached at all (**GL-384**), not by adding a third case to `AppStack`'s `RoleTabs`
+ternary, because `AppStack` registers several screens (`AccountSettings`, `EditProfile`,
+`GigDetail`, `PublicProfile`, ...) unconditionally and every one of them 403s for an admin.
+`screens/admin/` now exists, organised like `screens/business/` and `screens/seeker/`.
 
-This has never been hit in practice: admin accounts are not creatable through the API, so the only
-way to reach it is the seeded account or a hand-made database row. It is recorded because Sprint 3
-now has to fix it. The pulled-forward open-reports list (E6) is the first screen an admin will ever
-see, which makes this row's real scope "build the admin surface" — a third role branch, the
-directory, the screen, and a decision about what an admin lands on — rather than "add one list".
+**Landing decision (GL-385):** a minimal single-route stack, not a tab bar — one screen doesn't
+justify tabs this sprint, and Sprint 4's disputes/moderation/account-status rows can add them once
+there's more than one destination. Sign-out is a header control on `ReportsScreen` itself rather
+than a reused `AccountSettingsScreen`, which isn't admin-safe — it renders profile nav rows that
+403 for an admin and round-trips to `GET /auth/me`, itself a profile endpoint.
 
-**Ticketed for Sprint 3 as GL-306**, owner Bineth. It is not ticketed separately from the reports
-list: they are the same story, and splitting them would have put two stories in `RootNavigator.js`
-at the same line. Its criteria 1–5 cover the branch, the directory, the landing decision and a
-reachable sign-out, and depend on nothing but the `admin` role — so they are built before the queue
-API exists rather than waiting behind it.
+**The reports list (GL-386/GL-387):** `screens/admin/ReportsScreen.js` lists
+`GET /api/admin/reports` — open, newest first, ten per page, the same single-in-flight guard and
+inline "load more" retry `BrowseGigsScreen` uses. Each row carries the reason as a `Badge`, what
+was reported (a person's name, or a gig's title with its business), the reporter's name, the note
+in full or truncated with a "Read more" toggle, and the filing time via the existing relative-time
+formatter. A vanished target (`target: null`, for a hard-deleted gig or a deactivated user) renders
+"no longer available" instead of hiding the report — the report survives its subject.
+
+**Both guarantees verified deliberately (GL-388)**, not assumed: read-only holds — no
+resolve/dismiss/suspend/warn/assign/mark-as-read/swipe control anywhere in `screens/admin/`, not
+even a disabled one, confirmed by direct search of the admin screens and stack; and non-admin
+unreachability holds — `AdminStack`/`ReportsScreen` are referenced only from `RootNavigator.js`'s
+single `role === 'admin'` check, with no reference from `SeekerTabs`, `BusinessTabs`, `AuthStack`,
+or any seeker/business screen, and no other call anywhere navigates to the `Reports` route by name.
 
 ---
 
