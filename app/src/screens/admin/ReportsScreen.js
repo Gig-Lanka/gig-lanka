@@ -144,8 +144,17 @@ export default function ReportsScreen() {
       });
   }, []);
 
+  // `load` synchronously calls setLoading/setError before its first await,
+  // so calling it straight from this effect trips
+  // react-hooks/set-state-in-effect. Deferring through a zero-delay timeout
+  // keeps the effect itself from synchronously updating state, and the
+  // cleanup skips the request entirely if the screen unmounts first.
   useEffect(() => {
-    load(1, 'initial');
+    const timeoutId = setTimeout(() => {
+      load(1, 'initial');
+    }, 0);
+
+    return () => clearTimeout(timeoutId);
   }, [load]);
 
   const handleRetry = useCallback(() => load(1, 'initial'), [load]);
