@@ -7,27 +7,40 @@ import Brand from '../../components/ui/Brand';
 import Button from '../../components/ui/Button';
 import Notice from '../../components/ui/Notice';
 import TextInput from '../../components/ui/TextInput';
+import useAuth from '../../hooks/useAuth';
 import { isValidEmail } from '../../utils/validation';
 
 // docs/mockups/gig-lanka-user-profile-v3.html#forgot-password - the frame's
-// confirmation is neutral by construction: it never branches on whether the
-// address exists, so there is nothing here for the API to leak (GL-327 wires
-// the actual request; this screen always reaches the same confirmed state).
+// confirmation is neutral by construction: the API always returns the same
+// body regardless of whether the address exists (docs/api-contract.md §5.9),
+// so success here never branches on anything. A genuine request failure
+// (network/server, not "no such account") still gets its own formError,
+// the same way LoginScreen/SignUpScreen surface theirs.
 export default function ForgotPasswordScreen() {
   const navigation = useNavigation();
+  const { requestPasswordReset } = useAuth();
 
   const [email, setEmail] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [sent, setSent] = useState(false);
+  const [formError, setFormError] = useState('');
 
   const canSubmit = isValidEmail(email);
 
   const handleSubmit = async () => {
     if (!canSubmit || submitting) return;
 
+    setFormError('');
     setSubmitting(true);
-    setSent(true);
-    setSubmitting(false);
+    try {
+      await requestPasswordReset({ email: email.trim().toLowerCase() });
+      setSent(true);
+    } catch (error) {
+      const apiError = error.response?.data?.error;
+      setFormError(apiError?.message || 'Something went wrong. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -80,6 +93,12 @@ export default function ForgotPasswordScreen() {
           <Text className="mt-4 text-[13px] font-medium text-muted">
             The link works once and expires after 30 minutes.
           </Text>
+
+          {formError ? (
+            <Notice variant="error" className="mt-4">
+              {formError}
+            </Notice>
+          ) : null}
 
           <View className="flex-1" />
         </>

@@ -45,6 +45,16 @@ async function deactivateAccount() {
   return response.data.data;
 }
 
+async function requestPasswordReset({ email }) {
+  const response = await client.post('/auth/forgot-password', { email });
+  return response.data.data;
+}
+
+async function resetPassword({ token, newPassword }) {
+  const response = await client.post('/auth/reset-password', { token, newPassword });
+  return response.data.data;
+}
+
 export default {
   register,
   login,
@@ -53,4 +63,6 @@ export default {
   getCurrentUser,
   changePassword,
   deactivateAccount,
+  requestPasswordReset,
+  resetPassword,
 };

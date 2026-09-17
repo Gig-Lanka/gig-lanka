@@ -104,6 +104,17 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
+  // GL-327: neither call touches a session - the person requesting or
+  // completing a reset isn't signed in anywhere, so there's no token to
+  // store and no user/status to update, unlike every other method here.
+  const requestPasswordReset = useCallback(async ({ email }) => {
+    return authApi.requestPasswordReset({ email });
+  }, []);
+
+  const resetPassword = useCallback(async ({ token, newPassword }) => {
+    return authApi.resetPassword({ token, newPassword });
+  }, []);
+
   // GL-317: ends the session through the same path as logout above - the
   // account itself is already gone server-side (every refresh token revoked
   // by the endpoint), so this always clears the local session in `finally`
@@ -120,8 +131,28 @@ export function AuthProvider({ children }) {
   }, []);
 
   const value = useMemo(
-    () => ({ user, status, register, login, logout, changePassword, deactivateAccount }),
-    [user, status, register, login, logout, changePassword, deactivateAccount]
+    () => ({
+      user,
+      status,
+      register,
+      login,
+      logout,
+      changePassword,
+      deactivateAccount,
+      requestPasswordReset,
+      resetPassword,
+    }),
+    [
+      user,
+      status,
+      register,
+      login,
+      logout,
+      changePassword,
+      deactivateAccount,
+      requestPasswordReset,
+      resetPassword,
+    ]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
