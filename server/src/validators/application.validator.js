@@ -1,10 +1,22 @@
 import Joi from 'joi';
 
-// Apply has no accepted fields — status and appliedAt are set by the
-// service and never taken from the client. An empty schema still routes
-// the body through validate() so any fields a caller sends are stripped
-// rather than silently reaching the service.
-export const applyToGigSchema = Joi.object({});
+// `skillTrialSubmission` and `resumeUrl` are the only accepted fields —
+// status, appliedAt and the profile snapshot stay server-derived and are
+// stripped (stripUnknown, validate.middleware.js) if a caller sends them.
+// Content validation against the gig's submissionType (text length, file
+// requirement per type) is a sibling sub-task's concern; this only shapes
+// the client-settable fields — `result`, `submittedAt` etc. are
+// server-derived and stripped the same way if sent here. `resumeUrl`'s
+// storage-origin check (GL-362) needs the configured storage host, so it
+// lives in application.service.js, not here — this only shapes it as a
+// string.
+export const applyToGigSchema = Joi.object({
+  skillTrialSubmission: Joi.object({
+    textResponse: Joi.string(),
+    fileUrl: Joi.string(),
+  }).optional(),
+  resumeUrl: Joi.string().optional(),
+});
 
 // The four rejection rules — a missing code, a code that isn't
 // business-selectable, an unrecognised code, and a trial code on a gig
@@ -15,4 +27,14 @@ export const applyToGigSchema = Joi.object({});
 export const rejectApplicationSchema = Joi.object({
   reasonCode: Joi.string(),
   note: Joi.string(),
+});
+
+// `result` must be `passed` or `not_passed` — the two decided values;
+// "already marked"/"nothing to judge" and the 300-character cap on
+// `resultNote` are business rules that live in reviewSkillTrial
+// (application.service.js), not here. `resultNote` is never trimmed, the
+// same rule as `note` above — it is shown to the seeker exactly as written.
+export const trialReviewSchema = Joi.object({
+  result: Joi.string(),
+  resultNote: Joi.string(),
 });

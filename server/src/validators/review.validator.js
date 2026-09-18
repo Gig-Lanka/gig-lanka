@@ -34,3 +34,13 @@ export const createReviewSchema = Joi.object({
     .items(Joi.string().valid(...ALL_REVIEW_CATEGORIES))
     .default([]),
 });
+
+// §12.2's `page` and `rating` query params. `page` stays `Joi.any()`, same as
+// listGigsQuerySchema — malformed or missing values fall back to `1` in the
+// service, not here. `rating`, once present, narrows the query server-side
+// (GL-373) so it must be a real star value or rejected outright, the same as
+// GL-215/GL-216 did for Browse's filters.
+export const listUserReviewsQuerySchema = Joi.object({
+  page: Joi.any().optional(),
+  rating: Joi.number().integer().min(1).max(5).optional(),
+});

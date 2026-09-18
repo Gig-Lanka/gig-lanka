@@ -6,6 +6,9 @@ import {
   refreshTokens,
   logoutUser,
   changeUserPassword,
+  requestPasswordReset,
+  resetPassword,
+  deactivateOwnAccount,
 } from '../services/auth.service.js';
 
 export const register = asyncHandler(async (req, res) => {
@@ -40,4 +43,22 @@ export const changePassword = asyncHandler(async (req, res) => {
   const { accessToken, refreshToken } = await changeUserPassword(req.user, req.body);
 
   sendSuccess(res, { accessToken, refreshToken }, 200);
+});
+
+export const forgotPassword = asyncHandler(async (req, res) => {
+  await requestPasswordReset(req.body);
+
+  sendSuccess(res, { message: 'If that email is registered, a password reset link has been sent.' }, 200);
+});
+
+export const resetUserPassword = asyncHandler(async (req, res) => {
+  await resetPassword(req.body);
+
+  sendSuccess(res, null, 200);
+});
+
+export const deactivate = asyncHandler(async (req, res) => {
+  await deactivateOwnAccount(req.user);
+
+  sendSuccess(res, null, 200);
 });

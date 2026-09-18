@@ -167,6 +167,66 @@ describe('GET /api/users/:userId/reviews', () => {
     expect(pageTwo.body.data.total).toBe(12);
   });
 
+  it('narrows to a single star value server-side, keeping total in sync with the filtered list', async () => {
+    const business = await registerBusiness('rating-filter-business@example.com');
+    const seeker = await registerSeeker('rating-filter-seeker@example.com');
+    const caller = await registerSeeker('rating-filter-caller@example.com');
+
+    const ratings = [5, 5, 5, 5, 5, 5, 5, 5, 5, 3, 3, 1];
+    for (const rating of ratings) {
+      const application = await createCompletedApplication(business.userId, seeker.userId);
+      await Review.create({
+        application: application._id,
+        author: business.userId,
+        subject: seeker.userId,
+        direction: 'business_to_seeker',
+        rating,
+        text: `A review at ${rating} stars, long enough to pass validation easily.`,
+      });
+    }
+
+    const fiveStar = await request(app)
+      .get(`/api/users/${seeker.userId}/reviews?rating=5`)
+      .set('Authorization', `Bearer ${caller.accessToken}`);
+
+    expect(fiveStar.status).toBe(200);
+    expect(fiveStar.body.data.total).toBe(9);
+    expect(fiveStar.body.data.reviews).toHaveLength(9);
+    expect(fiveStar.body.data.reviews.every((review) => review.rating === 5)).toBe(true);
+
+    // A matching review past the first page of the *unfiltered* list (the
+    // 1-star review is 12th, i.e. on page 2 of the plain endpoint) must
+    // still surface on page 1 of the filtered query — the defect GL-215/
+    // GL-216 removed on Browse.
+    const oneStar = await request(app)
+      .get(`/api/users/${seeker.userId}/reviews?rating=1`)
+      .set('Authorization', `Bearer ${caller.accessToken}`);
+
+    expect(oneStar.status).toBe(200);
+    expect(oneStar.body.data.total).toBe(1);
+    expect(oneStar.body.data.reviews).toHaveLength(1);
+    expect(oneStar.body.data.reviews[0].rating).toBe(1);
+
+    const fourStar = await request(app)
+      .get(`/api/users/${seeker.userId}/reviews?rating=4`)
+      .set('Authorization', `Bearer ${caller.accessToken}`);
+
+    expect(fourStar.status).toBe(200);
+    expect(fourStar.body.data.total).toBe(0);
+    expect(fourStar.body.data.reviews).toEqual([]);
+  });
+
+  it('rejects an out-of-range rating filter with 400', async () => {
+    const caller = await registerSeeker('rating-filter-invalid-caller@example.com');
+
+    const res = await request(app)
+      .get('/api/users/64f1a2b3c4d5e6f7a8b9c0d1/reviews?rating=6')
+      .set('Authorization', `Bearer ${caller.accessToken}`);
+
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('VALIDATION_ERROR');
+  });
+
   it("keeps a deactivated user's reviews visible — deactivation never deletes reviews", async () => {
     const business = await registerBusiness('deactivated-business@example.com');
     const seeker = await registerSeeker('deactivated-seeker@example.com');

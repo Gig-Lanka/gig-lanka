@@ -175,23 +175,78 @@ export const setRatingSummary = async (userId, ratingSummary) => {
   await profile.save();
 };
 
-// The name and photo any other feature embeds when it shows who someone is —
-// a gig's business block, and later an application or review author. This is
-// the only shape other components should read a profile through, so when the
-// public identity changes it changes in one place instead of in every caller.
+// GL-353: the single writer of Profile.skillTrialResults — the mirror image
+// of setRatingSummary above, called only by application.service.js's
+// reviewSkillTrial, and only after a trial is marked `passed`. Narrow by
+// design: this appends one badge and nothing else, so the ownership
+// boundary with Application & Hiring is expressed in code the same way the
+// rating aggregate's already is (no import of profile.model.js from outside
+// this file). `skill` is the gig's category **value**, not its label, so
+// the client renders the label from the enum like everywhere else. A
+// `not_passed`, `skipped` or unmarked trial never reaches here — the caller
+// only calls this on a pass — and marking is once and final, so there is no
+// corresponding un-writing path.
+export const addSkillTrialResult = async (userId, { skill, completedAt }) => {
+  const user = await User.findById(userId);
+
+  if (!user) return;
+
+  const profile = await getOrCreateProfile(user);
+  profile.skillTrialResults.push({ skill, passed: true, completedAt });
+  await profile.save();
+};
+
+// The name, photo and rating any other feature embeds when it shows who
+// someone is — a gig's business block, and later an application or review
+// author. This is the only shape other components should read a profile
+// through, so when the public identity changes it changes in one place
+// instead of in every caller.
 //
 // Read-only and non-creating on purpose: callers include public, unauthenticated
 // endpoints (GET /api/gigs/:id), and a public read must never write. A user with
-// no profile yet returns nulls rather than being lazily created here.
+// no profile yet returns nulls rather than being lazily created here — including
+// ratingSummary, which reads back null rather than a fabricated zeroed aggregate
+// when there is no profile document to read it from (GL-377).
 //
 // userId is trusted to be a valid ObjectId — callers that take an id from a
 // request validate it at that boundary and 404 there, the way gig.service does.
 export const getPublicIdentity = async (userId) => {
-  const profile = await Profile.findOne({ user: userId }).select('name photo').lean();
+  const profile = await Profile.findOne({ user: userId })
+    .select('name photo ratingSummary')
+    .lean();
 
   return {
     id: userId.toString(),
     name: profile?.name ?? null,
     photo: profile?.photo ?? null,
+    ratingSummary: profile?.ratingSummary ?? null,
   };
+};
+
+// Batched sibling of getPublicIdentity, for a caller that needs several
+// people's identities at once (GL-371: an admin report page's reporters,
+// user targets and gig-poster businesses) — one query for the whole set
+// instead of one per id. Same contract per id as the single-id version,
+// including the no-profile-yet fallback to nulls; returned as a Map keyed by
+// the string id so a caller can look up a raw ObjectId reference either way.
+export const getPublicIdentities = async (userIds) => {
+  const uniqueIds = [...new Set(userIds.map((id) => id.toString()))];
+
+  if (uniqueIds.length === 0) return new Map();
+
+  const profiles = await Profile.find({ user: { $in: uniqueIds } })
+    .select('user name photo')
+    .lean();
+  const byUserId = new Map(profiles.map((profile) => [profile.user.toString(), profile]));
+
+  return new Map(
+    uniqueIds.map((id) => [
+      id,
+      {
+        id,
+        name: byUserId.get(id)?.name ?? null,
+        photo: byUserId.get(id)?.photo ?? null,
+      },
+    ]),
+  );
 };

@@ -30,12 +30,16 @@ const createAdminAccessToken = async () => {
   });
 };
 
-describe('GET /api/auth/admin-smoke-test — role-based access', () => {
+// GL-320: re-expressed against a real role-gated route after the
+// `admin-smoke-test` route (and the suite that exercised it) was deleted —
+// `GET /api/admin/reports` is gated the same way (requireAuth + requireRole
+// ('admin')), so these two assertions carry the same RBAC coverage forward.
+describe('GET /api/admin/reports — role-based access', () => {
   it('refuses a seeker token with 403', async () => {
     const seekerToken = await registerSeeker();
 
     const res = await request(app)
-      .get('/api/auth/admin-smoke-test')
+      .get('/api/admin/reports')
       .set('Authorization', `Bearer ${seekerToken}`);
 
     expect(res.status).toBe(403);
@@ -45,7 +49,7 @@ describe('GET /api/auth/admin-smoke-test — role-based access', () => {
     const adminToken = await createAdminAccessToken();
 
     const res = await request(app)
-      .get('/api/auth/admin-smoke-test')
+      .get('/api/admin/reports')
       .set('Authorization', `Bearer ${adminToken}`);
 
     expect(res.status).toBe(200);

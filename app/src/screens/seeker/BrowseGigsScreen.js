@@ -20,7 +20,7 @@ const SEARCH_PLACEHOLDER = 'Search tutoring, delivery, events…';
 const SEARCH_DEBOUNCE_MS = 400;
 const DEFAULT_SORT = 'newest';
 
-export default function BrowseGigsScreen() {
+export default function BrowseGigsScreen({ guest = false, onSignIn }) {
   const navigation = useNavigation();
   const [gigs, setGigs] = useState([]);
   const [total, setTotal] = useState(0);
@@ -250,7 +250,7 @@ export default function BrowseGigsScreen() {
   const handleCloseFilters = useCallback(() => setFiltersVisible(false), []);
 
   return (
-    <Screen>
+    <Screen edges={['top']}>
       <ScreenHeader title="Find a gig" />
 
       <TextInput
@@ -266,7 +266,12 @@ export default function BrowseGigsScreen() {
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        className="mb-4 flex-grow-0"
+        // ScrollView defaults to flexShrink: 1 (see RN's own
+        // baseHorizontal style) - without pinning it to 0, this row is
+        // still compressible by its sibling FlatList competing for the
+        // same vertical space, which is what was cutting the chips off
+        // (GL-280) even though flex-grow-0 alone looked like enough.
+        className="mb-4 flex-shrink-0 flex-grow-0"
         contentContainerClassName="items-center gap-2 pr-4"
       >
         <Pressable
@@ -311,7 +316,14 @@ export default function BrowseGigsScreen() {
         <FlatList
           data={gigs}
           keyExtractor={(gig) => gig.id}
-          renderItem={({ item }) => <GigCard gig={item} onPress={() => handleCardPress(item)} />}
+          renderItem={({ item }) => (
+            <GigCard
+              gig={item}
+              onPress={() => handleCardPress(item)}
+              guest={guest}
+              onSignIn={onSignIn}
+            />
+          )}
           ListHeaderComponent={
             gigs.length > 0 ? (
               <View className="mb-3 flex-row items-center justify-between gap-3">

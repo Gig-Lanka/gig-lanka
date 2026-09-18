@@ -6,8 +6,9 @@ import {
   APPLICATION_STATUSES,
   REJECTION_REASON_CODES,
 } from '../models/application.model.js';
-import { assertGigIsOpen, findOwnedGig } from './gig.service.js';
-import { getMyProfile } from './profile.service.js';
+import { assertGigIsOpen, findOwnedGig, markGigFilled } from './gig.service.js';
+import { getMyProfile, addSkillTrialResult } from './profile.service.js';
+import { isStorageUrl } from './storage.service.js';
 
 // Source status -> target status -> which kind of actor may trigger that
 // move. Modeled as data, not a chain of conditionals, so Sprint 2's hiring
@@ -69,6 +70,11 @@ const DECIDED_STATUSES = ['hired', 'completed', 'rejected', 'withdrawn', 'closed
 // gig's applicantCount must not fall when hire -> complete happens. A count
 // that drops when a job is done reads as a bug.
 const LIVE_STATUSES = ['applied', 'viewed', 'shortlisted', 'hired', 'completed'];
+// GL-345: what counts as "holding a position" on the gig. Mirrors
+// LIVE_STATUSES in keeping `completed` counted — finishing the work does not
+// free the position back up — but excludes `applied`, `viewed` and
+// `shortlisted`, which haven't been given one yet.
+const POSITION_HOLDING_STATUSES = ['hired', 'completed'];
 
 // The two Skill Trial reason codes only make sense once a gig can carry a
 // trial, which arrives in Sprint 3. `gig.skillTrial` does not exist on the
@@ -115,16 +121,122 @@ const buildProfileSnapshot = (profile) => ({
   rating: profile.ratingSummary,
 });
 
+// `gig.skillTrial` is only ever absent (no trial — see updateGig's "none
+// stores nothing" normalisation in gig.service.js) or `{ requirement:
+// 'optional', ... }`: GL-341 removed `required` from the vocabulary
+// entirely, so that case never arises here.
+const resolveSkillTrialRequirement = (gig) => gig.skillTrial?.requirement ?? 'none';
+
+const TRIAL_TEXT_MIN_LENGTH = 20;
+const TRIAL_TEXT_MAX_LENGTH = 2000;
+
+// GL-297 AC6: the submission is checked against the gig's own
+// `submissionType`, not a fixed shape — `text` requires `textResponse`
+// (20-2,000 characters, the same range the SkillTrialScreen counter
+// promises) and forbids `fileUrl`; `file` is the mirror image; `text_and_file`
+// requires both. A file itself never reaches this endpoint — the client
+// uploads it through POST /api/uploads into the `trials` folder first and
+// sends only the returned URL.
+const assertValidSkillTrialSubmissionContent = (submissionType, submissionBody) => {
+  const { textResponse, fileUrl } = submissionBody;
+  const textAllowed = submissionType === 'text' || submissionType === 'text_and_file';
+  const fileAllowed = submissionType === 'file' || submissionType === 'text_and_file';
+  const errors = [];
+
+  if (textAllowed) {
+    const trimmed = textResponse?.trim();
+    if (!trimmed) {
+      errors.push({
+        field: 'skillTrialSubmission.textResponse',
+        message: 'textResponse is required for this trial',
+      });
+    } else if (trimmed.length < TRIAL_TEXT_MIN_LENGTH || trimmed.length > TRIAL_TEXT_MAX_LENGTH) {
+      errors.push({
+        field: 'skillTrialSubmission.textResponse',
+        message: `textResponse must be between ${TRIAL_TEXT_MIN_LENGTH} and ${TRIAL_TEXT_MAX_LENGTH} characters`,
+      });
+    }
+  } else if (textResponse !== undefined) {
+    errors.push({
+      field: 'skillTrialSubmission.textResponse',
+      message: 'textResponse is not accepted for this trial',
+    });
+  }
+
+  if (fileAllowed) {
+    if (!fileUrl) {
+      errors.push({
+        field: 'skillTrialSubmission.fileUrl',
+        message: 'fileUrl is required for this trial',
+      });
+    }
+  } else if (fileUrl !== undefined) {
+    errors.push({
+      field: 'skillTrialSubmission.fileUrl',
+      message: 'fileUrl is not accepted for this trial',
+    });
+  }
+
+  if (errors.length > 0) {
+    throw new ApiError(400, 'VALIDATION_ERROR', 'Skill trial submission is invalid.', errors);
+  }
+};
+
+// GL-297 §4: a `none` gig has no task to answer, so a submission sent
+// anyway is refused; an `optional` gig accepts one, validated against its
+// own submissionType, or records a deliberate skip.
+const buildSkillTrialSubmission = (gig, submissionBody) => {
+  const requirement = resolveSkillTrialRequirement(gig);
+
+  if (requirement === 'none') {
+    if (submissionBody) {
+      throw new ApiError(400, 'VALIDATION_ERROR', 'This gig has no skill trial to submit.', [
+        { field: 'skillTrialSubmission', message: 'This gig has no skill trial to submit' },
+      ]);
+    }
+    return undefined;
+  }
+
+  if (!submissionBody) {
+    return { result: 'skipped' };
+  }
+
+  assertValidSkillTrialSubmissionContent(gig.skillTrial.submissionType, submissionBody);
+
+  return { ...submissionBody, result: 'submitted', submittedAt: new Date() };
+};
+
+// GL-362: an attached resume must be a file the applicant actually uploaded
+// through POST /api/uploads, never an arbitrary external link rendered as an
+// attachment on a business's screen. Checked by origin only — the server
+// never fetches a client-supplied URL to inspect it. Never a gate: absence
+// is fine, so this only runs when resumeUrl is present at all.
+const assertValidResumeUrl = (resumeUrl) => {
+  if (resumeUrl === undefined) return;
+
+  if (!isStorageUrl(resumeUrl)) {
+    throw new ApiError(
+      400,
+      'VALIDATION_ERROR',
+      'resumeUrl must be a URL from the platform’s own storage.',
+      [{ field: 'resumeUrl', message: 'resumeUrl must be a URL from the platform’s own storage' }],
+    );
+  }
+};
+
 // GL-182: creates the application a seeker submits for a gig. The profile
 // snapshot is read through profile.service.js rather than profile.model.js
 // directly, so the ownership boundary with E2 holds. Status and appliedAt
 // are schema defaults here, never accepted from a caller.
-export const applyToGig = async (gigId, user) => {
+export const applyToGig = async (gigId, user, body) => {
   const gig = await assertGigIsOpen(gigId);
   const profile = await getMyProfile(user);
 
   const profileSnapshot = buildProfileSnapshot(profile);
   const profileIncomplete = profile.workExperience.length === 0 && profile.education.length === 0;
+  const skillTrialSubmission = buildSkillTrialSubmission(gig, body?.skillTrialSubmission);
+  const resumeUrl = body?.resumeUrl;
+  assertValidResumeUrl(resumeUrl);
 
   let application;
   try {
@@ -132,14 +244,31 @@ export const applyToGig = async (gigId, user) => {
       gig: gig._id,
       applicant: user._id,
       profileSnapshot,
+      skillTrialSubmission,
+      resumeUrl,
     });
   } catch (err) {
     // Same trap GL-15 hit with duplicate emails: the unique (gig, applicant)
     // index is what actually enforces "one application per seeker per gig",
     // so the duplicate-key error is translated here rather than reaching the
     // client as a 500. Holds whether the earlier application is live,
-    // withdrawn or rejected — the index doesn't distinguish.
+    // withdrawn or rejected — the index doesn't distinguish. When the
+    // earlier application already carries a trial submission (submitted,
+    // skipped, passed or not passed), the more specific
+    // TRIAL_ALREADY_SUBMITTED replaces the generic error — the server half
+    // of "you can't edit a trial after submitting" (GL-297 §4/§8).
     if (err.code === 11000) {
+      const existing = await Application.findOne({ gig: gig._id, applicant: user._id });
+      const existingResult = existing?.skillTrialSubmission?.result;
+
+      if (existingResult && existingResult !== 'not_submitted') {
+        throw new ApiError(
+          409,
+          'TRIAL_ALREADY_SUBMITTED',
+          'A trial has already been submitted for this application.',
+        );
+      }
+
       throw new ApiError(
         409,
         'APPLICATION_ALREADY_EXISTS',
@@ -250,6 +379,36 @@ export const transitionApplicationStatus = async (application, targetStatus, act
     }
   }
 
+  // GL-347: `closed_filled` is system-only (TRANSITION_RULES above); the
+  // GL-346 sweep always supplies `positions_filled`, but a reason stays
+  // optional here — unlike `rejected`, nothing validates it, since this
+  // path is never reachable from a business request. Reuses
+  // `rejectionReasonCode` rather than a second field: the schema's
+  // REJECTION_REASON_CODES already carries `positions_filled` for exactly
+  // this write, and the seeker's tracker reads the same field either way.
+  if (targetStatus === 'closed_filled' && reason?.code) {
+    application.rejectionReasonCode = reason.code;
+  }
+
+  // GL-345 §9: a business cannot hire more people than the gig has
+  // positions. Checked here, after assertActorPermitted has already fetched
+  // `gig` for this business actor, so a business hiring into someone else's
+  // full gig still gets 403 rather than this 409 leaking the gig's state.
+  if (targetStatus === 'hired') {
+    const positionsHeld = await Application.countDocuments({
+      gig: application.gig,
+      status: { $in: POSITION_HOLDING_STATUSES },
+    });
+
+    if (positionsHeld >= gig.positions) {
+      throw new ApiError(
+        409,
+        'GIG_POSITIONS_FILLED',
+        `This gig only has ${gig.positions} position(s) and they are all filled.`,
+      );
+    }
+  }
+
   const wasLive = LIVE_STATUSES.includes(currentStatus);
   const isLive = LIVE_STATUSES.includes(targetStatus);
 
@@ -280,7 +439,91 @@ export const transitionApplicationStatus = async (application, targetStatus, act
     await adjustGigApplicantCount(application.gig, -1);
   }
 
+  // GL-345/GL-346: when this hire takes the gig's last open position, the
+  // fill sequence runs in the same request — markGigFilled (E3's writer for
+  // `gig.status`, never set directly here) followed by the graded sweep of
+  // the applications left waiting.
+  if (targetStatus === 'hired') {
+    const positionsHeld = await Application.countDocuments({
+      gig: application.gig,
+      status: { $in: POSITION_HOLDING_STATUSES },
+    });
+
+    if (positionsHeld >= gig.positions) {
+      await markGigFilled(application.gig);
+      await sweepPositionsFilledApplications(application.gig);
+    }
+  }
+
   return application;
+};
+
+// GL-346: whatever their application status, an applicant who submitted a
+// skill trial did the work, so the sweep leaves them for a person to
+// decide — `skipped` and `not_submitted` mean no work was done, and stay
+// eligible. `passed`/`not_passed` still count as submitted: reviewSkillTrial
+// records a result but never moves the application's status (§6.12), so a
+// reviewed trial can still be sitting at `applied` or `viewed` here.
+const TRIAL_DONE_RESULTS = ['submitted', 'passed', 'not_passed'];
+const hasSubmittedSkillTrial = (application) =>
+  TRIAL_DONE_RESULTS.includes(application.skillTrialSubmission?.result);
+
+// GL-296 §6: the graded sweep. Moves every `applied` or `viewed` application
+// on the gig to `closed_filled` through transitionApplicationStatus with a
+// system actor (no HTTP-authenticated caller), except one carrying a
+// submitted skill trial. `shortlisted` is never a candidate at all — it has
+// no `closed_filled` entry in TRANSITION_RULES, deliberately, so that guard
+// is never even reached for it.
+//
+// Several separate writes, not one transaction — the same shape
+// `applyToGig`'s create-plus-count-adjustment already is. A failure partway
+// leaves every application already moved in its new, valid state; re-running
+// this against the same gig only finds what's left, since a moved
+// application no longer matches the applied/viewed filter below.
+export const sweepPositionsFilledApplications = async (gigId) => {
+  const candidates = await Application.find({
+    gig: gigId,
+    status: { $in: ['applied', 'viewed'] },
+  });
+
+  for (const application of candidates) {
+    if (hasSubmittedSkillTrial(application)) continue;
+
+    await transitionApplicationStatus(application, 'closed_filled', null, {
+      code: 'positions_filled',
+    });
+  }
+};
+
+// GL-347 / Application & Hiring brief §6: how many applications on a gig
+// are still owed a personal answer — `shortlisted`, or carrying a skill
+// trial submission that hasn't been reviewed yet. Once a trial is reviewed
+// (`passed`/`not_passed`) the business has already given that answer, even
+// if the application's own status hasn't moved on, so it drops out here —
+// unlike the sweep's exemption above, which keeps a reviewed trial
+// untouched for a different reason (the application itself still needs a
+// decision, not just the trial). Batched across a whole gig list — one
+// aggregate rather than one query per gig, the same shape as
+// gig.service.js's getSavedGigIdSet and getGigSummariesByIds. Composed onto
+// the business's My Gigs read at the controller layer, not here in
+// gig.service.js, for the same import-cycle reason GL-245's
+// viewerApplication is (gig.controller.js, not gig.service.js).
+export const getWaitingOnYouCounts = async (gigIds) => {
+  const uniqueIds = [...new Set(gigIds.map((id) => id.toString()))];
+
+  if (uniqueIds.length === 0) return new Map();
+
+  const rows = await Application.aggregate([
+    {
+      $match: {
+        gig: { $in: uniqueIds.map((id) => new mongoose.Types.ObjectId(id)) },
+        $or: [{ status: 'shortlisted' }, { 'skillTrialSubmission.result': 'submitted' }],
+      },
+    },
+    { $group: { _id: '$gig', count: { $sum: 1 } } },
+  ]);
+
+  return new Map(rows.map((row) => [row._id.toString(), row.count]));
 };
 
 // The read side of the boundary with Reviews (GL-195): a review is created
@@ -507,6 +750,83 @@ export const rejectApplication = async (id, actor, body) => {
 
   return {
     application: { ...updated.toJSON(), gig: toGigSummary(gig) },
+  };
+};
+
+const RESULT_NOTE_MAX_LENGTH = 300;
+
+// GL-352/GL-353: PATCH /api/applications/:id/trial-review. The review is a
+// result, not a status (GL-297 §4/§8) — it never goes through
+// transitionApplicationStatus or TRANSITION_RULES, so a business can still
+// shortlist, hire or reject the same application afterwards regardless of
+// which way the trial was marked. Only the business that posted the gig may
+// call it, checked by ownership the same way every other decision endpoint
+// here is (403 for a seeker, a guest, or a business that owns a different
+// gig). Marking is once and final: a trial not currently `submitted` —
+// already `passed`/`not_passed`, or never eligible in the first place
+// (`skipped`, or no submission at all) — is refused with the same
+// TRIAL_ALREADY_REVIEWED code, the same way INVALID_APPLICATION_TRANSITION
+// covers every unreachable status move under one code. A pass writes a
+// badge to the seeker's profile — the gig's category and the moment it was
+// marked — through profile.service.js's narrow writer, never by importing
+// profile.model.js directly; a fail or a skip writes nothing there.
+export const reviewSkillTrial = async (id, actor, body) => {
+  const { application, businessId } = await getApplicationWithParties(id);
+
+  if (!actor || actor.role !== 'business' || businessId !== actor.id.toString()) {
+    throw FORBIDDEN_ERROR();
+  }
+
+  const result = body?.result;
+  if (result !== 'passed' && result !== 'not_passed') {
+    throw new ApiError(400, 'VALIDATION_ERROR', 'result must be "passed" or "not_passed".', [
+      { field: 'result', message: 'result must be "passed" or "not_passed"' },
+    ]);
+  }
+
+  const resultNote = body?.resultNote;
+  if (resultNote !== undefined && resultNote.length > RESULT_NOTE_MAX_LENGTH) {
+    throw new ApiError(
+      400,
+      'VALIDATION_ERROR',
+      `resultNote must be at most ${RESULT_NOTE_MAX_LENGTH} characters.`,
+      [
+        {
+          field: 'resultNote',
+          message: `resultNote must be at most ${RESULT_NOTE_MAX_LENGTH} characters`,
+        },
+      ],
+    );
+  }
+
+  if (application.skillTrialSubmission?.result !== 'submitted') {
+    throw new ApiError(
+      409,
+      'TRIAL_ALREADY_REVIEWED',
+      'This trial cannot be reviewed — it is either already marked, or was never submitted.',
+    );
+  }
+
+  const reviewedAt = new Date();
+  application.skillTrialSubmission.result = result;
+  application.skillTrialSubmission.reviewedAt = reviewedAt;
+  if (resultNote !== undefined) {
+    application.skillTrialSubmission.resultNote = resultNote;
+  }
+
+  await application.save();
+
+  const gig = await Gig.findById(application.gig);
+
+  if (result === 'passed') {
+    await addSkillTrialResult(application.applicant, {
+      skill: gig?.category,
+      completedAt: reviewedAt,
+    });
+  }
+
+  return {
+    application: { ...application.toJSON(), gig: toGigSummary(gig) },
   };
 };
 

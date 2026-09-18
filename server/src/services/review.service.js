@@ -210,6 +210,14 @@ export const listUserReviews = async (userId, query) => {
   const page = Math.max(1, parseInt(query.page, 10) || 1);
   const filter = { subject: userId };
 
+  // Narrows the query itself, not the page already fetched — a matching
+  // review on page 4 must stay reachable (GL-215/GL-216). `total` is counted
+  // against this same filter below, so the number beside a star tab and the
+  // list behind it can never disagree.
+  if (query.rating !== undefined) {
+    filter.rating = query.rating;
+  }
+
   const [reviews, total] = await Promise.all([
     Review.find(filter)
       .sort({ createdAt: -1, _id: -1 })

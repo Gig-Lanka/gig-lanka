@@ -63,12 +63,17 @@ export function formatRelativeTime(date, now = new Date()) {
   return formatShortDate(target);
 }
 
+// GL-283: this only formats urgency copy for a deadline that hasn't passed
+// yet - "is the gig closed" is `status`'s question to answer, not a date
+// comparison made independently of it (that's what let the badge and this
+// label disagree). A past date returns null; callers show their own
+// status-driven "Applications closed" copy instead.
 export function formatDeadline(deadline, now = new Date()) {
   const target = new Date(deadline);
   const dayDiff = Math.round((startOfDay(target) - startOfDay(now)) / DAY_MS);
 
   if (dayDiff < 0) {
-    return { label: 'Applications closed', urgent: true };
+    return null;
   }
   if (dayDiff === 0) {
     return { label: 'Closes today', urgent: true };
@@ -80,6 +85,16 @@ export function formatDeadline(deadline, now = new Date()) {
     return { label: `Closes in ${dayDiff} days`, urgent: true };
   }
   return { label: `Closes ${formatShortDate(target)}`, urgent: false };
+}
+
+// Binary units (1024, not 1000) since these are file sizes off the device
+// picker/server, not network-transfer estimates - matches how OSes report
+// picked-file sizes back to the app.
+export function formatFileSize(bytes) {
+  if (typeof bytes !== 'number' || Number.isNaN(bytes)) return '';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 export function formatLocation({ isRemote, area, city }) {

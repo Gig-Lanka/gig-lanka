@@ -18,6 +18,14 @@ const SCHEDULE_TAG_VALUES = ['weekday_mornings', 'weekday_evenings', 'weekends',
 
 const COMMITMENT_VALUES = ['one_off', 'under_a_week', 'one_to_four_weeks', 'ongoing'];
 
+// No 'required' value: product decided a skill trial is never mandatory to
+// apply, only ever absent or optional. See GL-341's PR / Jira note.
+const SKILL_TRIAL_REQUIREMENT_VALUES = ['none', 'optional'];
+
+const SKILL_TRIAL_SUBMISSION_TYPE_VALUES = ['text', 'file', 'text_and_file'];
+
+const SKILL_TRIAL_EFFORT_ESTIMATE_VALUES = ['under_30_minutes', '30_to_60_minutes', '1_to_2_hours'];
+
 const GIG_SORT_ORDER_VALUES = ['newest', 'highest_pay', 'starting_soon'];
 
 const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
@@ -54,6 +62,31 @@ const futureOrTodayDateOnly = () =>
       'date.past': 'cannot be in the past',
     });
 
+// When requirement is 'none' the other four fields are forbidden, not just
+// optional - a trial that isn't required shouldn't carry leftover task
+// details. Mirrors the pre('validate') guard on skillTrialSchema in
+// gig.model.js.
+const skillTrialSchema = Joi.object({
+  requirement: Joi.string()
+    .valid(...SKILL_TRIAL_REQUIREMENT_VALUES)
+    .default('none'),
+  taskTitle: Joi.string()
+    .trim()
+    .max(80)
+    .when('requirement', { is: 'none', then: Joi.forbidden(), otherwise: Joi.required() }),
+  taskBrief: Joi.string()
+    .trim()
+    .min(20)
+    .max(1000)
+    .when('requirement', { is: 'none', then: Joi.forbidden(), otherwise: Joi.required() }),
+  submissionType: Joi.string()
+    .valid(...SKILL_TRIAL_SUBMISSION_TYPE_VALUES)
+    .when('requirement', { is: 'none', then: Joi.forbidden(), otherwise: Joi.required() }),
+  effortEstimate: Joi.string()
+    .valid(...SKILL_TRIAL_EFFORT_ESTIMATE_VALUES)
+    .when('requirement', { is: 'none', then: Joi.forbidden(), otherwise: Joi.required() }),
+});
+
 export const gigSchema = Joi.object({
   title: Joi.string().trim().max(80).required(),
   description: Joi.string().trim().min(20).max(2000).required(),
@@ -81,6 +114,7 @@ export const gigSchema = Joi.object({
   positions: Joi.number().integer().min(1).default(1),
   startDate: dateOnly().optional(),
   applicationsCloseDate: futureOrTodayDateOnly().optional(),
+  skillTrial: skillTrialSchema.optional(),
 });
 
 export const createGigSchema = gigSchema;

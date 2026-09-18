@@ -10,10 +10,15 @@ import {
   shortlistApplication,
   hireApplication,
   rejectApplication,
+  reviewSkillTrial,
 } from '../controllers/application.controller.js';
 import { validate } from '../middleware/validate.middleware.js';
 import { requireAuth, requireRole } from '../middleware/auth.middleware.js';
-import { applyToGigSchema, rejectApplicationSchema } from '../validators/application.validator.js';
+import {
+  applyToGigSchema,
+  rejectApplicationSchema,
+  trialReviewSchema,
+} from '../validators/application.validator.js';
 
 const router = Router();
 
@@ -87,6 +92,20 @@ router.patch(
   requireRole('business'),
   validate(rejectApplicationSchema),
   rejectApplication,
+);
+
+// GL-352. The review is a result, not a status — separate from
+// shortlist/hire/reject above, so it takes no status precondition; a
+// business can still shortlist, hire or reject the same application
+// afterwards regardless of how the trial was marked. Same layering as the
+// rest of this file: requireRole gates the kind of actor, and which
+// specific business owns the gig is checked inside reviewSkillTrial.
+router.patch(
+  '/applications/:id/trial-review',
+  requireAuth,
+  requireRole('business'),
+  validate(trialReviewSchema),
+  reviewSkillTrial,
 );
 
 export default router;

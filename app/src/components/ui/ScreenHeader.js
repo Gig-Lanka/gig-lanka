@@ -4,7 +4,7 @@ export default function ScreenHeader({ title, small = false, onBack, rightSlot, 
   return (
     <View
       className={[
-        'min-h-12 flex-row items-center justify-between gap-3 px-[22px] pb-[10px] pt-1',
+        'min-h-12 flex-row items-center justify-between gap-3 px-[22px] pb-[10px] pt-4',
         className,
       ]
         .filter(Boolean)

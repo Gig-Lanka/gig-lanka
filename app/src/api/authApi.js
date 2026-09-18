@@ -40,6 +40,21 @@ async function changePassword({ currentPassword, newPassword }) {
   return response.data.data;
 }
 
+async function deactivateAccount() {
+  const response = await client.post('/auth/deactivate');
+  return response.data.data;
+}
+
+async function requestPasswordReset({ email }) {
+  const response = await client.post('/auth/forgot-password', { email });
+  return response.data.data;
+}
+
+async function resetPassword({ token, newPassword }) {
+  const response = await client.post('/auth/reset-password', { token, newPassword });
+  return response.data.data;
+}
+
 export default {
   register,
   login,
@@ -47,4 +62,7 @@ export default {
   logout,
   getCurrentUser,
   changePassword,
+  deactivateAccount,
+  requestPasswordReset,
+  resetPassword,
 };

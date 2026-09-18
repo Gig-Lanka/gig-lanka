@@ -28,29 +28,33 @@ export default function Dropdown({
 
   return (
     <View className={['mb-4', containerClassName].filter(Boolean).join(' ')}>
-      {label ? <Text className="mb-1.5 text-sm font-medium text-text-primary">{label}</Text> : null}
+      {label ? <Text className="mb-2 text-label text-ink">{label}</Text> : null}
 
       <Pressable
         ref={triggerRef}
         onPress={openMenu}
         disabled={disabled}
         className={[
-          'flex-row items-center justify-between rounded-md border px-4 py-2.5',
-          error ? 'border-danger' : 'border-border',
-          disabled ? 'bg-bg-soft opacity-60' : 'bg-bg-card',
+          'h-[58px] flex-row items-center justify-between rounded-ds-lg border-[1.5px] px-[18px]',
+          error ? 'border-danger bg-paper' : open ? 'border-ink bg-paper' : 'border-transparent bg-haze',
+          disabled && 'opacity-40',
           className,
         ]
           .filter(Boolean)
           .join(' ')}
         {...props}
       >
-        <Text className={selected ? 'text-base text-text-primary' : 'text-base text-text-muted'}>
+        <Text
+          className={
+            selected ? 'text-body font-medium text-ink' : 'text-body font-normal text-placeholder'
+          }
+        >
           {selected ? selected.label : placeholder}
         </Text>
-        <Text className="text-text-secondary">▾</Text>
+        <Text className="text-muted">▾</Text>
       </Pressable>
 
-      {error ? <Text className="mt-1 text-xs text-danger-text">{error}</Text> : null}
+      {error ? <Text className="mt-1.5 text-[13px] font-medium text-danger">{error}</Text> : null}
 
       <Modal
         visible={open}
@@ -62,7 +66,7 @@ export default function Dropdown({
         <Pressable className="flex-1" onPress={() => setOpen(false)}>
           {anchor ? (
             <View
-              className="absolute rounded-md border border-border bg-bg-card"
+              className="absolute rounded-ds-lg border-[1.5px] border-line bg-paper"
               style={{ top: anchor.y + anchor.height + 4, left: anchor.x, width: anchor.width }}
             >
               {options.map((option) => (
@@ -72,15 +76,15 @@ export default function Dropdown({
                     onChange?.(option.value);
                     setOpen(false);
                   }}
-                  className={['px-4 py-3', option.value === value ? 'bg-primary-soft' : '']
+                  className={['px-4 py-3', option.value === value ? 'bg-signal-soft' : '']
                     .filter(Boolean)
                     .join(' ')}
                 >
                   <Text
                     className={
                       option.value === value
-                        ? 'text-base font-semibold text-primary'
-                        : 'text-base text-text-primary'
+                        ? 'text-body font-semibold text-signal-ink'
+                        : 'text-body text-ink'
                     }
                   >
                     {option.label}

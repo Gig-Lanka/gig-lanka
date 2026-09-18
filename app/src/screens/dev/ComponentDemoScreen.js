@@ -733,10 +733,13 @@ function FormattersSection() {
 
       <Text className="mt-3 text-sm font-medium text-text-primary">Deadline</Text>
       {deadlineExamples.map((example) => {
-        const { label, urgent } = formatDeadline(example.date, now);
+        const result = formatDeadline(example.date, now);
         return (
           <Text key={example.label} className="text-sm text-text-secondary">
-            {example.label}: {label} ({urgent ? 'urgent' : 'not urgent'})
+            {example.label}:{' '}
+            {result
+              ? `${result.label} (${result.urgent ? 'urgent' : 'not urgent'})`
+              : 'null - past deadline, status decides now'}
           </Text>
         );
       })}

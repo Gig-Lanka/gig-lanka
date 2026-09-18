@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Animated, Text, View } from 'react-native';
+import { Animated, Linking, Pressable, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 
 import applicationApi from '../../api/applicationApi';
+import gigApi from '../../api/gigApi';
 import ApplicantActionRow, {
   applicantActionsForStatus,
 } from '../../components/application/ApplicantActionRow';
 import Avatar from '../../components/ui/Avatar';
+import Badge from '../../components/ui/Badge';
 import EmptyState from '../../components/ui/EmptyState';
 import EntryCard from '../../components/profile/EntryCard';
 import HeroHeader, { HeroSheet, HeroStickyBar } from '../../components/ui/HeroHeader';
@@ -18,7 +20,11 @@ import RejectReasonSheet from '../../components/application/RejectReasonSheet';
 import ScreenHeader from '../../components/ui/ScreenHeader';
 import SectionLabel from '../../components/ui/SectionLabel';
 import useHeroScroll from '../../hooks/useHeroScroll';
-import { APPLICATION_STATUSES, REJECTION_REASONS } from '../../constants/enums';
+import {
+  APPLICATION_STATUSES,
+  REJECTION_REASONS,
+  SKILL_TRIAL_RESULTS,
+} from '../../constants/enums';
 import { formatDateRange, formatShortDate } from '../../utils/format';
 
 const STATUS = { LOADING: 'loading', READY: 'ready', ERROR: 'error' };
@@ -33,12 +39,46 @@ function reasonLabel(code) {
   return REJECTION_REASONS.find((entry) => entry.value === code)?.label ?? code;
 }
 
+function trialResultLabel(value) {
+  return SKILL_TRIAL_RESULTS.find((entry) => entry.value === value)?.label ?? value;
+}
+
+// Same tone TrialReviewScreen.js uses for its own "Submitted"/result badges -
+// duplicated rather than shared, the same rule GL-118/GL-121 set for the
+// two gig cards' status maps.
+const TRIAL_BADGE_VARIANT = {
+  not_submitted: 'neutral',
+  submitted: 'warning',
+  passed: 'positive',
+  not_passed: 'muted',
+  skipped: 'muted',
+};
+
+// Only a `submitted`, `passed` or `not_passed` trial has anything for
+// TrialReviewScreen to show - `skipped` (and the unreachable
+// `not_submitted`) route nowhere, so this row never sends a business to
+// that screen's own "no skill trial to review" dead end (GL-358's guard).
+const TRIAL_ROUTABLE_RESULTS = new Set(['submitted', 'passed', 'not_passed']);
+
 // Same format as ApplicantRow.js's row - duplicated rather than shared, the
 // rule GL-118 and GL-121 followed for the two gig cards.
 function formatRating(rating) {
   const { averageRating = 0, reviewCount = 0 } = rating ?? {};
   if (reviewCount === 0) return 'No ratings yet';
   return `★ ${averageRating.toFixed(1)} (${reviewCount})`;
+}
+
+// GL-364 - the server only ever returns `resumeUrl` (§11.1) - no stored
+// display name - so the file's name is read off its own URL, the same way
+// TrialReviewScreen.js's fileNameFromUrl reads a trial attachment's name.
+// Duplicated rather than shared, the same rule formatRating above follows.
+function fileNameFromUrl(url) {
+  if (!url) return '';
+  try {
+    return decodeURIComponent(url).split('/').pop();
+  } catch {
+    return url.split('/').pop();
+  }
 }
 
 const SHORTLIST_ERROR_MESSAGE = 'Could not shortlist this applicant. Try again.';
@@ -66,6 +106,7 @@ export default function ApplicantDetailScreen() {
   const hero = useHeroScroll();
 
   const [application, setApplication] = useState(null);
+  const [trialTask, setTrialTask] = useState(null);
   const [status, setStatus] = useState(STATUS.LOADING);
   const [reloadToken, setReloadToken] = useState(0);
   const [pendingAction, setPendingAction] = useState(null);
@@ -93,9 +134,25 @@ export default function ApplicantDetailScreen() {
       async function loadApplication() {
         try {
           const data = await applicationApi.getApplication(applicationId);
-          if (!cancelled) {
-            setApplication(data.application);
-            setStatus(STATUS.READY);
+          if (cancelled) return;
+          setApplication(data.application);
+          setStatus(STATUS.READY);
+
+          // `getApplication` returns `gig` only as the §11.6 summary (no
+          // `skillTrial`), same gap TrialReviewScreen.js works around - a
+          // second, best-effort read for the trial section below. Its own
+          // failure never fails the whole screen: the section just stays
+          // hidden, the same as a gig with no trial at all, rather than a
+          // supplementary card blocking the applicant's core detail view.
+          if (data.application.gig?.id) {
+            try {
+              const { gig: fetchedGig } = await gigApi.getGig(data.application.gig.id);
+              if (!cancelled) setTrialTask(fetchedGig.skillTrial ?? null);
+            } catch {
+              if (!cancelled) setTrialTask(null);
+            }
+          } else {
+            setTrialTask(null);
           }
         } catch {
           if (!cancelled) setStatus(STATUS.ERROR);
@@ -291,11 +348,16 @@ export default function ApplicantDetailScreen() {
     appliedAt,
     rejectionReasonCode,
     rejectionNote,
+    skillTrialSubmission,
+    resumeUrl,
   } = application;
   const isRejected = applicationStatus === 'rejected';
   const experience = profileSnapshot?.experience ?? [];
   const education = profileSnapshot?.education ?? [];
   const hasActions = applicantActionsForStatus(applicationStatus).length > 0;
+  const trialResult = skillTrialSubmission?.result;
+  const isTrialRoutable = trialTask && TRIAL_ROUTABLE_RESULTS.has(trialResult);
+  const TrialRowContainer = isTrialRoutable ? Pressable : View;
 
   return (
     <View className="flex-1 bg-ink">
@@ -328,6 +390,35 @@ export default function ApplicantDetailScreen() {
             Opening this marked the application Viewed. The applicant can see that, and it
             can&apos;t be undone.
           </Notice>
+
+          {trialTask ? (
+            <View className="mb-5">
+              <SectionLabel>Skill trial</SectionLabel>
+              <Text className="mt-1 text-[11.5px] text-muted-dark">
+                This gig&apos;s own task, not part of their profile.
+              </Text>
+              <TrialRowContainer
+                onPress={
+                  isTrialRoutable
+                    ? () => navigation.navigate('TrialReview', { applicationId })
+                    : undefined
+                }
+                className="mt-2 flex-row items-center gap-3 rounded-ds-card border-[1.5px] border-line bg-paper p-4"
+              >
+                <View className="flex-1">
+                  <Text className="font-display text-title text-ink" numberOfLines={1}>
+                    {trialTask.taskTitle}
+                  </Text>
+                  <Badge variant={TRIAL_BADGE_VARIANT[trialResult] ?? 'neutral'} className="mt-2">
+                    {trialResultLabel(trialResult)}
+                  </Badge>
+                </View>
+                {isTrialRoutable ? (
+                  <Text className="text-[17px] font-semibold text-muted-dark">›</Text>
+                ) : null}
+              </TrialRowContainer>
+            </View>
+          ) : null}
 
           {isRejected ? (
             <View className="mb-5">
@@ -366,6 +457,23 @@ export default function ApplicantDetailScreen() {
             Frozen as it stood when they applied on {formatShortDate(new Date(appliedAt))}. Later
             profile edits don&apos;t change this.
           </Text>
+
+          {resumeUrl ? (
+            <View className="mt-5">
+              <SectionLabel>Resume</SectionLabel>
+              <Pressable
+                onPress={() => Linking.openURL(resumeUrl)}
+                className="mt-2 flex-row items-center gap-[13px] rounded-ds-lg border-[1.5px] border-line bg-haze px-[18px] py-[14px]"
+              >
+                <View className="flex-1">
+                  <Text className="text-body font-medium text-ink" numberOfLines={1}>
+                    {fileNameFromUrl(resumeUrl)}
+                  </Text>
+                  <Text className="mt-0.5 text-[12px] text-muted">Tap to open</Text>
+                </View>
+              </Pressable>
+            </View>
+          ) : null}
         </HeroSheet>
       </Animated.ScrollView>
 
