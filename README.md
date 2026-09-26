@@ -141,6 +141,8 @@ Requests flow **route → validate → middleware → controller → service →
 
 ## `app/` — Expo React Native client
 
+The client is on **Expo SDK 57** (React Native 0.86, React 19.2). To open it from `npx expo start`, your phone's Expo Go must be the **SDK 57 client** — an Expo Go built for another SDK will refuse to load the project.
+
 ```
 app/
 ├── src/
