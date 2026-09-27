@@ -23,6 +23,7 @@ import ManageExperienceScreen from '../screens/seeker/ManageExperienceScreen';
 import PostGigScreen from '../screens/business/PostGigScreen';
 import CompletedGigsScreen from '../screens/shared/CompletedGigsScreen';
 import GigDetailScreen from '../screens/shared/GigDetailScreen';
+import MyReportsScreen from '../screens/shared/MyReportsScreen';
 import RateFlowNavigator from '../screens/shared/rate/RateFlowNavigator';
 import PublicProfileScreen from '../screens/shared/PublicProfileScreen';
 import ReviewsScreen from '../screens/shared/ReviewsScreen';
@@ -59,6 +60,9 @@ function AppStack({ role }) {
       {/* Either role can be the subject read about (GL-374), so this is
           registered once here too, rather than duplicated below. */}
       <Stack.Screen name="Reviews" component={ReviewsScreen} />
+      {/* Either role can file a report (§13.2), so the reporter's own list
+          (GL-446) is registered once here, reached from Account settings. */}
+      <Stack.Screen name="MyReports" component={MyReportsScreen} />
       {role === 'business' ? (
         <>
           <Stack.Screen
