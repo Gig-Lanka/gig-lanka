@@ -618,6 +618,7 @@ These are the closed vocabularies used throughout the product. "Closed" means no
 | `newest` | Newest |
 | `highest_pay` | Highest pay |
 | `starting_soon` | Starting soon |
+| `best_match` | Best match |
 
 ### 6.7 Application statuses
 
@@ -1380,17 +1381,20 @@ An item outside the vocabulary fails the whole request with `400 VALIDATION_ERRO
 
 **`minPay`'s known limitation:** it compares the raw `payAmount` regardless of `payType`, so `minPay=1000` matches a Rs 1,000-per-hour gig and a Rs 1,000 fixed-price gig identically. This is deliberate, not an oversight — normalising per-hour against fixed-price would require an assumed number of hours that a gig does not carry. Do not "fix" this into a guessed conversion.
 
-**`sort` — one of `newest` (default), `highest_pay`, `starting_soon`:**
+**`sort` — one of `newest` (default), `highest_pay`, `starting_soon`, `best_match`:**
 
 | Value | Orders by | Tiebreak |
 |---|---|---|
 | `newest` | `createdAt` descending | `_id` descending |
 | `highest_pay` | `payAmount` descending | `_id` descending |
 | `starting_soon` | `startDate` ascending, gigs with **no** `startDate` sorted last | `_id` ascending |
+| `best_match` | Every gig whose `title` matches `q` before every gig that matches only in `description`; `createdAt` descending within each group | `_id` descending |
 
 Every sort carries a secondary `_id` tiebreak in the same direction as the primary key, so a paginated scroll never repeats or drops a row between pages. `startDate` is optional; without the explicit "no date sorts last" rule, `starting_soon` would put every undated gig first, since Mongo orders a missing field before every value ascending.
 
-**Failure — `400 Bad Request`** (an unrecognised value on a closed-vocabulary parameter):
+`best_match` is relevance ordering, and it needs something to be relevant *to*: it is only offered while `q` is present and non-empty (whitespace-only counts as empty, same as `q`'s own validation). `sort=best_match` without a non-empty `q` fails validation instead of silently falling back to `newest` — a relevance order with nothing to rank against is refused, not guessed at. The match itself is unchanged from the plain `q` filter above — the same case-insensitive substring test against `title` and `description`, with the same regex-metacharacter escaping — `best_match` only changes which of the two matched fields is ranked first, not what counts as a match.
+
+**Failure — `400 Bad Request`** (an unrecognised value on a closed-vocabulary parameter, or `sort=best_match` without a non-empty `q`):
 
 ```json
 {
@@ -1400,6 +1404,21 @@ Every sort carries a secondary `_id` tiebreak in the same direction as the prima
     "message": "Request validation failed.",
     "errors": [
       { "field": "category", "message": "category must only contain: tutoring, delivery, event_help, retail, hospitality, admin_data_entry, creative, tech, other" }
+    ]
+  }
+}
+```
+
+`sort=best_match` with no `q` (or an empty/whitespace-only one) answers the same shape, naming `sort`:
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Request validation failed.",
+    "errors": [
+      { "field": "sort", "message": "sort must be one of [newest, highest_pay, starting_soon]" }
     ]
   }
 }

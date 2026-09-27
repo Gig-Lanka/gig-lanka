@@ -93,6 +93,38 @@ const listByStartingSoon = async (filter, page) => {
   return orderedIds.map((id) => gigById.get(id.toString())).filter(Boolean);
 };
 
+// best_match is relevance ordering, offered only alongside a real `q` (the
+// validator refuses sort=best_match without one, so `query.q` is always
+// present and non-empty here). Same shape as listByStartingSoon above: an
+// aggregation over the same filter buildOpenGigFilter already produced,
+// picking just the page's ids in order, then hydrated through Gig.find so
+// toJSON, savedBy's privacy and viewerSaved apply exactly as for every other
+// sort. The search term is escaped the same way buildOpenGigFilter escapes
+// it into filter.$or, so a regex metacharacter in q can't crash $regexMatch
+// or turn it into an unanchored scan.
+const listByBestMatch = async (filter, page, q) => {
+  const pattern = escapeRegExp(q);
+
+  const idRows = await Gig.aggregate([
+    { $match: filter },
+    {
+      $addFields: {
+        _titleMatch: { $regexMatch: { input: '$title', regex: pattern, options: 'i' } },
+      },
+    },
+    { $sort: { _titleMatch: -1, createdAt: -1, _id: -1 } },
+    { $skip: (page - 1) * PAGE_SIZE },
+    { $limit: PAGE_SIZE },
+    { $project: { _id: 1 } },
+  ]);
+
+  const orderedIds = idRows.map((row) => row._id);
+  const gigs = await Gig.find({ _id: { $in: orderedIds } });
+  const gigById = new Map(gigs.map((gig) => [gig._id.toString(), gig]));
+
+  return orderedIds.map((id) => gigById.get(id.toString())).filter(Boolean);
+};
+
 const UPDATABLE_FIELDS = [
   'title',
   'description',
@@ -177,15 +209,19 @@ export const listOpenGigs = async (query, user) => {
   const filter = await buildOpenGigFilter(query);
   const sort = query.sort ?? 'newest';
 
-  const [gigs, total] = await Promise.all([
-    sort === 'starting_soon'
-      ? listByStartingSoon(filter, page)
-      : Gig.find(filter)
-          .sort(SORT_SPECS[sort] ?? SORT_SPECS.newest)
-          .skip((page - 1) * PAGE_SIZE)
-          .limit(PAGE_SIZE),
-    Gig.countDocuments(filter),
-  ]);
+  let gigsPromise;
+  if (sort === 'starting_soon') {
+    gigsPromise = listByStartingSoon(filter, page);
+  } else if (sort === 'best_match') {
+    gigsPromise = listByBestMatch(filter, page, query.q);
+  } else {
+    gigsPromise = Gig.find(filter)
+      .sort(SORT_SPECS[sort] ?? SORT_SPECS.newest)
+      .skip((page - 1) * PAGE_SIZE)
+      .limit(PAGE_SIZE);
+  }
+
+  const [gigs, total] = await Promise.all([gigsPromise, Gig.countDocuments(filter)]);
 
   const savedGigIds = await getSavedGigIdSet(gigs, user);
   // toJSON()'s `id` is still the raw ObjectId at this point (the schema
