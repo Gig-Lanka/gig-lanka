@@ -179,23 +179,18 @@ describe('GET /api/admin/reports', () => {
     expect(res.body.data.page).toBe(1);
   });
 
-  it('cannot be widened past status: open by any request parameter', async () => {
+  // GL-443: status now selects open or closed, and nothing else — a raw
+  // internal status like `resolved` is refused rather than passed to Mongo.
+  it('refuses any status other than open or closed with 400', async () => {
     const admin = await createAdmin('admin-queue-status-admin@example.com');
-    const reporter = await registerSeeker('admin-queue-status-reporter@example.com');
-    const openTarget = await registerSeeker('admin-queue-status-open-target@example.com');
-    const resolvedTarget = await registerSeeker('admin-queue-status-resolved-target@example.com');
-
-    await createOpenReport(reporter.userId, openTarget.userId);
-    await createOpenReport(reporter.userId, resolvedTarget.userId, { status: 'resolved' });
 
     const res = await request(app)
       .get('/api/admin/reports')
       .query({ status: 'resolved' })
       .set('Authorization', `Bearer ${admin.accessToken}`);
 
-    expect(res.status).toBe(200);
-    expect(res.body.data.reports).toHaveLength(1);
-    expect(res.body.data.reports[0].targetId).toBe(openTarget.userId);
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('VALIDATION_ERROR');
   });
 
   it('carries the reason code, note, filed-at time, and reporter and user-target identities', async () => {

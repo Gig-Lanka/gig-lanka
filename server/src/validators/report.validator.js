@@ -32,3 +32,12 @@ export const closeReportSchema = Joi.object({
     .required()
     .messages({ 'string.pattern.base': 'note must not be blank' }),
 });
+
+// GL-443: the admin queue's query. `status` picks the view — `open` (the
+// default) or `closed` — and anything else is a 400. `page` is left loose on
+// purpose: a malformed page still falls back to 1 in the service, as it did
+// before this schema existed.
+export const adminReportsQuerySchema = Joi.object({
+  page: Joi.any().optional(),
+  status: Joi.string().valid('open', 'closed').default('open'),
+});
