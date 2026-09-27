@@ -1,5 +1,8 @@
+import jwt from 'jsonwebtoken';
 import request from 'supertest';
 import app from '../../src/app.js';
+import { env } from '../../src/config/env.js';
+import { User } from '../../src/models/user.model.js';
 
 const validPassword = 'Password123!';
 
@@ -43,6 +46,24 @@ const createGig = async (token, overrides = {}) => {
 
 const postReport = async (accessToken, body) =>
   request(app).post('/api/reports').set('Authorization', `Bearer ${accessToken}`).send(body);
+
+// Admin accounts are never created through public registration — the same
+// direct-database approach auth.rbac.test.js already uses.
+const createAdmin = async (email) => {
+  const admin = await User.create({ email, passwordHash: 'not-a-real-hash', role: 'admin' });
+
+  const accessToken = jwt.sign({ id: admin.id, role: admin.role }, env.jwtAccessSecret, {
+    expiresIn: env.jwtAccessExpiresIn,
+  });
+
+  return { accessToken, userId: admin.id };
+};
+
+const closeReport = async (adminToken, reportId, action, note) =>
+  request(app)
+    .patch(`/api/admin/reports/${reportId}/${action}`)
+    .set('Authorization', `Bearer ${adminToken}`)
+    .send({ note });
 
 describe('GET /api/reports/mine', () => {
   it('rejects a guest with 401', async () => {
@@ -205,5 +226,77 @@ describe('GET /api/reports/mine', () => {
     expect(res.body.data.reports).toHaveLength(2);
     expect(res.body.data.reports[0].targetId).toBe(targetTwo.userId);
     expect(res.body.data.reports[1].targetId).toBe(targetOne.userId);
+  });
+
+  // GL-444: the reporter learns a decision was made, never which one or why.
+  it.each(['resolve', 'dismiss'])(
+    'shows a report closed by %s as reviewed, with no admin note, closer, closing time or internal status',
+    async (action) => {
+      const admin = await createAdmin(`mine-closed-${action}-admin@example.com`);
+      const reporter = await registerSeeker(`mine-closed-${action}-reporter@example.com`);
+      const target = await registerSeeker(`mine-closed-${action}-target@example.com`);
+
+      const posted = await postReport(reporter.accessToken, {
+        targetType: 'user',
+        targetId: target.userId,
+        reasonCode: 'spam_or_scam',
+        note: 'Asked me for money upfront.',
+      });
+      const closed = await closeReport(
+        admin.accessToken,
+        posted.body.data.report.id,
+        action,
+        'Admin-only note about what was done.',
+      );
+      expect(closed.status).toBe(200);
+
+      const res = await request(app)
+        .get('/api/reports/mine')
+        .set('Authorization', `Bearer ${reporter.accessToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.reports).toHaveLength(1);
+
+      const [report] = res.body.data.reports;
+      expect(report.status).toBe('reviewed');
+      // The reporter's own note comes back; the admin's never does.
+      expect(report.note).toBe('Asked me for money upfront.');
+      expect(report).not.toHaveProperty('resolutionNote');
+      expect(report).not.toHaveProperty('closedBy');
+      expect(report).not.toHaveProperty('closedAt');
+      expect(JSON.stringify(report)).not.toContain('Admin-only note');
+      expect(JSON.stringify(report)).not.toContain(admin.userId);
+    },
+  );
+
+  it('still shows an open report as open alongside a reviewed one', async () => {
+    const admin = await createAdmin('mine-mixed-admin@example.com');
+    const reporter = await registerSeeker('mine-mixed-reporter@example.com');
+    const closedTarget = await registerSeeker('mine-mixed-closed-target@example.com');
+    const openTarget = await registerSeeker('mine-mixed-open-target@example.com');
+
+    const toClose = await postReport(reporter.accessToken, {
+      targetType: 'user',
+      targetId: closedTarget.userId,
+      reasonCode: 'other',
+    });
+    await postReport(reporter.accessToken, {
+      targetType: 'user',
+      targetId: openTarget.userId,
+      reasonCode: 'other',
+    });
+    await closeReport(admin.accessToken, toClose.body.data.report.id, 'resolve', 'Handled.');
+
+    const res = await request(app)
+      .get('/api/reports/mine')
+      .set('Authorization', `Bearer ${reporter.accessToken}`);
+
+    const statusByTarget = Object.fromEntries(
+      res.body.data.reports.map((report) => [report.targetId, report.status]),
+    );
+    expect(statusByTarget).toEqual({
+      [closedTarget.userId]: 'reviewed',
+      [openTarget.userId]: 'open',
+    });
   });
 });
