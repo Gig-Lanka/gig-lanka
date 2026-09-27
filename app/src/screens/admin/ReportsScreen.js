@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { FlatList, Pressable, Text, View } from 'react-native';
 
 import reportApi from '../../api/reportApi';
+import ReportNote from '../../components/report/ReportNote';
 import Badge from '../../components/ui/Badge';
 import Card from '../../components/ui/Card';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
@@ -14,10 +15,6 @@ import { REPORT_REASONS } from '../../constants/enums';
 import { formatRelativeTime } from '../../utils/format';
 
 const LOAD_ERROR_MESSAGE = 'Could not load reports. Check your connection and try again.';
-// A character-count proxy for "would this wrap past a few lines", rather
-// than measuring rendered layout - simple, deterministic, and well under
-// the 300-character cap the server enforces on a report's note.
-const NOTE_PREVIEW_LENGTH = 140;
 
 function reasonLabel(code) {
   return REPORT_REASONS.find((entry) => entry.value === code)?.label ?? code;
@@ -35,32 +32,6 @@ function targetLabel({ targetType, target }) {
     return target.business?.name ? `${target.title} · ${target.business.name}` : target.title;
   }
   return target.name ?? 'Unnamed user';
-}
-
-// Full note or a clear truncation with a way to read the rest (GL-306
-// criterion 7) - expanding it is a read affordance, not an action on the
-// report, so it doesn't trip criterion 9's "not one action anywhere".
-function ReportNote({ note }) {
-  const [expanded, setExpanded] = useState(false);
-
-  if (!note) return null;
-
-  const needsTruncation = note.length > NOTE_PREVIEW_LENGTH;
-  const shown =
-    expanded || !needsTruncation ? note : `${note.slice(0, NOTE_PREVIEW_LENGTH).trimEnd()}…`;
-
-  return (
-    <View className="mt-2">
-      <Text className="text-[13.5px] leading-[1.5] text-muted">{shown}</Text>
-      {needsTruncation ? (
-        <Pressable onPress={() => setExpanded((value) => !value)} className="mt-1 self-start">
-          <Text className="text-[12.5px] font-semibold text-signal">
-            {expanded ? 'Show less' : 'Read more'}
-          </Text>
-        </Pressable>
-      ) : null}
-    </View>
-  );
 }
 
 function ReportRow({ report }) {

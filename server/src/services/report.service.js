@@ -131,54 +131,52 @@ const getTargetSummary = async (targetType, targetId) => {
   return toGigSummary(gig);
 };
 
+// GL-443: what a reporter sees of their own report. Built field by field, so
+// nothing added to the model later reaches the reporter by default. Status is
+// only `open` or `reviewed` — resolved and dismissed both read as reviewed —
+// and resolutionNote, closedAt, closedBy and the internal status are never
+// included: the outcome of a report is kept between the admin and the
+// reported party.
+const toReporterReport = (report) => {
+  const reportJson = report.toJSON();
+
+  return {
+    id: reportJson.id,
+    reporter: reportJson.reporter,
+    targetType: reportJson.targetType,
+    targetId: reportJson.targetId,
+    reasonCode: reportJson.reasonCode,
+    note: reportJson.note,
+    status: reportJson.status === 'open' ? 'open' : 'reviewed',
+    createdAt: reportJson.createdAt,
+  };
+};
+
 // GL-368: the reports the signed-in caller has filed, newest first, each
 // with its target's summary attached. Scoped to `reporter: callerId` only —
 // there is no parameter that reaches another reporter's reports, matching
 // listMyApplications and listMyReviews. Unpaginated, like those two: a
 // caller's own list is expected to return in full.
+//
+// GL-443: each report is mapped to the reporter's shape explicitly rather
+// than handed over as toJSON(), which would now carry the closing fields.
 export const listMyReports = async (callerId) => {
   const reports = await Report.find({ reporter: callerId }).sort({ createdAt: -1, _id: -1 });
 
   const reportsWithTarget = await Promise.all(
-    reports.map(async (report) => {
-      const reportJson = report.toJSON();
-      return { ...reportJson, target: await getTargetSummary(reportJson.targetType, reportJson.targetId) };
-    }),
+    reports.map(async (report) => ({
+      ...toReporterReport(report),
+      target: await getTargetSummary(report.targetType, report.targetId),
+    })),
   );
 
   return { reports: reportsWithTarget };
 };
 
-// GL-370: the admin queue. `status: 'open'` is hard-coded into the filter —
-// never read from `query` — so no combination of request parameters can
-// widen it; the query object is only ever consulted for `page`. Newest
-// first, ten per page, same shape §10.4 and §12.2 already return. Read-only:
-// this is the whole endpoint for this subtask, with no resolve, dismiss or
-// other write path attached anywhere near it.
-//
-// GL-371: each row carries the reporter's identity and a summary of its
-// target, resolved through the same narrow boundaries every other component
-// reads through — getPublicIdentity(-ies) in profile.service.js for people,
-// getGigSummariesByIds in gig.service.js for gigs. Neither profile.model.js
-// nor gig.model.js is imported here for this. Resolved in one batched pass
-// per page (ids grouped by type, fetched once, mapped back) rather than one
-// lookup per row, so a page costs a constant number of queries regardless of
-// its mix of target types. A target that's vanished — a hard-deleted gig, a
-// user row that's gone — is simply absent from its lookup map and reads back
-// as a null target rather than failing the request; the report itself still
-// renders, the same tolerance GET /api/applications/mine has for a deleted gig.
-export const listOpenReports = async (query) => {
-  const page = Math.max(1, parseInt(query.page, 10) || 1);
-  const filter = { status: 'open' };
-
-  const [reports, total] = await Promise.all([
-    Report.find(filter)
-      .sort({ createdAt: -1, _id: -1 })
-      .skip((page - 1) * PAGE_SIZE)
-      .limit(PAGE_SIZE),
-    Report.countDocuments(filter),
-  ]);
-
+// The admin shape: each report with its reporter's identity and a summary of
+// its target attached. Shared by the queue and by resolve/dismiss (GL-442),
+// so a closed report comes back looking exactly like a queue row.
+const toAdminReports = async (reports) => {
   const reportsJson = reports.map((report) => report.toJSON());
 
   const userTargetIds = reportsJson
@@ -194,7 +192,7 @@ export const listOpenReports = async (query) => {
     getGigSummariesByIds(gigTargetIds),
   ]);
 
-  const enrichedReports = reportsJson.map((report) => {
+  return reportsJson.map((report) => {
     const targetSummary =
       report.targetType === 'user'
         ? (userTargetIdentities.get(report.targetId.toString()) ?? null)
@@ -206,6 +204,86 @@ export const listOpenReports = async (query) => {
       target: targetSummary,
     };
   });
+};
+
+// GL-443: the admin queue's two views. The filter and sort are looked up
+// from this closed map by the already-validated `status` — the query value
+// is never passed into Mongo itself. Open is newest-filed first; closed is
+// most-recently-closed first.
+const ADMIN_QUEUE_VIEWS = {
+  open: { filter: { status: 'open' }, sort: { createdAt: -1, _id: -1 } },
+  closed: {
+    filter: { status: { $in: ['resolved', 'dismissed'] } },
+    sort: { closedAt: -1, _id: -1 },
+  },
+};
+
+// GL-370: the admin queue. The query object is only ever consulted for
+// `page` and `status`, and `status` only selects one of the fixed views
+// above (validated to `open` or `closed`, defaulting to `open`, at the
+// route). Ten per page, same shape §10.4 and §12.2 already return.
+// Read-only; resolve and dismiss are closeReport below. Closed rows carry
+// their status, resolutionNote, closedAt and closedBy through toJSON().
+//
+// GL-371: each row carries the reporter's identity and a summary of its
+// target, resolved through the same narrow boundaries every other component
+// reads through — getPublicIdentity(-ies) in profile.service.js for people,
+// getGigSummariesByIds in gig.service.js for gigs. Neither profile.model.js
+// nor gig.model.js is imported here for this. Resolved in one batched pass
+// per page (ids grouped by type, fetched once, mapped back) rather than one
+// lookup per row, so a page costs a constant number of queries regardless of
+// its mix of target types. A target that's vanished — a hard-deleted gig, a
+// user row that's gone — is simply absent from its lookup map and reads back
+// as a null target rather than failing the request; the report itself still
+// renders, the same tolerance GET /api/applications/mine has for a deleted gig.
+export const listAdminReports = async (query) => {
+  const page = Math.max(1, parseInt(query.page, 10) || 1);
+  const { filter, sort } = ADMIN_QUEUE_VIEWS[query.status] ?? ADMIN_QUEUE_VIEWS.open;
+
+  const [reports, total] = await Promise.all([
+    Report.find(filter)
+      .sort(sort)
+      .skip((page - 1) * PAGE_SIZE)
+      .limit(PAGE_SIZE),
+    Report.countDocuments(filter),
+  ]);
+
+  const enrichedReports = await toAdminReports(reports);
 
   return { reports: enrichedReports, total, page, limit: PAGE_SIZE };
+};
+
+// GL-442: resolve and dismiss. `status` is `resolved` or `dismissed`, fixed by
+// the route, never read from the request. The status change is conditional
+// on `status: 'open'` in the update itself, so two admins racing on the same
+// report can't both close it — the loser matches nothing and gets the 409.
+// Closing is once and final: nothing here, or anywhere, reopens a report or
+// edits its note afterwards.
+//
+// This only records the decision. It doesn't suspend anyone or take anything
+// down — those are separate admin actions, and the note is where the admin
+// records what they did.
+export const closeReport = async (reportId, adminId, status, note) => {
+  // A malformed id is indistinguishable from an unknown one: both 404.
+  if (!mongoose.isValidObjectId(reportId)) {
+    throw new ApiError(404, 'NOT_FOUND', 'Report not found.');
+  }
+
+  const report = await Report.findOneAndUpdate(
+    { _id: reportId, status: 'open' },
+    { $set: { status, resolutionNote: note, closedAt: new Date(), closedBy: adminId } },
+    { returnDocument: 'after', runValidators: true },
+  );
+
+  if (!report) {
+    // Nothing matched: either there's no such report, or it's already closed.
+    const exists = await Report.exists({ _id: reportId });
+    if (!exists) {
+      throw new ApiError(404, 'NOT_FOUND', 'Report not found.');
+    }
+    throw new ApiError(409, 'REPORT_ALREADY_CLOSED', 'This report has already been closed.');
+  }
+
+  const [adminReport] = await toAdminReports([report]);
+  return adminReport;
 };
