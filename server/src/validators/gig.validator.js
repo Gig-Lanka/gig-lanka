@@ -26,7 +26,20 @@ const SKILL_TRIAL_SUBMISSION_TYPE_VALUES = ['text', 'file', 'text_and_file'];
 
 const SKILL_TRIAL_EFFORT_ESTIMATE_VALUES = ['under_30_minutes', '30_to_60_minutes', '1_to_2_hours'];
 
-const GIG_SORT_ORDER_VALUES = ['newest', 'highest_pay', 'starting_soon'];
+const GIG_SORT_ORDER_VALUES = ['newest', 'highest_pay', 'starting_soon', 'best_match'];
+
+// best_match is relevance ordering, and relevance to nothing is meaningless -
+// it's only offered while `q` carries a real (non-empty, non-whitespace)
+// search term. Modelling this as a conditional valid-list on `sort` itself
+// (rather than a `.custom()` on `sort`, or a `.when()` on `q`) is deliberate:
+// Joi's `.valid()` short-circuits every later rule - including `.custom()` -
+// once a value matches, so a `sort`-level custom validator silently never
+// runs for a matched enum value. Swapping the valid list itself via `.when()`
+// keeps the failure on `sort` (as the contract requires: "400 VALIDATION_ERROR
+// naming sort"), not on `q`.
+const GIG_SORT_ORDER_VALUES_WITHOUT_BEST_MATCH = GIG_SORT_ORDER_VALUES.filter(
+  (value) => value !== 'best_match',
+);
 
 const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -161,6 +174,10 @@ export const listGigsQuerySchema = Joi.object({
   city: Joi.string().trim().max(120).optional(),
   minPay: Joi.number().min(0).optional(),
   sort: Joi.string()
-    .valid(...GIG_SORT_ORDER_VALUES)
+    .when('q', {
+      is: Joi.string().trim().min(1).required(),
+      then: Joi.valid(...GIG_SORT_ORDER_VALUES),
+      otherwise: Joi.valid(...GIG_SORT_ORDER_VALUES_WITHOUT_BEST_MATCH),
+    })
     .default('newest'),
 });

@@ -318,6 +318,161 @@ describe('GET /api/gigs — search, filter and sort', () => {
     expect(res.body.data.gigs).toHaveLength(2);
   });
 
+  it('sort=best_match without a non-empty q returns 400 naming sort', async () => {
+    const withoutQ = await request(app).get('/api/gigs').query({ sort: 'best_match' });
+    expect(withoutQ.status).toBe(400);
+    expect(withoutQ.body.error.code).toBe('VALIDATION_ERROR');
+    expect(withoutQ.body.error.errors).toEqual([expect.objectContaining({ field: 'sort' })]);
+
+    const emptyQ = await request(app).get('/api/gigs').query({ sort: 'best_match', q: '' });
+    expect(emptyQ.status).toBe(400);
+    expect(emptyQ.body.error.errors).toEqual(
+      expect.arrayContaining([expect.objectContaining({ field: 'sort' })]),
+    );
+
+    const whitespaceQ = await request(app).get('/api/gigs').query({ sort: 'best_match', q: '   ' });
+    expect(whitespaceQ.status).toBe(400);
+    expect(whitespaceQ.body.error.errors).toEqual(
+      expect.arrayContaining([expect.objectContaining({ field: 'sort' })]),
+    );
+  });
+
+  it('sort=best_match puts every title match before every description-only match, even when the title match is older', async () => {
+    const token = await registerBusiness('search-best-match-order@example.com');
+    // Created first (older) but matches only in the title.
+    const titleMatch = await createGig(token, {
+      title: 'Marimba lessons for beginners',
+      description: 'Weekly one-to-one sessions, no experience required.',
+    });
+    // Created second (newer) but matches only in the description.
+    const descriptionMatch = await createGig(token, {
+      title: 'Music helper wanted',
+      description: 'Assist a marimba teacher setting up for weekly lessons.',
+    });
+
+    const res = await request(app).get('/api/gigs').query({ q: 'marimba', sort: 'best_match' });
+
+    expect(res.status).toBe(200);
+    expect(idsOf(res)).toEqual([titleMatch.id, descriptionMatch.id]);
+  });
+
+  it('sort=best_match orders newest first within each of the two groups', async () => {
+    const token = await registerBusiness('search-best-match-groups@example.com');
+    const descriptionMatch = await createGig(token, {
+      title: 'Office helper',
+      description: 'Filing and errands, mentions xylophone recital posters.',
+    });
+    const olderTitleMatch = await createGig(token, {
+      title: 'Xylophone tutor needed',
+      description: 'Teach basic technique to a beginner.',
+    });
+    const newerTitleMatch = await createGig(token, {
+      title: 'Xylophone accompanist wanted',
+      description: 'Play for a small recital rehearsal.',
+    });
+
+    const res = await request(app).get('/api/gigs').query({ q: 'xylophone', sort: 'best_match' });
+
+    expect(res.status).toBe(200);
+    expect(idsOf(res)).toEqual([newerTitleMatch.id, olderTitleMatch.id, descriptionMatch.id]);
+  });
+
+  it('sort=best_match paginates correctly across the boundary between the title-match and description-match groups', async () => {
+    const token = await registerBusiness('search-best-match-page@example.com');
+
+    const titleMatches = [];
+    for (let i = 0; i < 6; i += 1) {
+      titleMatches.push(
+        await createGig(token, {
+          title: `Kayak instructor session ${i}`,
+          description: 'Basic paddling technique for a small group.',
+        }),
+      );
+    }
+
+    const descriptionMatches = [];
+    for (let i = 0; i < 6; i += 1) {
+      descriptionMatches.push(
+        await createGig(token, {
+          title: `Water sports helper ${i}`,
+          description: 'Assist with kayak setup and life jackets at the lake.',
+        }),
+      );
+    }
+
+    const page1 = await request(app).get('/api/gigs').query({ q: 'kayak', sort: 'best_match', page: 1 });
+    const page2 = await request(app).get('/api/gigs').query({ q: 'kayak', sort: 'best_match', page: 2 });
+
+    expect(page1.body.data.gigs).toHaveLength(10);
+    expect(page2.body.data.gigs).toHaveLength(2);
+
+    // All 6 title matches, newest first, followed by the 4 newest description
+    // matches, also newest first.
+    const expectedPage1 = [...titleMatches].reverse().concat([...descriptionMatches].reverse().slice(0, 4));
+    const expectedPage2 = [...descriptionMatches].reverse().slice(4, 6);
+
+    expect(idsOf(page1)).toEqual(expectedPage1.map((gig) => gig.id));
+    expect(idsOf(page2)).toEqual(expectedPage2.map((gig) => gig.id));
+  });
+
+  it('sort=best_match leaves total computed on the same filtered query, unaffected by the ordering', async () => {
+    const token = await registerBusiness('search-best-match-total@example.com');
+    await createGig(token, {
+      title: 'Ferry deckhand needed',
+      description: 'Help with mooring lines and passenger safety briefings.',
+    });
+    await createGig(token, {
+      title: 'Weekend crew wanted',
+      description: 'General deckhand duties on a small ferry.',
+    });
+
+    const newest = await request(app).get('/api/gigs').query({ q: 'deckhand', sort: 'newest' });
+    const bestMatch = await request(app).get('/api/gigs').query({ q: 'deckhand', sort: 'best_match' });
+
+    expect(bestMatch.body.data.total).toBe(2);
+    expect(bestMatch.body.data.total).toBe(newest.body.data.total);
+  });
+
+  it('sort=best_match combines with a category filter as an AND, same as every other sort', async () => {
+    const token = await registerBusiness('search-best-match-category@example.com');
+    const matching = await createGig(token, {
+      title: 'Falconry display assistant',
+      description: 'Help handle birds during a falconry demonstration.',
+      category: 'event_help',
+    });
+    await createGig(token, {
+      title: 'Falconry photo editor',
+      description: 'Edit photos from a falconry demonstration.',
+      category: 'creative',
+    });
+
+    const res = await request(app)
+      .get('/api/gigs')
+      .query({ q: 'falconry', sort: 'best_match', category: 'event_help' });
+
+    expect(res.status).toBe(200);
+    expect(idsOf(res)).toEqual([matching.id]);
+  });
+
+  it('sort=best_match escapes a regex metacharacter in q instead of crashing', async () => {
+    const token = await registerBusiness('search-best-match-regex@example.com');
+    const matching = await createGig(token, {
+      title: 'Physics (advanced) tutor',
+      description: 'One-to-one A/L combined physics tuition.',
+    });
+    await createGig(token, {
+      title: 'Unrelated gig',
+      description: 'Nothing to do with the above.',
+    });
+
+    const res = await request(app)
+      .get('/api/gigs')
+      .query({ q: 'Physics (advanced)', sort: 'best_match' });
+
+    expect(res.status).toBe(200);
+    expect(idsOf(res)).toEqual([matching.id]);
+  });
+
   it('status: open is applied unconditionally — a closed gig satisfying every other filter never appears', async () => {
     const token = await registerBusiness('search-closed@example.com');
     const matchingEverything = {
