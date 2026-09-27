@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { getOpenReports } from '../controllers/report.controller.js';
+import { closeGigAsAdmin } from '../controllers/admin.controller.js';
 import { requireAuth, requireRole } from '../middleware/auth.middleware.js';
 
 const router = Router();
@@ -15,5 +16,9 @@ router.use(requireAuth, requireRole('admin'));
 // dismiss, suspend, warn or assign verb is mounted here or anywhere else on
 // this router — every action on a report is Sprint 4 dispute handling.
 router.get('/reports', getOpenReports);
+
+// GL-434. The admin takedown — status: 'closed' with a closedByAdminAt
+// marker, per gig.service.js's takedownGig.
+router.patch('/gigs/:id/close', closeGigAsAdmin);
 
 export default router;
