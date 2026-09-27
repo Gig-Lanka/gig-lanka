@@ -7,6 +7,7 @@ import { useCallback, useRef, useState } from 'react';
 import { FlatList, Text, View } from 'react-native';
 
 import reportApi from '../../api/reportApi';
+import ReportNote from '../../components/report/ReportNote';
 import Badge from '../../components/ui/Badge';
 import Card from '../../components/ui/Card';
 import EmptyState from '../../components/ui/EmptyState';
@@ -59,9 +60,7 @@ function MyReportRow({ report }) {
 
       <Text className="text-[14.5px] font-semibold text-ink">{targetLabel(report)}</Text>
 
-      {report.note ? (
-        <Text className="mt-2 text-[13.5px] leading-[1.5] text-muted">{report.note}</Text>
-      ) : null}
+      <ReportNote note={report.note} />
     </Card>
   );
 }
