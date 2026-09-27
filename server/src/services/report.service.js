@@ -149,12 +149,44 @@ export const listMyReports = async (callerId) => {
   return { reports: reportsWithTarget };
 };
 
+// The admin shape: each report with its reporter's identity and a summary of
+// its target attached. Shared by the queue and by resolve/dismiss (GL-442),
+// so a closed report comes back looking exactly like a queue row.
+const toAdminReports = async (reports) => {
+  const reportsJson = reports.map((report) => report.toJSON());
+
+  const userTargetIds = reportsJson
+    .filter((report) => report.targetType === 'user')
+    .map((report) => report.targetId);
+  const gigTargetIds = reportsJson
+    .filter((report) => report.targetType === 'gig')
+    .map((report) => report.targetId);
+
+  const [reporterIdentities, userTargetIdentities, gigTargetSummaries] = await Promise.all([
+    getPublicIdentities(reportsJson.map((report) => report.reporter)),
+    getPublicIdentities(userTargetIds),
+    getGigSummariesByIds(gigTargetIds),
+  ]);
+
+  return reportsJson.map((report) => {
+    const targetSummary =
+      report.targetType === 'user'
+        ? (userTargetIdentities.get(report.targetId.toString()) ?? null)
+        : (gigTargetSummaries.get(report.targetId.toString()) ?? null);
+
+    return {
+      ...report,
+      reporter: reporterIdentities.get(report.reporter.toString()) ?? null,
+      target: targetSummary,
+    };
+  });
+};
+
 // GL-370: the admin queue. `status: 'open'` is hard-coded into the filter —
 // never read from `query` — so no combination of request parameters can
 // widen it; the query object is only ever consulted for `page`. Newest
-// first, ten per page, same shape §10.4 and §12.2 already return. Read-only:
-// this is the whole endpoint for this subtask, with no resolve, dismiss or
-// other write path attached anywhere near it.
+// first, ten per page, same shape §10.4 and §12.2 already return. Read-only;
+// resolve and dismiss are closeReport below.
 //
 // GL-371: each row carries the reporter's identity and a summary of its
 // target, resolved through the same narrow boundaries every other component
@@ -179,33 +211,42 @@ export const listOpenReports = async (query) => {
     Report.countDocuments(filter),
   ]);
 
-  const reportsJson = reports.map((report) => report.toJSON());
-
-  const userTargetIds = reportsJson
-    .filter((report) => report.targetType === 'user')
-    .map((report) => report.targetId);
-  const gigTargetIds = reportsJson
-    .filter((report) => report.targetType === 'gig')
-    .map((report) => report.targetId);
-
-  const [reporterIdentities, userTargetIdentities, gigTargetSummaries] = await Promise.all([
-    getPublicIdentities(reportsJson.map((report) => report.reporter)),
-    getPublicIdentities(userTargetIds),
-    getGigSummariesByIds(gigTargetIds),
-  ]);
-
-  const enrichedReports = reportsJson.map((report) => {
-    const targetSummary =
-      report.targetType === 'user'
-        ? (userTargetIdentities.get(report.targetId.toString()) ?? null)
-        : (gigTargetSummaries.get(report.targetId.toString()) ?? null);
-
-    return {
-      ...report,
-      reporter: reporterIdentities.get(report.reporter.toString()) ?? null,
-      target: targetSummary,
-    };
-  });
+  const enrichedReports = await toAdminReports(reports);
 
   return { reports: enrichedReports, total, page, limit: PAGE_SIZE };
+};
+
+// GL-442: resolve and dismiss. `status` is `resolved` or `dismissed`, fixed by
+// the route, never read from the request. The status change is conditional
+// on `status: 'open'` in the update itself, so two admins racing on the same
+// report can't both close it — the loser matches nothing and gets the 409.
+// Closing is once and final: nothing here, or anywhere, reopens a report or
+// edits its note afterwards.
+//
+// This only records the decision. It doesn't suspend anyone or take anything
+// down — those are separate admin actions, and the note is where the admin
+// records what they did.
+export const closeReport = async (reportId, adminId, status, note) => {
+  // A malformed id is indistinguishable from an unknown one: both 404.
+  if (!mongoose.isValidObjectId(reportId)) {
+    throw new ApiError(404, 'NOT_FOUND', 'Report not found.');
+  }
+
+  const report = await Report.findOneAndUpdate(
+    { _id: reportId, status: 'open' },
+    { $set: { status, resolutionNote: note, closedAt: new Date(), closedBy: adminId } },
+    { returnDocument: 'after', runValidators: true },
+  );
+
+  if (!report) {
+    // Nothing matched: either there's no such report, or it's already closed.
+    const exists = await Report.exists({ _id: reportId });
+    if (!exists) {
+      throw new ApiError(404, 'NOT_FOUND', 'Report not found.');
+    }
+    throw new ApiError(409, 'REPORT_ALREADY_CLOSED', 'This report has already been closed.');
+  }
+
+  const [adminReport] = await toAdminReports([report]);
+  return adminReport;
 };
