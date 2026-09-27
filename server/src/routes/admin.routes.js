@@ -1,5 +1,4 @@
 import { Router } from 'express';
-import { getOpenReports } from '../controllers/report.controller.js';
 import { closeGigAsAdmin } from '../controllers/admin.controller.js';
 import { getAdminReports, resolveReport, dismissReport } from '../controllers/report.controller.js';
 import { requireAuth, requireRole } from '../middleware/auth.middleware.js';
