@@ -21,9 +21,9 @@ export const REPORT_REASON_CODES = [
   'other',
 ];
 
-// The wider status vocabulary is declared now so Sprint 4 (resolve, dismiss)
-// has it, but this sprint ships no code path that writes anything other than
-// `open` — the same discipline `savedBy` was declared under.
+// `open` is written on create; `resolved` and `dismissed` only by the admin
+// resolve and dismiss endpoints (GL-442), each once and final — there is no
+// path back to `open`.
 export const REPORT_STATUSES = ['open', 'resolved', 'dismissed'];
 
 const reportSchema = new mongoose.Schema(
@@ -65,6 +65,23 @@ const reportSchema = new mongoose.Schema(
       type: String,
       enum: REPORT_STATUSES,
       default: 'open',
+    },
+    // GL-442: the three closing fields. None has a default, so all three are
+    // absent while a report is open and are set together, once, by
+    // closeReport in report.service.js. The note is the admin's record of
+    // what they decided and did — like `note` above it is not trimmed, so it
+    // is stored exactly as written.
+    resolutionNote: {
+      type: String,
+      maxlength: 300,
+    },
+    closedAt: {
+      type: Date,
+    },
+    // Always the admin's id from the token, never accepted from the body.
+    closedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
     },
   },
   {
