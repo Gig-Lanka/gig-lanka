@@ -112,6 +112,7 @@ Every error response — regardless of cause — returns the same outer shape:
 | `REVIEW_WINDOW_EXPIRED` | `POST /api/applications/:applicationId/reviews` more than 14 days after the application's `completedAt` (§12.1, §12.4). Always `409`, and distinct from `APPLICATION_NOT_COMPLETED` — the two 409s name different problems and the client shows different copy for each. Checked only once the application is confirmed `completed`, so a wrong-status application is never told its window has closed. |
 | `REVIEW_ALREADY_EXISTS` | `POST /api/applications/:applicationId/reviews` for an `(application, direction)` pair that already has a review (§12.4). Always `409`; the duplicate-key error from the unique index (§7) is translated here rather than surfacing as `500`. |
 | `REPORT_ALREADY_EXISTS` | `POST /api/reports` for a `(reporter, targetType, targetId)` pair that already has an open report. Always `409`; the duplicate-key error from the unique index on the Report model is translated here rather than surfacing as `500` — the same trap `POST /api/auth/register` and `POST /api/gigs/:gigId/applications` have both been caught by. |
+| `REPORT_ALREADY_CLOSED` | `PATCH /api/admin/reports/:id/resolve` or `/dismiss` (§13.5, §13.6) on a report that is already `resolved` or `dismissed`. Always `409`. Closing is once and final — there is no reopen and no edit of the note, and the loser of two admins racing to close the same report gets this code. |
 
 New codes may be added for later sprints' resources; existing codes are never repurposed for a different meaning.
 
@@ -2479,11 +2480,11 @@ No other failure modes — a caller who has written no reviews still gets `200` 
 
 ---
 
-## 13. Report endpoints (Sprint 3)
+## 13. Report endpoints (Sprint 3, Sprint 4)
 
-`server/src/routes/report.routes.js`, `report.controller.js`, `report.validator.js`, `report.service.js`. No business-rules brief covers this component — the rules below were agreed with the product owner at Sprint 3 planning rather than derived from a brief, and this contract section is their only written specification.
+`server/src/routes/report.routes.js`, `admin.routes.js`, `report.controller.js`, `report.validator.js`, `report.service.js`. No business-rules brief covers this component — the rules below were agreed with the product owner at Sprint 3 and Sprint 4 planning rather than derived from a brief, and this contract section is their only written specification.
 
-A report targets a user (reported from their public profile) or a gig (reported from gig detail). Reviews, applications and messages are deliberately not reportable — reviews in particular are permanent, with no edit, delete or respond path anywhere, and correcting one is a Sprint 4 dispute rather than a report. Status is `open` only this sprint: resolve and dismiss are Sprint 4 actions, so nothing in this component writes any other value. The reported party is never told — filing a report sends no email and touches no field on the target's profile, gig, rating or applications — and nothing about a report reaches anyone but its own reporter this sprint (an admin reading the Sprint 4 moderation queue is a separate component with its own boundary, out of scope here).
+A report targets a user (reported from their public profile) or a gig (reported from gig detail). Reviews, applications and messages are deliberately not reportable — reviews in particular are permanent, with no edit, delete or respond path anywhere, and correcting one is a Sprint 4 dispute rather than a report. A report is filed `open`; an admin later closes it, once and finally, as `resolved` or `dismissed` with a note (§13.5, §13.6). The reported party is never told — filing a report sends no email and touches no field on the target's profile, gig, rating or applications — and nothing about a report reaches anyone but its own reporter and an admin. Closing one doesn't either: resolve and dismiss only record the admin's decision. Suspending an account or taking a gig down are separate admin actions, and the note is where the admin records what they did.
 
 ### 13.1 Report shape
 
@@ -2500,14 +2501,18 @@ A report targets a user (reported from their public profile) or a gig (reported 
 }
 ```
 
-- `reporter` — always the caller, taken from the token; never accepted from the request body, the same as a gig's `postedBy` (§10.1) and a review's `author` (§7). Visible only to the reporter themself (§13.3) and, outside this story's scope, an admin — never to the reported party.
+- `reporter` — always the caller, taken from the token; never accepted from the request body, the same as a gig's `postedBy` (§10.1) and a review's `author` (§7). Visible only to the reporter themself (§13.3) and an admin (§13.4) — never to the reported party.
 - `targetType` — exactly `user` or `gig`. No other value is accepted, and none is added: reviews, applications and messages are all deliberately out.
 - `targetId` — the id of the reported user or gig. Existence is checked before anything else server-side (§13.2) — a bad id 404s and never reaches any rule below it.
 - `reasonCode` — required, one of the closed list in §6.11. A separate vocabulary from the rejection reason codes (§6.8) — the shape is similar by design, the lists are unrelated and never shared.
 - `note` — optional free text, up to 300 characters, matching the rejection-note limit. Stored and shown back exactly as written.
-- `status` — `open` on creation. This sprint has no code path that writes anything else; `resolved` and `dismissed` exist in the wider vocabulary for Sprint 4 but nothing here can reach them.
-- `createdAt` — set once, on creation. There is no `updatedAt`: like a review, a report is a permanent record of what someone said, with no edit or delete path — not this sprint and not planned.
-- At most one **open** report per `(reporter, targetType, targetId)` — a unique index enforces it outright, not partial on `status`. Sprint 4 adds resolve and dismiss; a partial index would then quietly allow a second report once the first was resolved, which may be the right rule but is a Sprint 4 decision this sprint must not pre-empt.
+- `status` — `open` on creation; `resolved` or `dismissed` once an admin closes it (§13.5, §13.6), and never back to `open`. This stored value is shown only to an admin. The reporter sees `open` or `reviewed` instead (§13.3).
+- `resolutionNote` — the admin's note on closing: 1–300 characters, must contain something other than whitespace, stored and shown back exactly as written (not trimmed). **Admin only.**
+- `closedAt` — when the report was closed. **Admin only.**
+- `closedBy` — the closing admin's user id, taken from the token. **Admin only.**
+- The three closing fields are absent (not `null`) while a report is `open`, and are set together, once, when it closes. None of them ever reaches the reporter (§13.3) or the reported party.
+- `createdAt` — set once, on creation. There is no `updatedAt`: like a review, a report is a permanent record of what someone said, with no edit or delete path — not this sprint and not planned. Closing a report adds the closing fields; it never changes what the reporter wrote.
+- At most one **open** report per `(reporter, targetType, targetId)` — a unique index enforces it, partial on `status: 'open'` (decided at Sprint 4 planning). A second open report is refused with `409 REPORT_ALREADY_EXISTS` (§13.2), but once the earlier report is resolved or dismissed it no longer blocks the same reporter filing a new one against the same target. This replaced a Sprint 3 index with the same keys that was unique outright; `server/scripts/rebuild-report-index.js` drops the old index and builds this one on an existing database.
 
 ### 13.2 Create a report — `POST /api/reports`
 
@@ -2586,7 +2591,7 @@ Files a report against a user or a gig. Requires `Authorization: Bearer <accessT
 }
 ```
 
-**Failure — `409 Conflict`** (an open report from this caller against this exact target already exists — the unique index in §13.1 enforces it; the duplicate-key error is translated here, never a `500`, the same trap `POST /api/auth/register` and `POST /api/gigs/:gigId/applications` have both been caught by):
+**Failure — `409 Conflict`** (an open report from this caller against this exact target already exists — the partial unique index in §13.1 enforces it, so a resolved or dismissed earlier report doesn't count; the duplicate-key error is translated here, never a `500`, the same trap `POST /api/auth/register` and `POST /api/gigs/:gigId/applications` have both been caught by):
 
 ```json
 {
@@ -2629,21 +2634,170 @@ The reports the signed-in caller has filed — never anyone else's, and no param
 }
 ```
 
+Each report is built field by field for the reporter — exactly the fields above, plus `target` — so nothing added to the model later reaches them by default.
+
+- `status` — `open` or `reviewed`, nothing else. A report that's `resolved` and one that's `dismissed` both read as `reviewed`: the reporter is told a decision was made, never which one.
+- Never included: `resolutionNote`, `closedAt`, `closedBy` or the stored `status`. What an admin decided and did is kept between the admin and the reported party.
+- `note` is the reporter's own note from §13.2, returned as they wrote it — not the admin's `resolutionNote`.
+
 Newest first (`createdAt` descending, `_id` descending tiebreak). Every report carries a `target` summary alongside the bare `targetType`/`targetId` it's stored with: a public identity (`{ id, name, photo }`, §8.2's shape) for a `user` target, or the trimmed gig summary (§11.6's shape) for a `gig` target — `null` if that gig has since been deleted. A report never carries anything about who else reported the same target — no count, no "N others reported this". That would leak another reporter's action, and would double as a way to gauge how much attention a target is drawing.
 
 **Failure — `401 Unauthorized`** (guest) — as in §8.6.
 
 No other failure modes — a caller who has filed no reports still gets `200` with `"reports": []`.
 
-### 13.4 Error codes for these endpoints
+### 13.4 Admin report queue — `GET /api/admin/reports`
+
+The moderation queue. Requires `Authorization: Bearer <accessToken>` for an **admin** — `requireRole('admin')` is applied once, on the whole `/api/admin` router (`admin.routes.js`), so every endpoint in §13.4–§13.6 shares the same gate.
+
+**Query parameters**
+
+| Param | Rule |
+|---|---|
+| `status` | Optional, `open` (the default) or `closed`. Any other value is `400`. `closed` means `resolved` and `dismissed` together; there's no parameter for one without the other. The value only picks one of two fixed filters server-side; it's never passed into the database query. |
+| `page` | Optional, 1-based. Anything missing or not a positive integer falls back to `1` rather than failing. |
+
+Unknown parameters are ignored.
+
+**Success — `200 OK`**, with `status=closed`:
+
+```json
+{
+  "success": true,
+  "data": {
+    "reports": [
+      {
+        "id": "64f1a2b3c4d5e6f7a8b9c0d5",
+        "reporter": { "id": "64f1a2b3c4d5e6f7a8b9c0d1", "name": "Nimali Perera", "photo": null },
+        "targetType": "gig",
+        "targetId": "64f1a2b3c4d5e6f7a8b9c0d6",
+        "reasonCode": "misleading_gig_details",
+        "note": "The pay listed doesn't match what they offered in person.",
+        "status": "resolved",
+        "createdAt": "2026-08-12T09:15:00.000Z",
+        "resolutionNote": "Confirmed with the business; gig taken down separately.",
+        "closedAt": "2026-09-28T10:02:00.000Z",
+        "closedBy": "64f1a2b3c4d5e6f7a8b9c0a1",
+        "target": {
+          "id": "64f1a2b3c4d5e6f7a8b9c0d6",
+          "title": "Weekend event helper",
+          "business": { "id": "64f1a2b3c4d5e6f7a8b9c0d2", "name": "Colombo Events Co.", "photo": null }
+        }
+      }
+    ],
+    "total": 1,
+    "page": 1,
+    "limit": 10
+  }
+}
+```
+
+This is the **admin shape**, which resolve and dismiss return too. It's §13.1's full stored shape, with two ids replaced by summaries:
+
+- `reporter` — the reporter's public identity, `{ id, name, photo }` (§8.2's shape).
+- `target` — for a `user` target, that user's public identity `{ id, name, photo }`. For a `gig` target, `{ id, title, business }`, where `business` is the posting business's public identity. A gig that has since been hard-deleted reads as `"target": null`. The report still renders with its `targetType` and `targetId`, and the request doesn't fail. A `user` target whose profile has gone reads with `name` and `photo` both `null`.
+- On `status=open` every row has `"status": "open"`, and the closing fields are absent. On `status=closed` every row carries its `status` (`resolved` or `dismissed`), `resolutionNote`, `closedAt` and `closedBy`. `closedBy` is the admin's bare user id, not a summary.
+
+Ten per page. `total` counts every report in the selected view across all pages, matching §10.4's and §12.2's shape. Ordering:
+
+- `open` — newest filed first (`createdAt` descending, `_id` descending tiebreak).
+- `closed` — most recently closed first (`closedAt` descending, `_id` descending tiebreak).
+
+A report leaves the open view the moment it's closed and appears in the closed view. It's never in both.
+
+**Failure — `401 Unauthorized`** (guest) — as in §8.6.
+
+**Failure — `403 Forbidden`** (signed in as a seeker or business):
+
+```json
+{
+  "success": false,
+  "error": { "code": "FORBIDDEN", "message": "You do not have permission to perform this action." }
+}
+```
+
+**Failure — `400 Bad Request`** (`status` is anything other than `open` or `closed` — including the stored values `resolved` and `dismissed`):
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Request validation failed.",
+    "errors": [{ "field": "status", "message": "status must be one of [open, closed]" }]
+  }
+}
+```
+
+### 13.5 Resolve a report — `PATCH /api/admin/reports/:id/resolve`
+
+Closes an open report as `resolved`, with a note. Admin only, behind the same router-level gate as §13.4. This only records the decision. It doesn't suspend anyone, take anything down or notify anyone; those are separate admin actions.
+
+**Request body**
+
+```json
+{ "note": "Warned the business about misleading pay; will suspend on a repeat." }
+```
+
+| Field | Rule |
+|---|---|
+| `note` | Required, 1–300 characters, and must contain something other than whitespace. Not trimmed — stored exactly as sent, surrounding spaces included. |
+
+Every other field is silently stripped (§10.3's convention). The new `status` comes from the route, `closedBy` from the token and `closedAt` from the server clock. None of them is accepted from the body.
+
+**Success — `200 OK`** — `data.report`, in §13.4's admin shape, with `"status": "resolved"` and `resolutionNote`, `closedAt` and `closedBy` set.
+
+The status change is made in a single update that only matches while the report is still `open`. If two admins close the same report at once, exactly one succeeds and the other gets `409 REPORT_ALREADY_CLOSED`.
+
+**Failure — `401 Unauthorized`** (guest) — as in §8.6.
+
+**Failure — `403 Forbidden`** (signed in as a seeker or business) — as in §13.4.
+
+**Failure — `400 Bad Request`** (`note` missing, empty, whitespace-only, or over 300 characters). The request body is validated before the report is looked up, so a bad note is a `400` even against an unknown id:
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Request validation failed.",
+    "errors": [{ "field": "note", "message": "note must not be blank" }]
+  }
+}
+```
+
+**Failure — `404 Not Found`** (no report with this id, or the id isn't a syntactically valid Mongo id — both answer identically, never `400`):
+
+```json
+{
+  "success": false,
+  "error": { "code": "NOT_FOUND", "message": "Report not found." }
+}
+```
+
+**Failure — `409 Conflict`** (the report is already `resolved` or `dismissed`). Closing is once and final: there's no reopen and no way to edit the note.
+
+```json
+{
+  "success": false,
+  "error": { "code": "REPORT_ALREADY_CLOSED", "message": "This report has already been closed." }
+}
+```
+
+### 13.6 Dismiss a report — `PATCH /api/admin/reports/:id/dismiss`
+
+Closes an open report as `dismissed`, with a note: the admin looked into it and decided no action was warranted. Identical to §13.5 in every respect — gate, request body, validation, success shape, atomicity and every failure — except that the report is set to `"status": "dismissed"`. A report already closed either way is `409 REPORT_ALREADY_CLOSED`, so a resolved report can't later be dismissed or the other way round.
+
+### 13.7 Error codes for these endpoints
 
 | Status | Code | When |
 |---|---|---|
-| `400` | `VALIDATION_ERROR` | `POST` — `targetType`/`reasonCode`/`note` failed schema validation (always carries `errors`), or the caller is reporting themselves or their own gig (also carries `errors`, on the `targetId` field). |
-| `401` | `AUTH_HEADER_MISSING` / `AUTH_HEADER_MALFORMED` / `TOKEN_EXPIRED` / `TOKEN_INVALID` | No/malformed/expired/invalid token on either endpoint — both require one. |
-| `403` | `FORBIDDEN` | `POST` by a signed-in admin. Not returned by `GET /reports/mine` — any signed-in seeker or business may read their own list back (an admin technically may too, but never has anything to see, since no path lets one create a report). |
-| `404` | `NOT_FOUND` | `POST` for a `targetId` that doesn't resolve to an existing user/gig of the given `targetType`, or has a malformed id. Checked before every other rule. |
-| `409` | `REPORT_ALREADY_EXISTS` | `POST` for a `(reporter, targetType, targetId)` pair that already has an open report. |
+| `400` | `VALIDATION_ERROR` | `POST` — `targetType`/`reasonCode`/`note` failed schema validation (always carries `errors`), or the caller is reporting themselves or their own gig (also carries `errors`, on the `targetId` field). `GET /admin/reports` — `status` other than `open`/`closed` (on the `status` field). Resolve/dismiss — `note` missing, empty, whitespace-only or over 300 characters (on the `note` field). |
+| `401` | `AUTH_HEADER_MISSING` / `AUTH_HEADER_MALFORMED` / `TOKEN_EXPIRED` / `TOKEN_INVALID` | No/malformed/expired/invalid token on any endpoint in this section — all require one. |
+| `403` | `FORBIDDEN` | `POST` by a signed-in admin. Any `/api/admin/reports` endpoint by a seeker or business. Not returned by `GET /reports/mine` — any signed-in seeker or business may read their own list back (an admin technically may too, but never has anything to see, since no path lets one create a report). |
+| `404` | `NOT_FOUND` | `POST` for a `targetId` that doesn't resolve to an existing user/gig of the given `targetType`, or has a malformed id — checked before every other rule. Resolve/dismiss for an unknown or malformed report id. |
+| `409` | `REPORT_ALREADY_EXISTS` | `POST` for a `(reporter, targetType, targetId)` pair that already has an open report. A resolved or dismissed one doesn't count. |
+| `409` | `REPORT_ALREADY_CLOSED` | Resolve/dismiss on a report that's already `resolved` or `dismissed`. |
 
 ---
 

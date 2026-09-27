@@ -175,6 +175,11 @@ export default function AccountSettingsScreen() {
             </>
           ) : null}
         </View>
+
+        <SectionLabel className="mt-6">Safety</SectionLabel>
+        <View className="mt-2">
+          <NavRow label="My reports" onPress={() => navigation.navigate('MyReports')} />
+        </View>
       </ScrollView>
 
       <Pressable
