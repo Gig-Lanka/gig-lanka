@@ -45,6 +45,7 @@ export const GIG_SORT_ORDERS = freezeList([
   { value: 'newest', label: 'Newest' },
   { value: 'highest_pay', label: 'Highest pay' },
   { value: 'starting_soon', label: 'Starting soon' },
+  { value: 'best_match', label: 'Best match' },
 ]);
 
 // No 'required' value: product decided a skill trial is never mandatory to
