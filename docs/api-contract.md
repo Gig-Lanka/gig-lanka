@@ -112,6 +112,8 @@ Every error response — regardless of cause — returns the same outer shape:
 | `REVIEW_WINDOW_EXPIRED` | `POST /api/applications/:applicationId/reviews` more than 14 days after the application's `completedAt` (§12.1, §12.4). Always `409`, and distinct from `APPLICATION_NOT_COMPLETED` — the two 409s name different problems and the client shows different copy for each. Checked only once the application is confirmed `completed`, so a wrong-status application is never told its window has closed. |
 | `REVIEW_ALREADY_EXISTS` | `POST /api/applications/:applicationId/reviews` for an `(application, direction)` pair that already has a review (§12.4). Always `409`; the duplicate-key error from the unique index (§7) is translated here rather than surfacing as `500`. |
 | `REPORT_ALREADY_EXISTS` | `POST /api/reports` for a `(reporter, targetType, targetId)` pair that already has an open report. Always `409`; the duplicate-key error from the unique index on the Report model is translated here rather than surfacing as `500` — the same trap `POST /api/auth/register` and `POST /api/gigs/:gigId/applications` have both been caught by. |
+| `GIG_TAKEN_DOWN` | `PUT /api/gigs/:id` attempted on a gig an admin has taken down (§10.7, §14.1). Always `409`. Checked before every other rule on that endpoint, including `GIG_HAS_APPLICANTS` above — a taken-down gig cannot be edited at all, not even a field that would otherwise be free to change, so the business can never reopen it or otherwise undo the takedown by editing. |
+| `GIG_ALREADY_TAKEN_DOWN` | `PATCH /api/admin/gigs/:id/close` (§14.1) called on a gig that already has `closedByAdminAt` set. Always `409`. Distinct from the `200` a takedown gets on a gig the business already closed itself (§14.1) — that call still has something new to record; a second admin takedown doesn't, and is treated as a mistake to surface rather than a no-op to swallow. |
 
 New codes may be added for later sprints' resources; existing codes are never repurposed for a different meaning.
 
@@ -1266,6 +1268,7 @@ Returned under `data.gig` (single) or `data.gigs` (list), everywhere a gig appea
 - **`waitingOnYouCount` is not part of this base shape** — it appears only on `GET /api/gigs/mine` (§10.6), the one read where it's needed and the one caller allowed to see it.
 - **`skillTrial` is optional and, when the gig has none, omitted entirely — never an empty object.** `requirement` is one of `none` or `optional` (§6.12; the Application & Hiring brief's original third value, `required`, was a considered-and-rejected product decision — a skill trial is never mandatory to apply, in no case). `taskTitle` (max 80 characters) and `taskBrief` (20–1,000 characters) are required whenever `requirement` is `optional`; `submissionType` and `effortEstimate` are each one of the closed vocabularies at §6.12. When `requirement` is `none`, none of the other four fields may be present. Reaches every read that returns a gig — §10.4 (list), §10.5 (single) and §10.6 (mine) — because a seeker must see the task and its effort estimate before deciding to apply.
 - **`savedBy` is never present in any response, for anyone, including the gig's own owner.** `select: false` on the schema path keeps it out of every default query, and the `toJSON` transform deletes it again as a second guard — two independent defences, both still in place now that `PUT /api/gigs/:id/save` (§10.10) actually writes to it. `gig.saved-privacy.test.js` pins that either guard's removal breaks the suite. There is no save-count field anywhere — deliberately asymmetric with `applicantCount`: a business learns how many people applied, never how many, or which, people saved a gig of theirs. The only thing anyone ever learns about saving is their own: `viewerSaved` (§10.4, §10.5), a boolean computed fresh per request from a match check, never the array itself, and never anyone else's.
+- **`closedByAdminAt` is present only for the gig's own owner.** `null` until an admin takes the gig down through `PATCH /api/admin/gigs/:id/close` (§14.1), an ISO timestamp of that call afterwards. Stripped from every response by the same `toJSON` transform that guards `savedBy` just above, then layered back on — the same per-caller layering `viewerSaved` and `viewerApplication` use — only on `GET /api/gigs/mine` (§10.6) and on `GET /api/gigs/:id` (§10.5) when the caller is the gig's owner. A seeker, a guest, or any other business never sees it, even on a gig that's been taken down: to everyone but the owner, a taken-down gig reads as an ordinary `closed` gig, indistinguishable from one the business closed itself. Not shown in the example above for that reason — it is absent from the wire shape far more often than it is present.
 - Optional fields (`area`, `startDate`, `applicationsCloseDate`) are omitted, not null, when unset — same convention as profiles (§8.1).
 
 ### 10.2 Business block
@@ -1513,6 +1516,8 @@ Only the business that posted the gig may update it. `PUT` replaces the editable
 
 **Once a gig has ever had an application, any attempted change to `skillTrial` is refused with `409 GIG_HAS_APPLICANTS`** — the terms cannot change underneath someone who already applied under them. This is keyed on whether an `Application` document exists for the gig, not on the live `applicantCount`, which falls when applicants withdraw or are rejected. Every other field on the gig stays editable regardless.
 
+**Once an admin has taken the gig down (`closedByAdminAt` set, §10.1, §14.1), the whole request is refused with `409 GIG_TAKEN_DOWN`** — checked first, before ownership's field-level rules and before the `skillTrial`/`GIG_HAS_APPLICANTS` check above, and before any field is read from the body. Nothing about the gig may change through this endpoint once it has been taken down, not just `status` — the business cannot reopen it, and cannot edit around the takedown by changing some other field instead. The business can still delete the gig (§10.9, subject to its own applicant rule) and can still open and decide its existing applications (§11.12) — a takedown blocks editing specifically, not every action on the gig.
+
 **Success — `200 OK`** — `data.gig`, the updated shape.
 
 **Failure — `400 Bad Request`** — same validation as create.
@@ -1520,6 +1525,18 @@ Only the business that posted the gig may update it. `PUT` replaces the editable
 **Failure — `401 Unauthorized`** (guest), **`403 Forbidden`** (seeker token, or a business token that isn't the owner) — see 10.9 for the ownership ordering.
 
 **Failure — `404 Not Found`** — no gig with that id.
+
+**Failure — `409 Conflict`** (`GIG_TAKEN_DOWN`) — the gig has been taken down by an admin; see above:
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "GIG_TAKEN_DOWN",
+    "message": "This gig was taken down by Gig Lanka and can no longer be edited."
+  }
+}
+```
 
 **Failure — `409 Conflict`** (`GIG_HAS_APPLICANTS`) — see above.
 
@@ -1631,6 +1648,7 @@ No pagination — like `GET /api/gigs/mine` (§10.6), a seeker's own saved list 
 | `403` | `FORBIDDEN` | Authenticated but not a business (`POST`, `GET /mine`, `PUT`, `PATCH .../close`, `DELETE`), **or** a business token that isn't the gig's owner (`PUT`, `PATCH .../close`, `DELETE`), **or** not a seeker (`PUT .../save`, `DELETE .../save`, `GET /saved` — §10.10–§10.12). Same code, same shape, every case — the distinction is which endpoint and, for the ownership case, whether the gig exists (see 10.9's ordering). |
 | `404` | `NOT_FOUND` | `GET /api/gigs/:id` for a gig that doesn't exist, or `PUT` / `PATCH .../close` / `DELETE` / `PUT .../save` / `DELETE .../save` for a gig that doesn't exist or has a malformed id — checked before ownership where an ownership check exists (save and unsave have none; see §10.10–§10.11). |
 | `409` | `GIG_CLOSED` | `PUT /api/gigs/:id/save` (§10.10) when the gig is not `open` — the same guard (`assertGigIsOpen` in `gig.service.js`) GL-110's apply endpoint calls before acting on a gig. Never returned by `DELETE /api/gigs/:id/save` (§10.11), which is deliberately ungated, or by `GET /api/gigs/saved` (§10.12), which never rejects on status. See §3 for the shared definition. |
+| `409` | `GIG_TAKEN_DOWN` | `PUT /api/gigs/:id` on a gig an admin has taken down (§10.7, §14.1). Checked before every other rule on this endpoint, including `GIG_HAS_APPLICANTS` below. See §3 for the shared definition. |
 | `409` | `GIG_HAS_APPLICANTS` | `PUT /api/gigs/:id` attempted to add, change or remove `skillTrial` on a gig that has ever had an application (§10.7). See §3 for the shared definition. |
 
 ---
@@ -2647,7 +2665,89 @@ No other failure modes — a caller who has filed no reports still gets `200` wi
 
 ---
 
-## 14. Adding a new endpoint later
+## 14. Admin endpoints (Sprint 4)
+
+`server/src/routes/admin.routes.js`, `admin.controller.js`. Every route on this router sits behind `requireAuth` then `requireRole('admin')`, applied once at the router rather than per-handler (the same shape `GET /api/admin/reports` already uses) — a seeker or business token gets `403`, no token gets `401`, on every endpoint below, and none of that is repeated per-handler in this section.
+
+### 14.1 Take down a gig — `PATCH /api/admin/gigs/:id/close`
+
+Admins only. This is the action behind an admin acting on a reported gig — E6's report-actions button calls it — but it takes no `reasonCode`, `note` or report id itself: filing the report (§13.2) and taking the gig down are separate steps, and nothing from the report ever reaches the gig or its business. No request body.
+
+**Has exactly the effect of the business's own `PATCH /api/gigs/:id/close` (§10.8):** `status` becomes `closed`, the gig leaves `GET /api/gigs` (§10.4), applying and saving are both refused with `409 GIG_CLOSED` (§10.10, §11.7), and every existing application is untouched — the business can still open and decide them (§11.12). The status vocabulary (§6.5) gains nothing new; `closed` is still the only value either close path ever writes.
+
+**What it adds is `closedByAdminAt` (§10.1)** — a timestamp of *this action specifically*, independent of whatever moved `status`, so the business's own screens can say "Closed by Gig Lanka" instead of a plain "Closed" that could look like their own action or a bug. No reason and no reporter is ever attached to the gig or returned from this endpoint, matching §13's rule that the reported party is never told who filed.
+
+**Existence is checked first**, before role or current status is considered: an unknown id, or one that isn't a syntactically valid Mongo id, is `404` either way — the same ordering `findOwnedGig` uses for the owner-scoped gig endpoints (§10.9), even though this endpoint has no ownership check of its own to order against.
+
+Three outcomes once the gig is found, keyed on its current state:
+
+| Current state | Result |
+|---|---|
+| `open` or `filled` | `200`. `status` moves to `closed`, `closedByAdminAt` is set. |
+| `closed`, `closedByAdminAt` still `null` (the business closed it itself) | `200`. `closedByAdminAt` is set; `status` is already `closed` and doesn't move. The takedown is still recorded even though there's nowhere further for `status` to go. |
+| `closedByAdminAt` already set (already taken down) | `409 GIG_ALREADY_TAKEN_DOWN`. Not idempotent by design — a second takedown call is treated as a caller mistake to surface, not a no-op to swallow silently. |
+
+**Success — `200 OK`** — `data.gig`, the shape in §10.1. `closedByAdminAt` is present on this response even though the caller is an admin, not the owner: §10.1's owner-only visibility rule governs who can *read* the field back later, not the response to the call that just wrote it, and hiding it here from the one caller who has permission to set it would serve nobody.
+
+```json
+{
+  "success": true,
+  "data": {
+    "gig": {
+      "id": "64f1a2b3c4d5e6f7a8b9c0d8",
+      "title": "Weekend event helper",
+      "status": "closed",
+      "closedByAdminAt": "2026-08-20T10:02:00.000Z",
+      "postedBy": "64f1a2b3c4d5e6f7a8b9c0d4",
+      "applicantCount": 3,
+      "createdAt": "2026-08-12T09:15:00.000Z",
+      "updatedAt": "2026-08-20T10:02:00.000Z"
+    }
+  }
+}
+```
+
+**Failure — `401 Unauthorized`** (no token) — `AUTH_HEADER_MISSING` etc., as in §5.8.
+
+**Failure — `403 Forbidden`** (a seeker or business token):
+
+```json
+{
+  "success": false,
+  "error": { "code": "FORBIDDEN", "message": "You do not have permission to perform this action." }
+}
+```
+
+**Failure — `404 Not Found`** (no gig with that id, or the id is malformed):
+
+```json
+{
+  "success": false,
+  "error": { "code": "NOT_FOUND", "message": "Gig not found." }
+}
+```
+
+**Failure — `409 Conflict`** (`GIG_ALREADY_TAKEN_DOWN`) — the gig already has `closedByAdminAt` set:
+
+```json
+{
+  "success": false,
+  "error": { "code": "GIG_ALREADY_TAKEN_DOWN", "message": "This gig has already been taken down." }
+}
+```
+
+### 14.2 Error codes for this endpoint
+
+| Status | Code | When |
+|---|---|---|
+| `401` | `AUTH_HEADER_MISSING` / `AUTH_HEADER_MALFORMED` / `TOKEN_EXPIRED` / `TOKEN_INVALID` | No/malformed/expired/invalid token — every endpoint on this router requires one. |
+| `403` | `FORBIDDEN` | Authenticated as a seeker or business — every endpoint on this router is admin-only. |
+| `404` | `NOT_FOUND` | `PATCH .../gigs/:id/close` for a gig that doesn't exist, or has a malformed id. Checked before role or status. |
+| `409` | `GIG_ALREADY_TAKEN_DOWN` | `PATCH .../gigs/:id/close` called on a gig that already has `closedByAdminAt` set. See §3 for the shared definition. |
+
+---
+
+## 15. Adding a new endpoint later
 
 1. Pick a plural, lowercase, hyphenated resource name.
 2. Reuse the envelopes in sections 2 and 3 exactly — don't invent a new outer shape.
