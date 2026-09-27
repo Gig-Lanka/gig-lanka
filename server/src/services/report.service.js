@@ -131,19 +131,43 @@ const getTargetSummary = async (targetType, targetId) => {
   return toGigSummary(gig);
 };
 
+// GL-443: what a reporter sees of their own report. Built field by field, so
+// nothing added to the model later reaches the reporter by default. Status is
+// only `open` or `reviewed` — resolved and dismissed both read as reviewed —
+// and resolutionNote, closedAt, closedBy and the internal status are never
+// included: the outcome of a report is kept between the admin and the
+// reported party.
+const toReporterReport = (report) => {
+  const reportJson = report.toJSON();
+
+  return {
+    id: reportJson.id,
+    reporter: reportJson.reporter,
+    targetType: reportJson.targetType,
+    targetId: reportJson.targetId,
+    reasonCode: reportJson.reasonCode,
+    note: reportJson.note,
+    status: reportJson.status === 'open' ? 'open' : 'reviewed',
+    createdAt: reportJson.createdAt,
+  };
+};
+
 // GL-368: the reports the signed-in caller has filed, newest first, each
 // with its target's summary attached. Scoped to `reporter: callerId` only —
 // there is no parameter that reaches another reporter's reports, matching
 // listMyApplications and listMyReviews. Unpaginated, like those two: a
 // caller's own list is expected to return in full.
+//
+// GL-443: each report is mapped to the reporter's shape explicitly rather
+// than handed over as toJSON(), which would now carry the closing fields.
 export const listMyReports = async (callerId) => {
   const reports = await Report.find({ reporter: callerId }).sort({ createdAt: -1, _id: -1 });
 
   const reportsWithTarget = await Promise.all(
-    reports.map(async (report) => {
-      const reportJson = report.toJSON();
-      return { ...reportJson, target: await getTargetSummary(reportJson.targetType, reportJson.targetId) };
-    }),
+    reports.map(async (report) => ({
+      ...toReporterReport(report),
+      target: await getTargetSummary(report.targetType, report.targetId),
+    })),
   );
 
   return { reports: reportsWithTarget };
@@ -182,11 +206,24 @@ const toAdminReports = async (reports) => {
   });
 };
 
-// GL-370: the admin queue. `status: 'open'` is hard-coded into the filter —
-// never read from `query` — so no combination of request parameters can
-// widen it; the query object is only ever consulted for `page`. Newest
-// first, ten per page, same shape §10.4 and §12.2 already return. Read-only;
-// resolve and dismiss are closeReport below.
+// GL-443: the admin queue's two views. The filter and sort are looked up
+// from this closed map by the already-validated `status` — the query value
+// is never passed into Mongo itself. Open is newest-filed first; closed is
+// most-recently-closed first.
+const ADMIN_QUEUE_VIEWS = {
+  open: { filter: { status: 'open' }, sort: { createdAt: -1, _id: -1 } },
+  closed: {
+    filter: { status: { $in: ['resolved', 'dismissed'] } },
+    sort: { closedAt: -1, _id: -1 },
+  },
+};
+
+// GL-370: the admin queue. The query object is only ever consulted for
+// `page` and `status`, and `status` only selects one of the fixed views
+// above (validated to `open` or `closed`, defaulting to `open`, at the
+// route). Ten per page, same shape §10.4 and §12.2 already return.
+// Read-only; resolve and dismiss are closeReport below. Closed rows carry
+// their status, resolutionNote, closedAt and closedBy through toJSON().
 //
 // GL-371: each row carries the reporter's identity and a summary of its
 // target, resolved through the same narrow boundaries every other component
@@ -199,13 +236,13 @@ const toAdminReports = async (reports) => {
 // user row that's gone — is simply absent from its lookup map and reads back
 // as a null target rather than failing the request; the report itself still
 // renders, the same tolerance GET /api/applications/mine has for a deleted gig.
-export const listOpenReports = async (query) => {
+export const listAdminReports = async (query) => {
   const page = Math.max(1, parseInt(query.page, 10) || 1);
-  const filter = { status: 'open' };
+  const { filter, sort } = ADMIN_QUEUE_VIEWS[query.status] ?? ADMIN_QUEUE_VIEWS.open;
 
   const [reports, total] = await Promise.all([
     Report.find(filter)
-      .sort({ createdAt: -1, _id: -1 })
+      .sort(sort)
       .skip((page - 1) * PAGE_SIZE)
       .limit(PAGE_SIZE),
     Report.countDocuments(filter),

@@ -3,7 +3,7 @@ import { sendSuccess } from '../utils/response.js';
 import {
   createReport as createReportService,
   listMyReports as listMyReportsService,
-  listOpenReports as listOpenReportsService,
+  listAdminReports as listAdminReportsService,
   closeReport as closeReportService,
 } from '../services/report.service.js';
 
@@ -21,9 +21,10 @@ export const getMyReports = asyncHandler(async (req, res) => {
 });
 
 // GL-370. The admin gate (requireAuth + requireRole('admin')) is applied at
-// the router, not here — this handler has no role check of its own.
-export const getOpenReports = asyncHandler(async (req, res) => {
-  const result = await listOpenReportsService(req.query);
+// the router, not here — this handler has no role check of its own. GL-443:
+// req.query has already been validated, so `status` is `open` or `closed`.
+export const getAdminReports = asyncHandler(async (req, res) => {
+  const result = await listAdminReportsService(req.query);
 
   sendSuccess(res, result, 200);
 });

@@ -1,8 +1,8 @@
 import { Router } from 'express';
-import { getOpenReports, resolveReport, dismissReport } from '../controllers/report.controller.js';
+import { getAdminReports, resolveReport, dismissReport } from '../controllers/report.controller.js';
 import { requireAuth, requireRole } from '../middleware/auth.middleware.js';
-import { validate } from '../middleware/validate.middleware.js';
-import { closeReportSchema } from '../validators/report.validator.js';
+import { validate, validateQuery } from '../middleware/validate.middleware.js';
+import { adminReportsQuerySchema, closeReportSchema } from '../validators/report.validator.js';
 
 const router = Router();
 
@@ -13,7 +13,8 @@ const router = Router();
 // instead of repeating the gate per-handler.
 router.use(requireAuth, requireRole('admin'));
 
-router.get('/reports', getOpenReports);
+// GL-443: ?status=open|closed, defaulting to open.
+router.get('/reports', validateQuery(adminReportsQuerySchema), getAdminReports);
 
 // GL-442: close a report, once and final. Both take { note }; there is no
 // reopen or edit route.
