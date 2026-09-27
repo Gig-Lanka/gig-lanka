@@ -1,19 +1,8 @@
 import { Pressable, Text, View } from 'react-native';
 
 import Badge from '../ui/Badge';
-import { GIG_STATUSES } from '../../constants/enums';
 import { formatDeadline, formatPay } from '../../utils/format';
-
-const BADGE_VARIANT_BY_STATUS = {
-  open: 'positive',
-  filled: 'strong',
-  closed: 'muted',
-  draft: 'neutral',
-};
-
-function statusLabel(status) {
-  return GIG_STATUSES.find((entry) => entry.value === status)?.label ?? status;
-}
+import { GIG_STATUS_BADGE_VARIANT, getGigStatusLabel } from '../../utils/gigStatus';
 
 export default function BusinessGigCard({ gig, onPress, className, ...props }) {
   const {
@@ -21,6 +10,7 @@ export default function BusinessGigCard({ gig, onPress, className, ...props }) {
     payAmount,
     payType,
     status,
+    closedByAdminAt,
     applicantCount = 0,
     applicationsCloseDate,
     waitingOnYouCount = 0,
@@ -53,7 +43,9 @@ export default function BusinessGigCard({ gig, onPress, className, ...props }) {
     >
       <View className="flex-row items-start justify-between gap-3">
         <Text className="flex-1 font-display text-title text-ink">{title}</Text>
-        <Badge variant={BADGE_VARIANT_BY_STATUS[status] ?? 'neutral'}>{statusLabel(status)}</Badge>
+        <Badge variant={GIG_STATUS_BADGE_VARIANT[status] ?? 'neutral'}>
+          {getGigStatusLabel({ status, closedByAdminAt })}
+        </Badge>
       </View>
 
       <Text className="mt-[5px] text-desc text-muted">{formatPay(payAmount, payType)}</Text>

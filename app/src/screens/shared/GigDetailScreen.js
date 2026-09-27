@@ -23,26 +23,17 @@ import useSavedToggle from '../../hooks/useSavedToggle';
 import {
   COMMITMENT_LENGTHS,
   GIG_CATEGORIES,
-  GIG_STATUSES,
   SCHEDULE_TAGS,
   SKILL_TRIAL_EFFORT_ESTIMATES,
   SKILL_TRIAL_REQUIREMENTS,
 } from '../../constants/enums';
 import { formatDeadline, formatLocation, formatPay, formatShortDate } from '../../utils/format';
+import { GIG_STATUS_BADGE_VARIANT, getGigStatusLabel } from '../../utils/gigStatus';
 
 const STATUS = { LOADING: 'loading', READY: 'ready', ERROR: 'error', NOT_FOUND: 'not_found' };
 
 const LOAD_ERROR_MESSAGE = 'Could not load this gig. Check your connection and try again.';
 const GENERIC_REPORT_ERROR = 'Could not submit your report. Check your connection and try again.';
-
-// Same status → Badge variant mapping as BusinessGigCard, kept in sync so a
-// gig's status pill reads identically wherever it appears.
-const BADGE_VARIANT_BY_STATUS = {
-  open: 'positive',
-  filled: 'strong',
-  closed: 'muted',
-  draft: 'neutral',
-};
 
 // Ionicons takes a literal color, not a className - mirrors the `signal` /
 // `star-off` tokens in tailwind.config.js, same as GigCard's own star.
@@ -235,6 +226,7 @@ export default function GigDetailScreen({ onSignIn }) {
     payAmount,
     payType,
     status: gigStatus,
+    closedByAdminAt,
     city,
     area,
     remote,
@@ -367,8 +359,8 @@ export default function GigDetailScreen({ onSignIn }) {
               <Text className="font-display text-[24px] tracking-[-0.03em] text-signal">
                 {formatPay(payAmount, payType)}
               </Text>
-              <Badge variant={BADGE_VARIANT_BY_STATUS[gigStatus] ?? 'neutral'}>
-                {labelFor(GIG_STATUSES, gigStatus)}
+              <Badge variant={GIG_STATUS_BADGE_VARIANT[gigStatus] ?? 'neutral'}>
+                {getGigStatusLabel({ status: gigStatus, closedByAdminAt })}
               </Badge>
             </View>
             <Text className="mt-2 text-[13.5px] font-medium text-muted-dark">
