@@ -21,6 +21,8 @@ const SKILL_TRIAL_LOCKED_REASON =
   "This gig already has applicants, so its skill trial terms can't change underneath people who already applied under them.";
 const SKILL_TRIAL_LOCKED_SAVE_ERROR =
   "This gig's skill trial terms can't change now that someone has applied - the rest of your changes were not saved. Go back and try again.";
+const GIG_HAS_APPLICANTS_REASON =
+  "This gig already has applicants, so it can't be deleted. Close it instead.";
 
 // Same shape PostGigScreen sends to POST - PUT uses the same validation
 // (§10.7 reuses §10.3), and since PUT replaces the gig in full, every field
@@ -231,6 +233,14 @@ export default function EditGigScreen() {
       } else if (apiError?.code === 'NOT_FOUND') {
         // Already gone - the outcome the user wanted is already true.
         navigation.goBack();
+      } else if (apiError?.code === 'GIG_HAS_APPLICANTS') {
+        // Only reachable when applicantCount had already fallen to zero (so
+        // Delete looked offered) while an application still exists on record
+        // - every past applicant withdrew or was rejected. Same backstop
+        // shape as handleSubmit's GIG_HAS_APPLICANTS branch above.
+        setDeleteConfirmVisible(false);
+        setDeleteError(GIG_HAS_APPLICANTS_REASON);
+        setDeleting(false);
       } else {
         setDeleteError(apiError?.message || GENERIC_DELETE_ERROR);
         setDeleting(false);
@@ -288,31 +298,40 @@ export default function EditGigScreen() {
                 Save changes
               </Button>
 
-              <View className="flex-row gap-[10px]">
-                {status === 'open' ? (
-                  <Button
-                    variant="small"
-                    fullWidth={false}
-                    className="h-11 flex-1"
-                    loading={closing}
-                    disabled={busy && !closing}
-                    onPress={() => setCloseConfirmVisible(true)}
-                  >
-                    Close gig
-                  </Button>
-                ) : null}
+              {status === 'open' || applicantCount === 0 ? (
+                <View className="flex-row gap-[10px]">
+                  {status === 'open' ? (
+                    <Button
+                      variant="small"
+                      fullWidth={false}
+                      className="h-11 flex-1"
+                      loading={closing}
+                      disabled={busy && !closing}
+                      onPress={() => setCloseConfirmVisible(true)}
+                    >
+                      Close gig
+                    </Button>
+                  ) : null}
 
-                <Button
-                  variant="small-danger"
-                  fullWidth={false}
-                  className="h-11 flex-1"
-                  loading={deleting}
-                  disabled={busy && !deleting}
-                  onPress={() => setDeleteConfirmVisible(true)}
-                >
-                  Delete gig
-                </Button>
-              </View>
+                  {applicantCount === 0 ? (
+                    <Button
+                      variant="small-danger"
+                      fullWidth={false}
+                      className="h-11 flex-1"
+                      loading={deleting}
+                      disabled={busy && !deleting}
+                      onPress={() => setDeleteConfirmVisible(true)}
+                    >
+                      Delete gig
+                    </Button>
+                  ) : null}
+                </View>
+              ) : null}
+
+              {/* GL-437: a gig with a live applicant can never delete, so
+                  Delete is never offered here rather than shown disabled with
+                  no explanation. */}
+              {applicantCount > 0 ? <Notice>{GIG_HAS_APPLICANTS_REASON}</Notice> : null}
 
               {closeError ? (
                 <Text className="text-[12.5px] text-danger-ink">{closeError}</Text>
