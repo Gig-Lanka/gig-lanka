@@ -1555,13 +1555,15 @@ Closing is not deleting: the gig disappears from `GET /api/gigs` immediately, bu
 
 Only the owner. Permanently deletes the gig. There is no soft delete and no undo — a deleted gig immediately 404s from every other endpoint, including `GET /api/gigs/mine`.
 
+**Once a gig has ever had an application, deleting it is refused with `409 GIG_HAS_APPLICANTS`** — the same check and the same code `PUT /api/gigs/:id` uses for its `skillTrial` refusal (§10.7), keyed on whether an `Application` document exists for the gig, not on the live `applicantCount`. A withdrawn, rejected or closed application still counts: any status means the gig has applicant history that a deletion would strand with a dangling reference, and the message points the business at closing the gig (§10.8) instead. A gig that has never had an application deletes exactly as described above.
+
 **Success — `200 OK`**
 
 ```json
 { "success": true, "data": null }
 ```
 
-**Failure — `401`, `403`, `404`** — same as 10.7.
+**Failure — `401`, `403`, `404`** — same as 10.7. **`409`** (`GIG_HAS_APPLICANTS`) — see above.
 
 **Ownership check order (10.7–10.9):** the owner check runs **after** the existence check. A gig that doesn't exist (or has a malformed id) is `404`, before the caller's identity is even considered; a gig that exists but belongs to someone else is `403`. The two are never conflated into a single `403`-or-`404` — doing that would let a caller learn which ids exist by noticing which refusal they got instead.
 
@@ -1650,7 +1652,7 @@ No pagination — like `GET /api/gigs/mine` (§10.6), a seeker's own saved list 
 | `404` | `NOT_FOUND` | `GET /api/gigs/:id` for a gig that doesn't exist, or `PUT` / `PATCH .../close` / `DELETE` / `PUT .../save` / `DELETE .../save` for a gig that doesn't exist or has a malformed id — checked before ownership where an ownership check exists (save and unsave have none; see §10.10–§10.11). |
 | `409` | `GIG_CLOSED` | `PUT /api/gigs/:id/save` (§10.10) when the gig is not `open` — the same guard (`assertGigIsOpen` in `gig.service.js`) GL-110's apply endpoint calls before acting on a gig. Never returned by `DELETE /api/gigs/:id/save` (§10.11), which is deliberately ungated, or by `GET /api/gigs/saved` (§10.12), which never rejects on status. See §3 for the shared definition. |
 | `409` | `GIG_TAKEN_DOWN` | `PUT /api/gigs/:id` on a gig an admin has taken down (§10.7, §14.1). Checked before every other rule on this endpoint, including `GIG_HAS_APPLICANTS` below. See §3 for the shared definition. |
-| `409` | `GIG_HAS_APPLICANTS` | `PUT /api/gigs/:id` attempted to add, change or remove `skillTrial` on a gig that has ever had an application (§10.7). See §3 for the shared definition. |
+| `409` | `GIG_HAS_APPLICANTS` | `PUT /api/gigs/:id` attempted to add, change or remove `skillTrial` on a gig that has ever had an application (§10.7), **or** `DELETE /api/gigs/:id` attempted on a gig that has ever had an application, in any status (§10.9). Same code both places, so the client handles one error regardless of which endpoint returned it. See §3 for the shared definition. |
 
 ---
 
@@ -1799,7 +1801,7 @@ Returned under `data.applications[].gig` (§11.7) and `data.application.gig` (§
 }
 ```
 
-`null` if the gig no longer exists — `DELETE /api/gigs/:id` (§10.9) has no cascade to applications, so an orphaned application reads back with `gig: null` rather than the request failing. **Not present** on the apply response (§11.7): the caller already knows which gig they just applied to, and `application.gig` there is still the bare reference id from §11.1.
+`null` if the gig no longer exists. Since GL-437, `DELETE /api/gigs/:id` (§10.9) refuses once a gig has ever had an application, so a gig with applications can no longer be deleted at all — `gig: null` now only shows up for applications whose gig was deleted before that rule existed, not for anything created going forward. **Not present** on the apply response (§11.7): the caller already knows which gig they just applied to, and `application.gig` there is still the bare reference id from §11.1.
 
 ### 11.7 Apply to a gig — `POST /api/gigs/:gigId/applications`
 

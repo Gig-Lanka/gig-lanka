@@ -446,8 +446,23 @@ export const markGigFilled = async (gigId) => {
   return gig.toJSON();
 };
 
+// GL-437: mirrors the updateGig skill-trial check above — same
+// Application.exists({ gig: gig._id }) test, same GIG_HAS_APPLICANTS code,
+// so the client has one error to handle for both. "Has ever had an
+// applicant", not just live ones: a withdrawn or rejected applicant's
+// history still points at this gig, and deleting it would strand that
+// record with a dangling reference exactly as a live one would.
 export const deleteGig = async (id, userId) => {
   const gig = await findOwnedGig(id, userId);
+
+  const hasEverHadApplicant = await Application.exists({ gig: gig._id });
+  if (hasEverHadApplicant) {
+    throw new ApiError(
+      409,
+      'GIG_HAS_APPLICANTS',
+      'This gig has applicants and cannot be deleted. Close it instead.',
+    );
+  }
 
   await gig.deleteOne();
 };
