@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { closeGigAsAdmin } from '../controllers/admin.controller.js';
 import { getAdminReports, resolveReport, dismissReport } from '../controllers/report.controller.js';
 import { requireAuth, requireRole } from '../middleware/auth.middleware.js';
 import { validate, validateQuery } from '../middleware/validate.middleware.js';
@@ -20,5 +21,9 @@ router.get('/reports', validateQuery(adminReportsQuerySchema), getAdminReports);
 // reopen or edit route.
 router.patch('/reports/:id/resolve', validate(closeReportSchema), resolveReport);
 router.patch('/reports/:id/dismiss', validate(closeReportSchema), dismissReport);
+
+// GL-434. The admin takedown — status: 'closed' with a closedByAdminAt
+// marker, per gig.service.js's takedownGig.
+router.patch('/gigs/:id/close', closeGigAsAdmin);
 
 export default router;

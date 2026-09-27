@@ -238,7 +238,7 @@ export const listOpenGigs = async (query, user) => {
   return { gigs: gigsJson, total, page, limit: PAGE_SIZE };
 };
 
-export const getGigById = async (id) => {
+export const getGigById = async (id, user) => {
   if (!mongoose.isValidObjectId(id)) {
     throw new ApiError(404, 'NOT_FOUND', 'Gig not found.');
   }
@@ -256,6 +256,14 @@ export const getGigById = async (id) => {
   // User holds credentials and a role, the profile holds what everyone else
   // sees. A business that has not filled in a profile yet reads back as nulls.
   const business = await getPublicIdentity(gigJson.postedBy);
+
+  // GL-434: closedByAdminAt is stripped by toJSON above for everyone, then
+  // layered back on here only for the gig's own owner — the same per-caller
+  // layering viewerSaved and viewerApplication use. A seeker or a guest
+  // never sees it, even on a taken-down gig.
+  if (user && gig.postedBy.toString() === user.id.toString()) {
+    gigJson.closedByAdminAt = gig.closedByAdminAt;
+  }
 
   return { gig: gigJson, business };
 };
@@ -317,6 +325,19 @@ export const listSavedGigs = async (userId) => {
 export const updateGig = async (id, body, userId) => {
   const gig = await findOwnedGig(id, userId);
 
+  // GL-434: a takedown is final from the business's side - it can still
+  // delete the gig (elsewhere) and process its applicants, but it cannot
+  // edit its way back to 'open' or otherwise change it underneath the
+  // admin's action. Checked first, before any other refusal in this
+  // function, since no field-level change is ever allowed here.
+  if (gig.closedByAdminAt) {
+    throw new ApiError(
+      409,
+      'GIG_TAKEN_DOWN',
+      'This gig was taken down by Gig Lanka and can no longer be edited.',
+    );
+  }
+
   const isChangingSkillTrial = Object.prototype.hasOwnProperty.call(body, 'skillTrial');
 
   if (isChangingSkillTrial) {
@@ -347,6 +368,40 @@ export const closeGig = async (id, userId) => {
   const gig = await findOwnedGig(id, userId);
 
   gig.status = 'closed';
+  await gig.save({ validateModifiedOnly: true });
+
+  return gig.toJSON();
+};
+
+// GL-434: the admin takedown, called from PATCH /api/admin/gigs/:id/close.
+// Not ownership-scoped like closeGig above - the admin role check already
+// happened at the router, and an admin acts on any gig, not just one it
+// owns. closedByAdminAt is the record of *that action*, independent of the
+// status transition it may or may not need: a gig the business already
+// closed still gets the marker set even though status itself doesn't move,
+// so the takedown is recorded either way. Idempotent guard is
+// closedByAdminAt itself, not status, since a taken-down gig is always
+// 'closed' but a merely business-closed one must still be takedown-able.
+export const takedownGig = async (id) => {
+  if (!mongoose.isValidObjectId(id)) {
+    throw new ApiError(404, 'NOT_FOUND', 'Gig not found.');
+  }
+
+  const gig = await Gig.findById(id);
+
+  if (!gig) {
+    throw new ApiError(404, 'NOT_FOUND', 'Gig not found.');
+  }
+
+  if (gig.closedByAdminAt) {
+    throw new ApiError(409, 'GIG_ALREADY_TAKEN_DOWN', 'This gig has already been taken down.');
+  }
+
+  if (gig.status === 'open' || gig.status === 'filled') {
+    gig.status = 'closed';
+  }
+  gig.closedByAdminAt = new Date();
+
   await gig.save({ validateModifiedOnly: true });
 
   return gig.toJSON();
