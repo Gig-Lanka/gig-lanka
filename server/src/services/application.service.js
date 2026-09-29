@@ -9,6 +9,7 @@ import {
 import { assertGigIsOpen, findOwnedGig, markGigFilled } from './gig.service.js';
 import { getMyProfile, addSkillTrialResult } from './profile.service.js';
 import { isStorageUrl } from './storage.service.js';
+import { recomputeCompletedGigCounts } from './review.service.js';
 
 // Source status -> target status -> which kind of actor may trigger that
 // move. Modeled as data, not a chain of conditionals, so Sprint 2's hiring
@@ -551,6 +552,20 @@ export const getApplicationWithParties = async (id) => {
   };
 };
 
+// GL-447: the count behind the rating aggregate's `completedGigCount` —
+// completed applications where the user is the applicant, or, for a
+// business, where the application's gig was posted by them. Narrow on
+// purpose, like getApplicationWithParties above: review.service.js calls
+// this and never imports the Application or Gig model itself.
+export const countCompletedApplications = async (userId, role) => {
+  if (role === 'business') {
+    const gigIds = await Gig.find({ postedBy: userId }).distinct('_id');
+    return Application.countDocuments({ gig: { $in: gigIds }, status: 'completed' });
+  }
+
+  return Application.countDocuments({ applicant: userId, status: 'completed' });
+};
+
 // Never the full gig (10.1) — just enough for a seeker or business to
 // recognise which posting an application belongs to in a list or detail
 // view. A deleted gig (10.9 has no cascade) reads back as null rather than
@@ -677,6 +692,7 @@ export const completeApplication = async (id, actor) => {
 
   const updated = await transitionApplicationStatus(application, 'completed', actor);
   const gig = await Gig.findById(updated.gig);
+  await recomputeCompletedGigCounts(updated.applicant, gig?.postedBy);
 
   return {
     application: { ...updated.toJSON(), gig: toGigSummary(gig) },

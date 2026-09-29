@@ -22,6 +22,10 @@ export const RATING_AGGREGATE_SHAPE = {
     4: { type: Number, default: 0 },
     5: { type: Number, default: 0 },
   },
+  // GL-447: how many gigs the user has completed on Gig Lanka — counted from
+  // applications, not reviews, so "4.8 from 3 reviews" and "4.8 from 3
+  // reviews and 20 completed gigs" read differently.
+  completedGigCount: { type: Number, default: 0 },
 };
 
 const reviewSchema = new mongoose.Schema(
