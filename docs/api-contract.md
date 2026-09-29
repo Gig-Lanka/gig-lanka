@@ -472,6 +472,8 @@ Requests a password reset link for the given email. No `Authorization` header �
 
 **Always returns `200` with the same body** whether the address matches an active account, a deactivated account, or no account at all — the same anti-enumeration rule login already follows (§5.2). When the address matches an active account, a reset email is sent through the transactional email provider carrying a single-use link that expires after **thirty minutes**. A deactivated account receives no email — deactivation means the account cannot be signed into, and a reset must not be a way around that. Requesting again before an earlier link is used invalidates it, so only the most recent link for an account ever works.
 
+The link in that email points at the reset-link bridge page (§5.11), not directly at a `giglanka://` scheme URL — a custom-scheme link isn't reliably tappable from every mail client, an HTTPS link always is.
+
 **Request body**
 
 ```json
@@ -558,6 +560,18 @@ An expired, already-used, unknown or malformed token all return the same `400 RE
   }
 }
 ```
+
+### 5.11 Reset-link bridge page — `GET /reset-password`
+
+An **HTML bridge page**, not a JSON endpoint — it is mounted outside `/api` in `server/src/app.js`, and its response is a full HTML document rather than the success/error envelope (§2, §3). It exists because the link in a reset email (§5.9) has to be an HTTPS URL to be reliably tappable from every mail client, but the app itself is opened through the `giglanka://` custom scheme.
+
+Given `?token=<token>`, the page immediately tries to navigate to `giglanka://reset-password?token=<token>`, and shows an **Open Gig Lanka** button that does the same, for when the automatic navigation is blocked — Android only opens a custom scheme from Chrome after a user gesture, and the button is that gesture. If nothing happens, the page says in one line to install the Gig Lanka app. With no `token` in the query string, the page skips the scheme URL entirely and says to request a new link from the app, rather than erroring.
+
+The page **never validates, consumes or reveals anything about the token** — it is a dumb bridge. Whether the token is well-formed, expired, or already used is decided only when the app calls `POST /api/auth/reset-password` (§5.10). The token is percent-encoded before it is placed in the scheme URL, and the resulting URL is HTML-escaped before it is written into the page, so a token containing markup, quotes or extra query parameters cannot inject into the page or the script that performs the redirect.
+
+Styling is inline CSS only, built from the app's own design tokens — `paper` background, `ink` text, a `signal`-coloured button, and the `Schibsted Grotesk` / `Inter Tight` font families by name with system fallbacks. No external stylesheets, fonts or scripts; the only `<script>` on the page performs the redirect.
+
+**Success — `200 OK`**, `Content-Type: text/html` — always `200` in every case (token present, token missing, or a malformed token), since the page never inspects the token beyond encoding it.
 
 ---
 
