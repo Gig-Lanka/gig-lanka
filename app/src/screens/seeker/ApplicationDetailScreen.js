@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 
 import applicationApi from '../../api/applicationApi';
+import ApplicationDetailRows from '../../components/application/ApplicationDetailRows';
 import ApplicationTracker from '../../components/application/ApplicationTracker';
 import SkillTrialSubmission from '../../components/application/SkillTrialSubmission';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
@@ -202,6 +203,8 @@ export default function ApplicationDetailScreen() {
             submission={skillTrialSubmission}
             className="mt-5"
           />
+
+          <ApplicationDetailRows application={application} className="mt-4" />
 
           {WITHDRAWABLE_STATUSES.has(applicationStatus) ? (
             <View className="mt-5">
