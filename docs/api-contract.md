@@ -684,11 +684,15 @@ The summary that lands on a profile once reviews exist for it: an average, a cou
   "averageRating": 4.6,
   "reviewCount": 12,
   "topCategories": ["communication", "punctuality"],
-  "distribution": { "1": 0, "2": 0, "3": 1, "4": 3, "5": 8 }
+  "distribution": { "1": 0, "2": 0, "3": 1, "4": 3, "5": 8 },
+  "completedGigCount": 20
 }
 ```
 
 - `distribution` — the count of reviews at each star value, keyed `"1"` through `"5"`. Always all five keys, each defaulting to `0`. The five counts sum to `reviewCount`.
+- `completedGigCount` — how many gigs the user has completed on Gig Lanka, defaulting to `0` (GL-447). Counted from applications, not reviews: for a seeker, their own applications at status `completed`; for a business, the applications at status `completed` on gigs it posted. Withdrawn, rejected, closed – position filled and hired-but-not-completed applications are never counted, and gigs completed off the platform can't be. It is counted for every user, including one with no reviews — so a user with no reviews carries zeroed review fields alongside a real `completedGigCount`, not a fully zeroed aggregate.
+  - **When it is recomputed:** whenever the aggregate is — when a review is created (for the review's subject), and when an application is marked Completed (`PATCH /api/applications/:id/complete`, §11), for both the applicant and the business that posted the gig. Always a full recomputation, never an increment. Best-effort: a failed recompute is logged and never fails the completion or the review that triggered it.
+  - Because `Application.profileSnapshot.rating` embeds this same shape, a snapshot carries the count as it stood when the application was submitted, frozen like the rest of the snapshot. Snapshots taken before GL-447 were never counted: they read back `completedGigCount: 0` through the schema default, which is not a real count.
 
 **Ownership boundary**, stated in both directions so neither epic computes the other's number: the Review component (this contract's `6.9`) owns the aggregate and is the only thing that writes it, computed from the reviews collection starting in Sprint 2. User & Profile stores the aggregate on the profile document and displays it, and never writes it.
 

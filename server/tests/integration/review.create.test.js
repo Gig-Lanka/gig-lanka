@@ -275,6 +275,7 @@ describe('POST /api/applications/:applicationId/reviews', () => {
       reviewCount: 1,
       topCategories: ['fair_payment'],
       distribution: { 1: 0, 2: 0, 3: 0, 4: 1, 5: 0 },
+      completedGigCount: 1,
     });
   });
 
