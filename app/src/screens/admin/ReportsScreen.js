@@ -186,6 +186,21 @@ export default function ReportsScreen() {
     };
   }, [load]);
 
+  // Clears the tab being left before the new one loads, so its rows never
+  // show under the new tab and a stray onEndReached can't page the new
+  // status from the old tab's `page`/`total` before page one lands.
+  const handleStatusChange = useCallback(
+    (nextStatus) => {
+      if (nextStatus === status) return;
+      setReports([]);
+      setTotal(0);
+      setPage(1);
+      setLoading(true);
+      setStatus(nextStatus);
+    },
+    [status],
+  );
+
   const handleRetry = useCallback(() => load(1, 'initial'), [load]);
   const handleRefresh = useCallback(() => load(1, 'refresh'), [load]);
   const handleEndReached = useCallback(() => {
@@ -207,7 +222,7 @@ export default function ReportsScreen() {
       <SegmentedControl
         options={STATUS_OPTIONS}
         value={status}
-        onChange={setStatus}
+        onChange={handleStatusChange}
         className="mb-4"
       />
 
