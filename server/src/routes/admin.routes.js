@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { closeGigAsAdmin } from '../controllers/admin.controller.js';
+import { closeGigAsAdmin, suspendUser, reinstateUser } from '../controllers/admin.controller.js';
 import { getAdminReports, resolveReport, dismissReport } from '../controllers/report.controller.js';
 import { requireAuth, requireRole } from '../middleware/auth.middleware.js';
 import { validate, validateQuery } from '../middleware/validate.middleware.js';
@@ -25,5 +25,10 @@ router.patch('/reports/:id/dismiss', validate(closeReportSchema), dismissReport)
 // GL-434. The admin takedown — status: 'closed' with a closedByAdminAt
 // marker, per gig.service.js's takedownGig.
 router.patch('/gigs/:id/close', closeGigAsAdmin);
+
+// GL-428. No request body for either — the target comes from the path, and
+// nothing else about the decision (a reason, a duration) is captured yet.
+router.patch('/users/:id/suspend', suspendUser);
+router.patch('/users/:id/reinstate', reinstateUser);
 
 export default router;
