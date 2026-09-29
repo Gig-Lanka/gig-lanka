@@ -15,6 +15,11 @@ const CATEGORY_LABELS = [...BUSINESS_REVIEW_CATEGORIES, ...YOUTH_WORKER_REVIEW_C
   {},
 );
 
+// GL-449 - "1 completed gig", "20 completed gigs". Counted from completed
+// applications on the server (§6.10), not from reviews, so it can be
+// non-zero for someone nobody has reviewed yet.
+const completedGigsLabel = (count) => `${count} completed ${count === 1 ? 'gig' : 'gigs'}`;
+
 export default function RatingSummary({ rating, userId, variant = 'full', className, ...props }) {
   const navigation = useNavigation();
   const {
@@ -22,6 +27,7 @@ export default function RatingSummary({ rating, userId, variant = 'full', classN
     reviewCount = 0,
     topCategories = [],
     distribution = {},
+    completedGigCount = 0,
   } = rating ?? {};
 
   if (reviewCount === 0) {
@@ -39,6 +45,12 @@ export default function RatingSummary({ rating, userId, variant = 'full', classN
         {...props}
       >
         <Text className="text-center text-[13px] font-semibold text-ink">New to Gig Lanka</Text>
+        {/* Work done but not reviewed yet isn't the same as brand new. */}
+        {completedGigCount > 0 ? (
+          <Text className="text-center text-[12.5px] text-muted">
+            {completedGigsLabel(completedGigCount)}
+          </Text>
+        ) : null}
         <Text className="text-center text-[12.5px] text-muted">
           Ratings appear here once a completed gig is reviewed.
         </Text>
@@ -58,6 +70,9 @@ export default function RatingSummary({ rating, userId, variant = 'full', classN
         <StarRating value={Math.round(averageRating)} size="sm" />
         <Text className="text-[12.5px] text-muted">
           ({reviewCount} {reviewLabel})
+          {completedGigCount > 0
+            ? ` · ${completedGigCount} ${completedGigCount === 1 ? 'gig' : 'gigs'}`
+            : ''}
         </Text>
       </View>
     );
@@ -72,7 +87,7 @@ export default function RatingSummary({ rating, userId, variant = 'full', classN
         <View>
           <StarRating value={Math.round(averageRating)} size="sm" />
           <Text className="mt-[6px] text-[12.5px] text-muted">
-            {reviewCount} {reviewLabel}
+            {reviewCount} {reviewLabel} · {completedGigsLabel(completedGigCount)}
           </Text>
         </View>
       </View>
