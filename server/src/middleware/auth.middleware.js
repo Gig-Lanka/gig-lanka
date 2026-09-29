@@ -1,6 +1,6 @@
 import jwt from 'jsonwebtoken';
 import { env } from '../config/env.js';
-import { User } from '../models/user.model.js';
+import { User, isBlocked } from '../models/user.model.js';
 import { ApiError } from '../utils/ApiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 
@@ -35,10 +35,10 @@ export const requireAuth = asyncHandler(async (req, res, next) => {
   const user = await User.findById(decoded.id);
 
   // Re-loaded from the database rather than trusted from the token's claim,
-  // so a token minted before deactivation and still inside its expiry window
-  // is refused the moment isActive flips, instead of working for up to
-  // fifteen more minutes.
-  if (!user || user.isActive === false) {
+  // so a token minted before the account was blocked and still inside its
+  // expiry window is refused the moment isActive flips or suspendedAt is
+  // set, instead of working for up to fifteen more minutes.
+  if (!user || isBlocked(user)) {
     throw new ApiError(401, 'TOKEN_INVALID', 'Access token is invalid.');
   }
 

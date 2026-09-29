@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 import { Gig } from '../models/gig.model.js';
 import { Application } from '../models/application.model.js';
-import { User } from '../models/user.model.js';
+import { User, isBlocked } from '../models/user.model.js';
 import { ApiError } from '../utils/ApiError.js';
 import { getPublicIdentity, getPublicIdentities } from './profile.service.js';
 
@@ -15,12 +15,14 @@ const SORT_SPECS = {
   highest_pay: { payAmount: -1, _id: -1 },
 };
 
-// GL-316: gigs posted by a deactivated business narrow out of the public
-// listing (User & Profile brief §9). A $nin of deactivated poster ids rather
-// than a $lookup — listByStartingSoon below runs its own aggregation, and a
-// $lookup here would have to be kept in step with it forever. $nin against
-// an empty array excludes nothing, so this is safe to apply unconditionally.
-const getDeactivatedPosterIds = () => User.find({ isActive: false }).distinct('_id');
+// GL-316: gigs posted by a deactivated or suspended business narrow out of
+// the public listing (User & Profile brief §9). A $nin of blocked poster ids
+// rather than a $lookup — listByStartingSoon below runs its own aggregation,
+// and a $lookup here would have to be kept in step with it forever. $nin
+// against an empty array excludes nothing, so this is safe to apply
+// unconditionally.
+const getBlockedPosterIds = () =>
+  User.find({ $or: [{ isActive: false }, { suspendedAt: { $ne: null } }] }).distinct('_id');
 
 // Builds the filter for the public listing only — status: 'open' is fixed
 // here and never derived from `query`, so no combination of parameters can
@@ -30,11 +32,11 @@ const getDeactivatedPosterIds = () => User.find({ isActive: false }).distinct('_
 // $not/$lt also matches a missing field, so gigs with no deadline pass through.
 const buildOpenGigFilter = async (query) => {
   const today = new Date().toISOString().slice(0, 10);
-  const deactivatedPosterIds = await getDeactivatedPosterIds();
+  const blockedPosterIds = await getBlockedPosterIds();
   const filter = {
     status: 'open',
     applicationsCloseDate: { $not: { $lt: today } },
-    postedBy: { $nin: deactivatedPosterIds },
+    postedBy: { $nin: blockedPosterIds },
   };
 
   if (query.q) {
@@ -532,13 +534,13 @@ export const assertGigIsOpen = async (id) => {
     throw new ApiError(409, 'GIG_CLOSED', 'This gig is no longer open.');
   }
 
-  // GL-316 criterion 7: a deactivated business's gig still resolves by direct
-  // link (GET /api/gigs/:id), but applying to it is refused the same way a
-  // closed gig is — the existing code, not a new one, so the client's
-  // existing message still explains it.
-  const poster = await User.findById(gig.postedBy).select('isActive').lean();
+  // GL-316 criterion 7: a deactivated or suspended business's gig still
+  // resolves by direct link (GET /api/gigs/:id), but applying to it is
+  // refused the same way a closed gig is — the existing code, not a new one,
+  // so the client's existing message still explains it.
+  const poster = await User.findById(gig.postedBy).select('isActive suspendedAt').lean();
 
-  if (poster?.isActive === false) {
+  if (poster && isBlocked(poster)) {
     throw new ApiError(409, 'GIG_CLOSED', 'This gig is no longer open.');
   }
 

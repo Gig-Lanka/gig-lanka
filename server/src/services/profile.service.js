@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 import { Profile } from '../models/profile.model.js';
-import { User } from '../models/user.model.js';
+import { User, isBlocked } from '../models/user.model.js';
 import { ApiError } from '../utils/ApiError.js';
 import { removeFile } from './storage.service.js';
 
@@ -133,7 +133,7 @@ export const getPublicProfile = async (userId) => {
     throw profileNotFound();
   }
 
-  // Read lean so the isActive check below sees the stored document rather than
+  // Read lean so the blocked check below sees the stored document rather than
   // only the paths the schema declares today — a hydrated document hides fields
   // the schema has not caught up with, which would silently disable that guard.
   const user = await User.findById(userId).lean();
@@ -144,11 +144,12 @@ export const getPublicProfile = async (userId) => {
     throw profileNotFound();
   }
 
-  // Criterion 13, written before the flag exists: isActive arrives in Sprint 3,
-  // so only an explicit false hides a profile and accounts stored without the
-  // field stay visible. The 404 is identical to a missing profile on purpose —
-  // a deactivated account must not be distinguishable from one that never was.
-  if (user.isActive === false) {
+  // Criterion 13, written before the flag existed: isActive arrives in Sprint 3
+  // and suspendedAt in Sprint 4, so only an explicit block hides a profile and
+  // accounts stored without either field stay visible. The 404 is identical to
+  // a missing profile on purpose — a deactivated or suspended account must not
+  // be distinguishable from one that never was.
+  if (isBlocked(user)) {
     throw profileNotFound();
   }
 

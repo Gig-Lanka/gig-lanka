@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import { env } from '../config/env.js';
-import { User } from '../models/user.model.js';
+import { User, isBlocked } from '../models/user.model.js';
 import {
   PasswordResetToken,
   PASSWORD_RESET_TOKEN_TTL_MINUTES,
@@ -103,7 +103,7 @@ export const changeUserPassword = async (user, { currentPassword, newPassword })
 export const requestPasswordReset = async ({ email }) => {
   const user = await User.findOne({ email });
 
-  if (!user || user.isActive === false) {
+  if (!user || isBlocked(user)) {
     return;
   }
 
