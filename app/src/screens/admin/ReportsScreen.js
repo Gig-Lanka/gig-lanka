@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { FlatList, Pressable, Text, View } from 'react-native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 
 import reportApi from '../../api/reportApi';
 import ReportNote from '../../components/report/ReportNote';
@@ -58,36 +59,43 @@ function targetLabel({ targetType, target }) {
 
 // A closed row (§13.4's `status=closed`) is the open row plus its outcome
 // Badge beside the reason and a line saying when it was closed.
-function ReportRow({ report }) {
+//
+// GL-406: the whole row opens ReportDetail with this row's data - there's no
+// single-report read - and the chevron is the only thing it adds, the same
+// `›` ApplicantDetailScreen's routable trial row uses.
+function ReportRow({ report, onPress }) {
   const isClosed = report.status === 'resolved' || report.status === 'dismissed';
 
   return (
-    <Card className="gap-2">
-      <View className="flex-row items-start justify-between gap-3">
-        <View className="flex-1 flex-row flex-wrap gap-2">
-          <Badge>{reasonLabel(report.reasonCode)}</Badge>
-          {isClosed ? (
-            <Badge variant={OUTCOME_BADGE_VARIANT[report.status]}>
-              {outcomeLabel(report.status)}
-            </Badge>
-          ) : null}
+    <Card onPress={onPress} className="flex-row items-center gap-3">
+      <View className="flex-1 gap-2">
+        <View className="flex-row items-start justify-between gap-3">
+          <View className="flex-1 flex-row flex-wrap gap-2">
+            <Badge>{reasonLabel(report.reasonCode)}</Badge>
+            {isClosed ? (
+              <Badge variant={OUTCOME_BADGE_VARIANT[report.status]}>
+                {outcomeLabel(report.status)}
+              </Badge>
+            ) : null}
+          </View>
+          <Text className="text-[11.5px] text-muted-dark">
+            {formatRelativeTime(report.createdAt)}
+          </Text>
         </View>
-        <Text className="text-[11.5px] text-muted-dark">
-          {formatRelativeTime(report.createdAt)}
-        </Text>
-      </View>
 
-      <Text className="text-[14.5px] font-semibold text-ink">{targetLabel(report)}</Text>
-      <Text className="text-[12.5px] text-muted-dark">
-        Reported by {report.reporter?.name ?? 'Unknown'}
-      </Text>
-      {isClosed && report.closedAt ? (
+        <Text className="text-[14.5px] font-semibold text-ink">{targetLabel(report)}</Text>
         <Text className="text-[12.5px] text-muted-dark">
-          Closed {formatRelativeTime(report.closedAt)}
+          Reported by {report.reporter?.name ?? 'Unknown'}
         </Text>
-      ) : null}
+        {isClosed && report.closedAt ? (
+          <Text className="text-[12.5px] text-muted-dark">
+            Closed {formatRelativeTime(report.closedAt)}
+          </Text>
+        ) : null}
 
-      <ReportNote note={report.note} />
+        <ReportNote note={report.note} />
+      </View>
+      <Text className="text-[17px] font-semibold text-muted-dark">›</Text>
     </Card>
   );
 }
@@ -98,6 +106,8 @@ function ReportRow({ report }) {
 // all 403 for an admin and round-trips to GET /auth/me, itself a profile
 // endpoint. A header action is the only control an admin needs this sprint.
 export default function ReportsScreen() {
+  const navigation = useNavigation();
+  const route = useRoute();
   const { logout } = useAuth();
   const [logoutConfirmVisible, setLogoutConfirmVisible] = useState(false);
 
@@ -186,6 +196,32 @@ export default function ReportsScreen() {
     };
   }, [load]);
 
+  // ReportDetail pops back here with `closedReportId` once a report has been
+  // resolved or dismissed (or found already closed), so the open list is
+  // stale: reload it from page one rather than dropping the row locally,
+  // which would shift the server's page offsets under the next load-more.
+  // Anything still in flight is invalidated first so the reload can't be
+  // swallowed by the in-flight guard. The ref makes each id fire once.
+  const closedReportId = route.params?.closedReportId;
+  const handledClosedReportIdRef = useRef(null);
+  useEffect(() => {
+    if (!closedReportId || closedReportId === handledClosedReportIdRef.current) return undefined;
+    handledClosedReportIdRef.current = closedReportId;
+
+    const timeoutId = setTimeout(() => {
+      generationRef.current += 1;
+      isFetchingRef.current = false;
+      load(1, 'refresh');
+    }, 0);
+
+    return () => clearTimeout(timeoutId);
+  }, [closedReportId, load]);
+
+  const handleOpenReport = useCallback(
+    (report) => navigation.navigate('ReportDetail', { report }),
+    [navigation],
+  );
+
   // Clears the tab being left before the new one loads, so its rows never
   // show under the new tab and a stray onEndReached can't page the new
   // status from the old tab's `page`/`total` before page one lands.
@@ -234,7 +270,9 @@ export default function ReportsScreen() {
         <FlatList
           data={reports}
           keyExtractor={(report) => report.id}
-          renderItem={({ item }) => <ReportRow report={item} />}
+          renderItem={({ item }) => (
+            <ReportRow report={item} onPress={() => handleOpenReport(item)} />
+          )}
           ListEmptyComponent={<EmptyState message={EMPTY_MESSAGE_BY_STATUS[status]} />}
           ListFooterComponent={
             loadingMore ? (
