@@ -1819,6 +1819,22 @@ Returned under `data.applications[].gig` (§11.7) and `data.application.gig` (§
 }
 ```
 
+**`skillTrial` — the single read only.** On `GET /api/applications/:id` (§11.9) the summary gains one more field when the gig carries a skill trial, so the seeker's application detail can name the trial:
+
+```json
+{
+  "id": "64f1a2b3c4d5e6f7a8b9c0d8",
+  "title": "Weekend event helper",
+  "payAmount": 2500,
+  "payType": "per_day",
+  "city": "Colombo",
+  "status": "open",
+  "skillTrial": { "title": "Plan a stock check", "submissionType": "text" }
+}
+```
+
+`title` is the gig's `skillTrial.taskTitle` (§10.1) and `submissionType` is one of the §6.12 values. The key is **absent** — never `null`, never an empty object — when the gig has no trial. It appears **only** on §11.9: the list endpoints (§11.8, §11.13), the action responses that share §11.9's shape (§11.10, §11.11, §11.14–§11.18) and every other place this summary is returned keep the six fields above. The terms of a trial can't change once a gig has applicants (GL-342), so reading them from the live gig is safe.
+
 `null` if the gig no longer exists. Since GL-437, `DELETE /api/gigs/:id` (§10.9) refuses once a gig has ever had an application, so a gig with applications can no longer be deleted at all — `gig: null` now only shows up for applications whose gig was deleted before that rule existed, not for anything created going forward. **Not present** on the apply response (§11.7): the caller already knows which gig they just applied to, and `application.gig` there is still the bare reference id from §11.1.
 
 ### 11.7 Apply to a gig — `POST /api/gigs/:gigId/applications`
@@ -1973,10 +1989,12 @@ Returns one application to the seeker who owns it or the business that posted th
 {
   "success": true,
   "data": {
-    "application": { /* 11.1, gig replaced with the §11.6 summary */ }
+    "application": { /* 11.1, gig replaced with the §11.6 summary, plus `skillTrial` when the gig has a trial */ }
   }
 }
 ```
+
+The gig summary here is the one place that also carries `gig.skillTrial: { title, submissionType }` (§11.6), present only when the gig has a trial and absent otherwise; `gig` is still `null` if the gig no longer exists.
 
 The full application is returned, including the decision once made — `status`, `rejectionReasonCode` and `rejectionNote` (§11.1) shown exactly as the business wrote it, no softening, no truncation, no paraphrase.
 
