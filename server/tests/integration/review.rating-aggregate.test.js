@@ -1,4 +1,6 @@
+import { jest } from '@jest/globals';
 import request from 'supertest';
+import mongoose from 'mongoose';
 import app from '../../src/app.js';
 import { Gig } from '../../src/models/gig.model.js';
 import { Application } from '../../src/models/application.model.js';
@@ -82,6 +84,7 @@ const ZEROED_AGGREGATE = {
   reviewCount: 0,
   topCategories: [],
   distribution: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
+  completedGigCount: 0,
 };
 
 describe('rating aggregate computed from reviews', () => {
@@ -106,6 +109,9 @@ describe('rating aggregate computed from reviews', () => {
       // (alphabetical) is what orders them, not submission order.
       topCategories: ['communication', 'fair_payment'],
       distribution: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 1 },
+      // The application the review is written against is itself completed,
+      // on a gig this business posted.
+      completedGigCount: 1,
     });
   });
 
@@ -225,5 +231,155 @@ describe('rating aggregate computed from reviews', () => {
       averageRating: 3,
       reviewCount: 1,
     });
+  });
+});
+
+// GL-447: completed gigs are counted from applications, not reviews. Hires
+// are seeded directly at `hired` and then marked complete through the real
+// endpoint, so the recompute under test is the one completeApplication makes.
+const createApplicationAt = async (gigId, applicantId, status) =>
+  Application.create({
+    gig: gigId,
+    applicant: applicantId,
+    profileSnapshot: buildSnapshot(),
+    status,
+    ...(status === 'hired' ? { decidedAt: new Date() } : {}),
+    ...(status === 'completed' ? { decidedAt: new Date(), completedAt: new Date() } : {}),
+  });
+
+const createGig = async (businessId) => Gig.create({ ...validGigPayload, postedBy: businessId });
+
+const completeHire = async (applicationId, accessToken) =>
+  request(app)
+    .patch(`/api/applications/${applicationId}/complete`)
+    .set('Authorization', `Bearer ${accessToken}`);
+
+const completedGigCountOf = async (userId, accessToken) => {
+  const res = await getProfile(userId, accessToken);
+  return res.body.data.profile.ratingSummary.completedGigCount;
+};
+
+describe('completedGigCount in the rating aggregate', () => {
+  it("counts a seeker's own completed applications, and nothing else", async () => {
+    const business = await registerBusiness('count-seeker-business@example.com');
+    const seeker = await registerSeeker('count-seeker-seeker@example.com');
+
+    // One earlier completed gig, plus a withdrawn, a rejected and a
+    // still-hired application — only completed ones count.
+    await createApplicationAt((await createGig(business.userId))._id, seeker.userId, 'completed');
+    await createApplicationAt((await createGig(business.userId))._id, seeker.userId, 'withdrawn');
+    await createApplicationAt((await createGig(business.userId))._id, seeker.userId, 'rejected');
+    await createApplicationAt((await createGig(business.userId))._id, seeker.userId, 'hired');
+    const hire = await createApplicationAt(
+      (await createGig(business.userId))._id,
+      seeker.userId,
+      'hired',
+    );
+
+    const res = await completeHire(hire.id, business.accessToken);
+    expect(res.status).toBe(200);
+
+    expect(await completedGigCountOf(seeker.userId, business.accessToken)).toBe(2);
+  });
+
+  it("counts a business's completed applications across the gigs it posted, and nothing else", async () => {
+    const business = await registerBusiness('count-business-business@example.com');
+    const otherBusiness = await registerBusiness('count-business-other@example.com');
+    const seekers = await Promise.all(
+      [0, 1, 2, 3, 4, 5].map((index) =>
+        registerSeeker(`count-business-seeker-${index}@example.com`),
+      ),
+    );
+
+    const gigA = await createGig(business.userId);
+    const gigB = await createGig(business.userId);
+    const otherGig = await createGig(otherBusiness.userId);
+
+    await createApplicationAt(gigA._id, seekers[0].userId, 'completed');
+    await createApplicationAt(gigA._id, seekers[1].userId, 'withdrawn');
+    await createApplicationAt(gigA._id, seekers[2].userId, 'rejected');
+    await createApplicationAt(gigB._id, seekers[3].userId, 'hired');
+    // Completed, but on another business's gig — never this business's.
+    await createApplicationAt(otherGig._id, seekers[4].userId, 'completed');
+    const hire = await createApplicationAt(gigB._id, seekers[5].userId, 'hired');
+
+    const res = await completeHire(hire.id, business.accessToken);
+    expect(res.status).toBe(200);
+
+    expect(await completedGigCountOf(business.userId, business.accessToken)).toBe(2);
+  });
+
+  it('carries the count for a user with no reviews, beside zeroed review fields', async () => {
+    const business = await registerBusiness('count-no-reviews-business@example.com');
+    const seeker = await registerSeeker('count-no-reviews-seeker@example.com');
+    const hire = await createApplicationAt(
+      (await createGig(business.userId))._id,
+      seeker.userId,
+      'hired',
+    );
+
+    const res = await completeHire(hire.id, business.accessToken);
+    expect(res.status).toBe(200);
+
+    const seekerRes = await getMyProfile(seeker.accessToken);
+    expect(seekerRes.body.data.profile.ratingSummary).toEqual({
+      ...ZEROED_AGGREGATE,
+      completedGigCount: 1,
+    });
+
+    const businessRes = await getMyProfile(business.accessToken);
+    expect(businessRes.body.data.profile.ratingSummary).toEqual({
+      ...ZEROED_AGGREGATE,
+      completedGigCount: 1,
+    });
+  });
+
+  it('recomputes both parties when a hire is marked complete', async () => {
+    const business = await registerBusiness('count-both-business@example.com');
+    const seeker = await registerSeeker('count-both-seeker@example.com');
+    const hire = await createApplicationAt(
+      (await createGig(business.userId))._id,
+      seeker.userId,
+      'hired',
+    );
+
+    expect(await completedGigCountOf(seeker.userId, business.accessToken)).toBe(0);
+    expect(await completedGigCountOf(business.userId, business.accessToken)).toBe(0);
+
+    const res = await completeHire(hire.id, business.accessToken);
+    expect(res.status).toBe(200);
+
+    expect(await completedGigCountOf(seeker.userId, business.accessToken)).toBe(1);
+    expect(await completedGigCountOf(business.userId, business.accessToken)).toBe(1);
+  });
+
+  it('never fails the completion when a recompute fails', async () => {
+    const business = await registerBusiness('count-failure-business@example.com');
+    const seeker = await registerSeeker('count-failure-seeker@example.com');
+    const hire = await createApplicationAt(
+      (await createGig(business.userId))._id,
+      seeker.userId,
+      'hired',
+    );
+
+    // The same genuine save() failure review.create.test.js uses: a profile
+    // written straight through the driver, missing its required `name`, so
+    // setRatingSummary's save rejects for the business.
+    await mongoose.connection
+      .collection('profiles')
+      .insertOne({ user: new mongoose.Types.ObjectId(business.userId) });
+    const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    const res = await completeHire(hire.id, business.accessToken);
+
+    expect(consoleError).toHaveBeenCalled();
+    consoleError.mockRestore();
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.application.status).toBe('completed');
+    expect((await Application.findById(hire.id)).status).toBe('completed');
+
+    // One party failing never blocks the other.
+    expect(await completedGigCountOf(seeker.userId, seeker.accessToken)).toBe(1);
   });
 });
