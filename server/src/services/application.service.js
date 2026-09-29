@@ -637,6 +637,13 @@ export const listMyApplications = async (userId) => {
 // rejection reason/note once decided — shown exactly as the business wrote
 // it, no softening. No endpoint here can reach another applicant's
 // application: this only ever resolves the one id given.
+//
+// GL-439: the gig summary here — and only here, not in toGigSummary, which
+// the list and action endpoints share — also carries `skillTrial: { title,
+// submissionType }` when the gig has a trial, so the seeker's detail can name
+// it. Absent (not null) when there is none; a deleted gig stays `gig: null`.
+// Reading the live gig is safe: a trial's terms are frozen once the gig has
+// applicants (GL-342).
 export const getApplicationById = async (id, actor) => {
   const { application, applicantId, businessId } = await getApplicationWithParties(id);
 
@@ -648,9 +655,17 @@ export const getApplicationById = async (id, actor) => {
   }
 
   const gig = await Gig.findById(application.gig);
+  const gigSummary = toGigSummary(gig);
+
+  if (gigSummary && resolveSkillTrialRequirement(gig) !== 'none') {
+    gigSummary.skillTrial = {
+      title: gig.skillTrial.taskTitle,
+      submissionType: gig.skillTrial.submissionType,
+    };
+  }
 
   return {
-    application: { ...application.toJSON(), gig: toGigSummary(gig) },
+    application: { ...application.toJSON(), gig: gigSummary },
   };
 };
 
