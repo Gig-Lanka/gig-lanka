@@ -1,8 +1,8 @@
 // Report client - E6/GL-305 (docs/api-contract.md §13). The only place
 // screens talk to the network for reports; screens never import axios or
 // touch a token, `client` handles auth headers the same way it does for
-// gigs and applications (see ./client.js). Covers both endpoints §13.2-13.3
-// define this sprint.
+// gigs and applications (see ./client.js). Covers the reporter's endpoints
+// (§13.2-13.3) and the admin queue, resolve and dismiss.
 
 import client from './client';
 
@@ -32,14 +32,38 @@ async function getMyReports() {
 }
 
 /**
- * `GET /api/admin/reports` - the open-reports moderation queue (GL-370).
- * Admin-only (the server 403s any other role), open reports only, newest
- * first, ten per page - `page` is the only parameter this endpoint reads.
- * Each report carries a resolved `reporter` identity and `target` summary,
- * with `target` coming back `null` when the reported gig or user is gone.
+ * `GET /api/admin/reports` - the moderation queue (GL-370, §13.4).
+ * Admin-only (the server 403s any other role), ten per page. `status` is
+ * `'open'` (the default - newest filed first) or `'closed'` (resolved and
+ * dismissed together, most recently closed first, each row also carrying
+ * `status`, `resolutionNote`, `closedAt` and `closedBy`). Each report
+ * carries a resolved `reporter` identity and `target` summary, with
+ * `target` coming back `null` when the reported gig or user is gone.
  */
-async function getOpenReports(page) {
-  const response = await client.get('/admin/reports', { params: { page } });
+async function getOpenReports(page, status = 'open') {
+  const response = await client.get('/admin/reports', { params: { page, status } });
+  return response.data.data;
+}
+
+/**
+ * `PATCH /api/admin/reports/:id/resolve` - close an open report as resolved
+ * (GL-442). `note` is required, 1-300 characters with at least one
+ * non-space character, and stored verbatim as the report's resolution note.
+ * A report that's no longer open comes back 409 `REPORT_ALREADY_CLOSED`.
+ * Returns `{ report }` in the same shape as a closed queue row.
+ */
+async function resolveReport(id, note) {
+  const response = await client.patch(`/admin/reports/${id}/resolve`, { note });
+  return response.data.data;
+}
+
+/**
+ * `PATCH /api/admin/reports/:id/dismiss` - close an open report as
+ * dismissed (GL-442). Same `note` rules, 409 and response as
+ * `resolveReport`.
+ */
+async function dismissReport(id, note) {
+  const response = await client.patch(`/admin/reports/${id}/dismiss`, { note });
   return response.data.data;
 }
 
@@ -47,4 +71,6 @@ export default {
   createReport,
   getMyReports,
   getOpenReports,
+  resolveReport,
+  dismissReport,
 };

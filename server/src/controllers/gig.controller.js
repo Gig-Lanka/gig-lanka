@@ -37,7 +37,7 @@ export const listGigs = asyncHandler(async (req, res) => {
 // application service, which would close an import cycle (application.service.js
 // already imports gig.service.js for assertGigIsOpen).
 export const getGig = asyncHandler(async (req, res) => {
-  const result = await getGigById(req.params.id);
+  const result = await getGigById(req.params.id, req.user);
   const viewerApplication = await getViewerApplication(req.params.id, req.user);
   const viewerSaved = await getViewerSaved(req.params.id, req.user);
 
@@ -57,6 +57,10 @@ export const getMyGigs = asyncHandler(async (req, res) => {
     const gigJson = gig.toJSON();
     return {
       ...gigJson,
+      // GL-434: this list is always the caller's own gigs (listMyGigs
+      // filters by postedBy: req.user.id), so closedByAdminAt — stripped by
+      // toJSON for everyone — is always safe to layer back on here.
+      closedByAdminAt: gig.closedByAdminAt,
       waitingOnYouCount: waitingCounts.get(gigJson.id.toString()) ?? 0,
     };
   });

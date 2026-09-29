@@ -180,6 +180,7 @@ describe('GET /api/gigs/:id — business.ratingSummary', () => {
       reviewCount: 1,
       topCategories: ['fair_payment'],
       distribution: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 1 },
+      completedGigCount: 1,
     });
   });
 

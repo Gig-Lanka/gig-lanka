@@ -186,6 +186,16 @@ const gigSchema = new mongoose.Schema(
       enum: GIG_STATUSES,
       default: 'open',
     },
+    // GL-434: set only by the admin takedown, never by the business's own
+    // close. This is *who* closed it, layered on top of `status` rather than
+    // replacing it - a takedown still lands on the same 'closed' value a
+    // business close does, per the Marketplace brief's status vocabulary.
+    // Stripped in toJSON below and added back only for the gig's owner, the
+    // same layering viewerSaved and viewerApplication use per caller.
+    closedByAdminAt: {
+      type: Date,
+      default: null,
+    },
     postedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
@@ -224,6 +234,7 @@ const gigSchema = new mongoose.Schema(
         delete ret._id;
         delete ret.__v;
         delete ret.savedBy;
+        delete ret.closedByAdminAt;
         return ret;
       },
     },

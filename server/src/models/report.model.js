@@ -21,9 +21,9 @@ export const REPORT_REASON_CODES = [
   'other',
 ];
 
-// The wider status vocabulary is declared now so Sprint 4 (resolve, dismiss)
-// has it, but this sprint ships no code path that writes anything other than
-// `open` — the same discipline `savedBy` was declared under.
+// `open` is written on create; `resolved` and `dismissed` only by the admin
+// resolve and dismiss endpoints (GL-442), each once and final — there is no
+// path back to `open`.
 export const REPORT_STATUSES = ['open', 'resolved', 'dismissed'];
 
 const reportSchema = new mongoose.Schema(
@@ -66,6 +66,23 @@ const reportSchema = new mongoose.Schema(
       enum: REPORT_STATUSES,
       default: 'open',
     },
+    // GL-442: the three closing fields. None has a default, so all three are
+    // absent while a report is open and are set together, once, by
+    // closeReport in report.service.js. The note is the admin's record of
+    // what they decided and did — like `note` above it is not trimmed, so it
+    // is stored exactly as written.
+    resolutionNote: {
+      type: String,
+      maxlength: 300,
+    },
+    closedAt: {
+      type: Date,
+    },
+    // Always the admin's id from the token, never accepted from the body.
+    closedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+    },
   },
   {
     timestamps: { createdAt: true, updatedAt: false },
@@ -80,14 +97,20 @@ const reportSchema = new mongoose.Schema(
   },
 );
 
-// One open report per reporter per target. This index is unique outright —
-// NOT partial on status. Sprint 4 adds resolve and dismiss; a partial index
-// (unique only while status is `open`) would then quietly allow a second
-// report once the first was resolved. That may turn out to be the right
-// rule, but it is a Sprint 4 decision and this sprint must not pre-empt it.
-// A duplicate is translated by the service into 409 REPORT_ALREADY_EXISTS
-// rather than surfacing as a Mongo duplicate-key 500.
-reportSchema.index({ reporter: 1, targetType: 1, targetId: 1 }, { unique: true });
+// One open report per reporter per target — decided at Sprint 4 planning.
+// The index is partial on `status: 'open'`, so a resolved or dismissed report
+// no longer blocks the same reporter filing a new one against the same
+// target, while a second *open* report is still refused. A duplicate is
+// translated by the service into 409 REPORT_ALREADY_EXISTS rather than
+// surfacing as a Mongo duplicate-key 500.
+//
+// This replaced a non-partial index with the same keys, which Mongoose won't
+// swap by itself — scripts/rebuild-report-index.js drops the old one and
+// builds this one on an existing database.
+reportSchema.index(
+  { reporter: 1, targetType: 1, targetId: 1 },
+  { unique: true, partialFilterExpression: { status: 'open' } },
+);
 
 // Reports are permanent records of what someone said. Like reviews, there is
 // no edit and no delete path — not this sprint and not planned.

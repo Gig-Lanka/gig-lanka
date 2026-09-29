@@ -11,6 +11,7 @@ import reviewRoutes from './routes/review.routes.js';
 import applicationRoutes from './routes/application.routes.js';
 import reportRoutes from './routes/report.routes.js';
 import adminRoutes from './routes/admin.routes.js';
+import resetLinkRoutes from './routes/resetLink.routes.js';
 import { notFound } from './middleware/notFound.js';
 import { errorHandler } from './middleware/errorHandler.js';
 
@@ -30,6 +31,10 @@ app.use('/api', reviewRoutes);
 app.use('/api', applicationRoutes);
 app.use('/api', reportRoutes);
 app.use('/api/admin', adminRoutes);
+
+// HTML bridge page the reset email links to — outside /api since it renders
+// a page, not the JSON envelope.
+app.use('/reset-password', resetLinkRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

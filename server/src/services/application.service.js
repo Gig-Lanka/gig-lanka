@@ -9,6 +9,7 @@ import {
 import { assertGigIsOpen, findOwnedGig, markGigFilled } from './gig.service.js';
 import { getMyProfile, addSkillTrialResult } from './profile.service.js';
 import { isStorageUrl } from './storage.service.js';
+import { recomputeCompletedGigCounts } from './review.service.js';
 
 // Source status -> target status -> which kind of actor may trigger that
 // move. Modeled as data, not a chain of conditionals, so Sprint 2's hiring
@@ -551,6 +552,20 @@ export const getApplicationWithParties = async (id) => {
   };
 };
 
+// GL-447: the count behind the rating aggregate's `completedGigCount` —
+// completed applications where the user is the applicant, or, for a
+// business, where the application's gig was posted by them. Narrow on
+// purpose, like getApplicationWithParties above: review.service.js calls
+// this and never imports the Application or Gig model itself.
+export const countCompletedApplications = async (userId, role) => {
+  if (role === 'business') {
+    const gigIds = await Gig.find({ postedBy: userId }).distinct('_id');
+    return Application.countDocuments({ gig: { $in: gigIds }, status: 'completed' });
+  }
+
+  return Application.countDocuments({ applicant: userId, status: 'completed' });
+};
+
 // Never the full gig (10.1) — just enough for a seeker or business to
 // recognise which posting an application belongs to in a list or detail
 // view. A deleted gig (10.9 has no cascade) reads back as null rather than
@@ -622,6 +637,13 @@ export const listMyApplications = async (userId) => {
 // rejection reason/note once decided — shown exactly as the business wrote
 // it, no softening. No endpoint here can reach another applicant's
 // application: this only ever resolves the one id given.
+//
+// GL-439: the gig summary here — and only here, not in toGigSummary, which
+// the list and action endpoints share — also carries `skillTrial: { title,
+// submissionType }` when the gig has a trial, so the seeker's detail can name
+// it. Absent (not null) when there is none; a deleted gig stays `gig: null`.
+// Reading the live gig is safe: a trial's terms are frozen once the gig has
+// applicants (GL-342).
 export const getApplicationById = async (id, actor) => {
   const { application, applicantId, businessId } = await getApplicationWithParties(id);
 
@@ -633,9 +655,17 @@ export const getApplicationById = async (id, actor) => {
   }
 
   const gig = await Gig.findById(application.gig);
+  const gigSummary = toGigSummary(gig);
+
+  if (gigSummary && resolveSkillTrialRequirement(gig) !== 'none') {
+    gigSummary.skillTrial = {
+      title: gig.skillTrial.taskTitle,
+      submissionType: gig.skillTrial.submissionType,
+    };
+  }
 
   return {
-    application: { ...application.toJSON(), gig: toGigSummary(gig) },
+    application: { ...application.toJSON(), gig: gigSummary },
   };
 };
 
@@ -677,6 +707,7 @@ export const completeApplication = async (id, actor) => {
 
   const updated = await transitionApplicationStatus(application, 'completed', actor);
   const gig = await Gig.findById(updated.gig);
+  await recomputeCompletedGigCounts(updated.applicant, gig?.postedBy);
 
   return {
     application: { ...updated.toJSON(), gig: toGigSummary(gig) },

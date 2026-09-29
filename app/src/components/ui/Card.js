@@ -1,24 +1,32 @@
 import { Pressable, Text, View } from 'react-native';
 
+// `flat` is the grey-filled, borderless card the v3 frames draw for a read-only
+// summary (`.card-flat`) - denser than the default, so it carries its own
+// padding rather than leaning on a `className` override, which can't reliably
+// beat the default's `p-5` / `bg-paper` / `border-line`. Ignored on a
+// selectable card (one with a `title`), which has its own selected look.
 export default function Card({
   children,
   title,
   description,
   selected = false,
+  flat = false,
   onPress,
   className,
   ...props
 }) {
   const isSelectable = title !== undefined;
   const isSelected = isSelectable && selected;
+  const isFlat = flat && !isSelectable;
   const Container = onPress ? Pressable : View;
 
   return (
     <Container
       onPress={onPress}
       className={[
-        'rounded-ds-card border-[1.5px] p-5',
-        isSelected ? 'border-ink bg-ink' : 'border-line bg-paper',
+        'rounded-ds-card border-[1.5px]',
+        isFlat ? 'border-transparent bg-haze p-4' : 'p-5',
+        !isFlat && (isSelected ? 'border-ink bg-ink' : 'border-line bg-paper'),
         isSelectable && 'flex-row items-start gap-[14px]',
         className,
       ]

@@ -20,3 +20,24 @@ export const createReportSchema = Joi.object({
     .required(),
   note: Joi.string().trim().max(300).allow('').optional(),
 });
+
+// GL-442: the one body resolve and dismiss both take. The note is required,
+// at most 300 characters, and must contain something other than whitespace —
+// but is never trimmed, so what passes is stored exactly as written. Joi
+// already refuses an empty string; the pattern catches whitespace-only.
+export const closeReportSchema = Joi.object({
+  note: Joi.string()
+    .max(300)
+    .pattern(/\S/)
+    .required()
+    .messages({ 'string.pattern.base': 'note must not be blank' }),
+});
+
+// GL-443: the admin queue's query. `status` picks the view — `open` (the
+// default) or `closed` — and anything else is a 400. `page` is left loose on
+// purpose: a malformed page still falls back to 1 in the service, as it did
+// before this schema existed.
+export const adminReportsQuerySchema = Joi.object({
+  page: Joi.any().optional(),
+  status: Joi.string().valid('open', 'closed').default('open'),
+});

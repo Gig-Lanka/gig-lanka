@@ -161,15 +161,29 @@ export default function BrowseGigsScreen({ guest = false, onSignIn }) {
     [navigation],
   );
 
+  // best_match is relevance ordering the sheet only ever offers while the
+  // search box has text (GigFilters' own hasSearchText check), but clearing
+  // that same box is a search-field edit, not a sheet action - so the
+  // fallback to Newest lives here, alongside the rest of what typing (or
+  // deleting) in the search box does. Sort is deliberately updated
+  // synchronously, ahead of the debounced fetch, so activeFilterCount drops
+  // the instant the box empties rather than lagging the network call by
+  // SEARCH_DEBOUNCE_MS; nextSort is then passed as an explicit override
+  // instead of relying on load() to read the `sort` state, since that
+  // update may not have committed yet when the debounce fires.
   const handleSearchChange = useCallback(
     (text) => {
       setSearchText(text);
+      const clearedSearch = text.trim().length === 0;
+      const nextSort = clearedSearch && sort === 'best_match' ? DEFAULT_SORT : sort;
+      if (nextSort !== sort) setSort(nextSort);
+
       if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
       searchDebounceRef.current = setTimeout(() => {
-        load(1, 'initial', { q: text, schedule: selectedTags });
+        load(1, 'initial', { q: text, schedule: selectedTags, sort: nextSort });
       }, SEARCH_DEBOUNCE_MS);
     },
-    [load, selectedTags],
+    [load, selectedTags, sort],
   );
 
   const toggleTag = useCallback(
@@ -304,6 +318,7 @@ export default function BrowseGigsScreen({ guest = false, onSignIn }) {
         sort={sort}
         city={city}
         minPay={minPay}
+        hasSearchText={searchText.trim().length > 0}
         onClear={handleClearFilters}
         onApply={handleApplyFilters}
       />

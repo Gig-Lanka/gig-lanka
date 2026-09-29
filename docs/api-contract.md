@@ -112,6 +112,9 @@ Every error response — regardless of cause — returns the same outer shape:
 | `REVIEW_WINDOW_EXPIRED` | `POST /api/applications/:applicationId/reviews` more than 14 days after the application's `completedAt` (§12.1, §12.4). Always `409`, and distinct from `APPLICATION_NOT_COMPLETED` — the two 409s name different problems and the client shows different copy for each. Checked only once the application is confirmed `completed`, so a wrong-status application is never told its window has closed. |
 | `REVIEW_ALREADY_EXISTS` | `POST /api/applications/:applicationId/reviews` for an `(application, direction)` pair that already has a review (§12.4). Always `409`; the duplicate-key error from the unique index (§7) is translated here rather than surfacing as `500`. |
 | `REPORT_ALREADY_EXISTS` | `POST /api/reports` for a `(reporter, targetType, targetId)` pair that already has an open report. Always `409`; the duplicate-key error from the unique index on the Report model is translated here rather than surfacing as `500` — the same trap `POST /api/auth/register` and `POST /api/gigs/:gigId/applications` have both been caught by. |
+| `GIG_TAKEN_DOWN` | `PUT /api/gigs/:id` attempted on a gig an admin has taken down (§10.7, §14.1). Always `409`. Checked before every other rule on that endpoint, including `GIG_HAS_APPLICANTS` above — a taken-down gig cannot be edited at all, not even a field that would otherwise be free to change, so the business can never reopen it or otherwise undo the takedown by editing. |
+| `GIG_ALREADY_TAKEN_DOWN` | `PATCH /api/admin/gigs/:id/close` (§14.1) called on a gig that already has `closedByAdminAt` set. Always `409`. Distinct from the `200` a takedown gets on a gig the business already closed itself (§14.1) — that call still has something new to record; a second admin takedown doesn't, and is treated as a mistake to surface rather than a no-op to swallow. |
+| `REPORT_ALREADY_CLOSED` | `PATCH /api/admin/reports/:id/resolve` or `/dismiss` (§13.5, §13.6) on a report that is already `resolved` or `dismissed`. Always `409`. Closing is once and final — there is no reopen and no edit of the note, and the loser of two admins racing to close the same report gets this code. |
 
 New codes may be added for later sprints' resources; existing codes are never repurposed for a different meaning.
 
@@ -469,6 +472,8 @@ Requests a password reset link for the given email. No `Authorization` header �
 
 **Always returns `200` with the same body** whether the address matches an active account, a deactivated account, or no account at all — the same anti-enumeration rule login already follows (§5.2). When the address matches an active account, a reset email is sent through the transactional email provider carrying a single-use link that expires after **thirty minutes**. A deactivated account receives no email — deactivation means the account cannot be signed into, and a reset must not be a way around that. Requesting again before an earlier link is used invalidates it, so only the most recent link for an account ever works.
 
+The link in that email points at the reset-link bridge page (§5.11), not directly at a `giglanka://` scheme URL — a custom-scheme link isn't reliably tappable from every mail client, an HTTPS link always is.
+
 **Request body**
 
 ```json
@@ -556,6 +561,18 @@ An expired, already-used, unknown or malformed token all return the same `400 RE
 }
 ```
 
+### 5.11 Reset-link bridge page — `GET /reset-password`
+
+An **HTML bridge page**, not a JSON endpoint — it is mounted outside `/api` in `server/src/app.js`, and its response is a full HTML document rather than the success/error envelope (§2, §3). It exists because the link in a reset email (§5.9) has to be an HTTPS URL to be reliably tappable from every mail client, but the app itself is opened through the `giglanka://` custom scheme.
+
+Given `?token=<token>`, the page immediately tries to navigate to `giglanka://reset-password?token=<token>`, and shows an **Open Gig Lanka** button that does the same, for when the automatic navigation is blocked — Android only opens a custom scheme from Chrome after a user gesture, and the button is that gesture. If nothing happens, the page says in one line to install the Gig Lanka app. With no `token` in the query string, the page skips the scheme URL entirely and says to request a new link from the app, rather than erroring.
+
+The page **never validates, consumes or reveals anything about the token** — it is a dumb bridge. Whether the token is well-formed, expired, or already used is decided only when the app calls `POST /api/auth/reset-password` (§5.10). The token is percent-encoded before it is placed in the scheme URL, and the resulting URL is HTML-escaped before it is written into the page, so a token containing markup, quotes or extra query parameters cannot inject into the page or the script that performs the redirect.
+
+Styling is inline CSS only, built from the app's own design tokens — `paper` background, `ink` text, a `signal`-coloured button, and the `Schibsted Grotesk` / `Inter Tight` font families by name with system fallbacks. No external stylesheets, fonts or scripts; the only `<script>` on the page performs the redirect.
+
+**Success — `200 OK`**, `Content-Type: text/html` — always `200` in every case (token present, token missing, or a malformed token), since the page never inspects the token beyond encoding it.
+
 ---
 
 ## 6. Vocabularies
@@ -618,6 +635,7 @@ These are the closed vocabularies used throughout the product. "Closed" means no
 | `newest` | Newest |
 | `highest_pay` | Highest pay |
 | `starting_soon` | Starting soon |
+| `best_match` | Best match |
 
 ### 6.7 Application statuses
 
@@ -680,11 +698,15 @@ The summary that lands on a profile once reviews exist for it: an average, a cou
   "averageRating": 4.6,
   "reviewCount": 12,
   "topCategories": ["communication", "punctuality"],
-  "distribution": { "1": 0, "2": 0, "3": 1, "4": 3, "5": 8 }
+  "distribution": { "1": 0, "2": 0, "3": 1, "4": 3, "5": 8 },
+  "completedGigCount": 20
 }
 ```
 
 - `distribution` — the count of reviews at each star value, keyed `"1"` through `"5"`. Always all five keys, each defaulting to `0`. The five counts sum to `reviewCount`.
+- `completedGigCount` — how many gigs the user has completed on Gig Lanka, defaulting to `0` (GL-447). Counted from applications, not reviews: for a seeker, their own applications at status `completed`; for a business, the applications at status `completed` on gigs it posted. Withdrawn, rejected, closed – position filled and hired-but-not-completed applications are never counted, and gigs completed off the platform can't be. It is counted for every user, including one with no reviews — so a user with no reviews carries zeroed review fields alongside a real `completedGigCount`, not a fully zeroed aggregate.
+  - **When it is recomputed:** whenever the aggregate is — when a review is created (for the review's subject), and when an application is marked Completed (`PATCH /api/applications/:id/complete`, §11), for both the applicant and the business that posted the gig. Always a full recomputation, never an increment. Best-effort: a failed recompute is logged and never fails the completion or the review that triggered it.
+  - Because `Application.profileSnapshot.rating` embeds this same shape, a snapshot carries the count as it stood when the application was submitted, frozen like the rest of the snapshot. Snapshots taken before GL-447 were never counted: they read back `completedGigCount: 0` through the schema default, which is not a real count.
 
 **Ownership boundary**, stated in both directions so neither epic computes the other's number: the Review component (this contract's `6.9`) owns the aggregate and is the only thing that writes it, computed from the reviews collection starting in Sprint 2. User & Profile stores the aggregate on the profile document and displays it, and never writes it.
 
@@ -1265,6 +1287,7 @@ Returned under `data.gig` (single) or `data.gigs` (list), everywhere a gig appea
 - **`waitingOnYouCount` is not part of this base shape** — it appears only on `GET /api/gigs/mine` (§10.6), the one read where it's needed and the one caller allowed to see it.
 - **`skillTrial` is optional and, when the gig has none, omitted entirely — never an empty object.** `requirement` is one of `none` or `optional` (§6.12; the Application & Hiring brief's original third value, `required`, was a considered-and-rejected product decision — a skill trial is never mandatory to apply, in no case). `taskTitle` (max 80 characters) and `taskBrief` (20–1,000 characters) are required whenever `requirement` is `optional`; `submissionType` and `effortEstimate` are each one of the closed vocabularies at §6.12. When `requirement` is `none`, none of the other four fields may be present. Reaches every read that returns a gig — §10.4 (list), §10.5 (single) and §10.6 (mine) — because a seeker must see the task and its effort estimate before deciding to apply.
 - **`savedBy` is never present in any response, for anyone, including the gig's own owner.** `select: false` on the schema path keeps it out of every default query, and the `toJSON` transform deletes it again as a second guard — two independent defences, both still in place now that `PUT /api/gigs/:id/save` (§10.10) actually writes to it. `gig.saved-privacy.test.js` pins that either guard's removal breaks the suite. There is no save-count field anywhere — deliberately asymmetric with `applicantCount`: a business learns how many people applied, never how many, or which, people saved a gig of theirs. The only thing anyone ever learns about saving is their own: `viewerSaved` (§10.4, §10.5), a boolean computed fresh per request from a match check, never the array itself, and never anyone else's.
+- **`closedByAdminAt` is present only for the gig's own owner.** `null` until an admin takes the gig down through `PATCH /api/admin/gigs/:id/close` (§14.1), an ISO timestamp of that call afterwards. Stripped from every response by the same `toJSON` transform that guards `savedBy` just above, then layered back on — the same per-caller layering `viewerSaved` and `viewerApplication` use — only on `GET /api/gigs/mine` (§10.6) and on `GET /api/gigs/:id` (§10.5) when the caller is the gig's owner. A seeker, a guest, or any other business never sees it, even on a gig that's been taken down: to everyone but the owner, a taken-down gig reads as an ordinary `closed` gig, indistinguishable from one the business closed itself. Not shown in the example above for that reason — it is absent from the wire shape far more often than it is present.
 - Optional fields (`area`, `startDate`, `applicationsCloseDate`) are omitted, not null, when unset — same convention as profiles (§8.1).
 
 ### 10.2 Business block
@@ -1380,17 +1403,20 @@ An item outside the vocabulary fails the whole request with `400 VALIDATION_ERRO
 
 **`minPay`'s known limitation:** it compares the raw `payAmount` regardless of `payType`, so `minPay=1000` matches a Rs 1,000-per-hour gig and a Rs 1,000 fixed-price gig identically. This is deliberate, not an oversight — normalising per-hour against fixed-price would require an assumed number of hours that a gig does not carry. Do not "fix" this into a guessed conversion.
 
-**`sort` — one of `newest` (default), `highest_pay`, `starting_soon`:**
+**`sort` — one of `newest` (default), `highest_pay`, `starting_soon`, `best_match`:**
 
 | Value | Orders by | Tiebreak |
 |---|---|---|
 | `newest` | `createdAt` descending | `_id` descending |
 | `highest_pay` | `payAmount` descending | `_id` descending |
 | `starting_soon` | `startDate` ascending, gigs with **no** `startDate` sorted last | `_id` ascending |
+| `best_match` | Every gig whose `title` matches `q` before every gig that matches only in `description`; `createdAt` descending within each group | `_id` descending |
 
 Every sort carries a secondary `_id` tiebreak in the same direction as the primary key, so a paginated scroll never repeats or drops a row between pages. `startDate` is optional; without the explicit "no date sorts last" rule, `starting_soon` would put every undated gig first, since Mongo orders a missing field before every value ascending.
 
-**Failure — `400 Bad Request`** (an unrecognised value on a closed-vocabulary parameter):
+`best_match` is relevance ordering, and it needs something to be relevant *to*: it is only offered while `q` is present and non-empty (whitespace-only counts as empty, same as `q`'s own validation). `sort=best_match` without a non-empty `q` fails validation instead of silently falling back to `newest` — a relevance order with nothing to rank against is refused, not guessed at. The match itself is unchanged from the plain `q` filter above — the same case-insensitive substring test against `title` and `description`, with the same regex-metacharacter escaping — `best_match` only changes which of the two matched fields is ranked first, not what counts as a match.
+
+**Failure — `400 Bad Request`** (an unrecognised value on a closed-vocabulary parameter, or `sort=best_match` without a non-empty `q`):
 
 ```json
 {
@@ -1400,6 +1426,21 @@ Every sort carries a secondary `_id` tiebreak in the same direction as the prima
     "message": "Request validation failed.",
     "errors": [
       { "field": "category", "message": "category must only contain: tutoring, delivery, event_help, retail, hospitality, admin_data_entry, creative, tech, other" }
+    ]
+  }
+}
+```
+
+`sort=best_match` with no `q` (or an empty/whitespace-only one) answers the same shape, naming `sort`:
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Request validation failed.",
+    "errors": [
+      { "field": "sort", "message": "sort must be one of [newest, highest_pay, starting_soon]" }
     ]
   }
 }
@@ -1494,6 +1535,8 @@ Only the business that posted the gig may update it. `PUT` replaces the editable
 
 **Once a gig has ever had an application, any attempted change to `skillTrial` is refused with `409 GIG_HAS_APPLICANTS`** — the terms cannot change underneath someone who already applied under them. This is keyed on whether an `Application` document exists for the gig, not on the live `applicantCount`, which falls when applicants withdraw or are rejected. Every other field on the gig stays editable regardless.
 
+**Once an admin has taken the gig down (`closedByAdminAt` set, §10.1, §14.1), the whole request is refused with `409 GIG_TAKEN_DOWN`** — checked first, before ownership's field-level rules and before the `skillTrial`/`GIG_HAS_APPLICANTS` check above, and before any field is read from the body. Nothing about the gig may change through this endpoint once it has been taken down, not just `status` — the business cannot reopen it, and cannot edit around the takedown by changing some other field instead. The business can still delete the gig (§10.9, subject to its own applicant rule) and can still open and decide its existing applications (§11.12) — a takedown blocks editing specifically, not every action on the gig.
+
 **Success — `200 OK`** — `data.gig`, the updated shape.
 
 **Failure — `400 Bad Request`** — same validation as create.
@@ -1501,6 +1544,18 @@ Only the business that posted the gig may update it. `PUT` replaces the editable
 **Failure — `401 Unauthorized`** (guest), **`403 Forbidden`** (seeker token, or a business token that isn't the owner) — see 10.9 for the ownership ordering.
 
 **Failure — `404 Not Found`** — no gig with that id.
+
+**Failure — `409 Conflict`** (`GIG_TAKEN_DOWN`) — the gig has been taken down by an admin; see above:
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "GIG_TAKEN_DOWN",
+    "message": "This gig was taken down by Gig Lanka and can no longer be edited."
+  }
+}
+```
 
 **Failure — `409 Conflict`** (`GIG_HAS_APPLICANTS`) — see above.
 
@@ -1518,13 +1573,15 @@ Closing is not deleting: the gig disappears from `GET /api/gigs` immediately, bu
 
 Only the owner. Permanently deletes the gig. There is no soft delete and no undo — a deleted gig immediately 404s from every other endpoint, including `GET /api/gigs/mine`.
 
+**Once a gig has ever had an application, deleting it is refused with `409 GIG_HAS_APPLICANTS`** — the same check and the same code `PUT /api/gigs/:id` uses for its `skillTrial` refusal (§10.7), keyed on whether an `Application` document exists for the gig, not on the live `applicantCount`. A withdrawn, rejected or closed application still counts: any status means the gig has applicant history that a deletion would strand with a dangling reference, and the message points the business at closing the gig (§10.8) instead. A gig that has never had an application deletes exactly as described above.
+
 **Success — `200 OK`**
 
 ```json
 { "success": true, "data": null }
 ```
 
-**Failure — `401`, `403`, `404`** — same as 10.7.
+**Failure — `401`, `403`, `404`** — same as 10.7. **`409`** (`GIG_HAS_APPLICANTS`) — see above.
 
 **Ownership check order (10.7–10.9):** the owner check runs **after** the existence check. A gig that doesn't exist (or has a malformed id) is `404`, before the caller's identity is even considered; a gig that exists but belongs to someone else is `403`. The two are never conflated into a single `403`-or-`404` — doing that would let a caller learn which ids exist by noticing which refusal they got instead.
 
@@ -1612,7 +1669,8 @@ No pagination — like `GET /api/gigs/mine` (§10.6), a seeker's own saved list 
 | `403` | `FORBIDDEN` | Authenticated but not a business (`POST`, `GET /mine`, `PUT`, `PATCH .../close`, `DELETE`), **or** a business token that isn't the gig's owner (`PUT`, `PATCH .../close`, `DELETE`), **or** not a seeker (`PUT .../save`, `DELETE .../save`, `GET /saved` — §10.10–§10.12). Same code, same shape, every case — the distinction is which endpoint and, for the ownership case, whether the gig exists (see 10.9's ordering). |
 | `404` | `NOT_FOUND` | `GET /api/gigs/:id` for a gig that doesn't exist, or `PUT` / `PATCH .../close` / `DELETE` / `PUT .../save` / `DELETE .../save` for a gig that doesn't exist or has a malformed id — checked before ownership where an ownership check exists (save and unsave have none; see §10.10–§10.11). |
 | `409` | `GIG_CLOSED` | `PUT /api/gigs/:id/save` (§10.10) when the gig is not `open` — the same guard (`assertGigIsOpen` in `gig.service.js`) GL-110's apply endpoint calls before acting on a gig. Never returned by `DELETE /api/gigs/:id/save` (§10.11), which is deliberately ungated, or by `GET /api/gigs/saved` (§10.12), which never rejects on status. See §3 for the shared definition. |
-| `409` | `GIG_HAS_APPLICANTS` | `PUT /api/gigs/:id` attempted to add, change or remove `skillTrial` on a gig that has ever had an application (§10.7). See §3 for the shared definition. |
+| `409` | `GIG_TAKEN_DOWN` | `PUT /api/gigs/:id` on a gig an admin has taken down (§10.7, §14.1). Checked before every other rule on this endpoint, including `GIG_HAS_APPLICANTS` below. See §3 for the shared definition. |
+| `409` | `GIG_HAS_APPLICANTS` | `PUT /api/gigs/:id` attempted to add, change or remove `skillTrial` on a gig that has ever had an application (§10.7), **or** `DELETE /api/gigs/:id` attempted on a gig that has ever had an application, in any status (§10.9). Same code both places, so the client handles one error regardless of which endpoint returned it. See §3 for the shared definition. |
 
 ---
 
@@ -1761,7 +1819,23 @@ Returned under `data.applications[].gig` (§11.7) and `data.application.gig` (§
 }
 ```
 
-`null` if the gig no longer exists — `DELETE /api/gigs/:id` (§10.9) has no cascade to applications, so an orphaned application reads back with `gig: null` rather than the request failing. **Not present** on the apply response (§11.7): the caller already knows which gig they just applied to, and `application.gig` there is still the bare reference id from §11.1.
+**`skillTrial` — the single read only.** On `GET /api/applications/:id` (§11.9) the summary gains one more field when the gig carries a skill trial, so the seeker's application detail can name the trial:
+
+```json
+{
+  "id": "64f1a2b3c4d5e6f7a8b9c0d8",
+  "title": "Weekend event helper",
+  "payAmount": 2500,
+  "payType": "per_day",
+  "city": "Colombo",
+  "status": "open",
+  "skillTrial": { "title": "Plan a stock check", "submissionType": "text" }
+}
+```
+
+`title` is the gig's `skillTrial.taskTitle` (§10.1) and `submissionType` is one of the §6.12 values. The key is **absent** — never `null`, never an empty object — when the gig has no trial. It appears **only** on §11.9: the list endpoints (§11.8, §11.13), the action responses that share §11.9's shape (§11.10, §11.11, §11.14–§11.18) and every other place this summary is returned keep the six fields above. The terms of a trial can't change once a gig has applicants (GL-342), so reading them from the live gig is safe.
+
+`null` if the gig no longer exists. Since GL-437, `DELETE /api/gigs/:id` (§10.9) refuses once a gig has ever had an application, so a gig with applications can no longer be deleted at all — `gig: null` now only shows up for applications whose gig was deleted before that rule existed, not for anything created going forward. **Not present** on the apply response (§11.7): the caller already knows which gig they just applied to, and `application.gig` there is still the bare reference id from §11.1.
 
 ### 11.7 Apply to a gig — `POST /api/gigs/:gigId/applications`
 
@@ -1915,10 +1989,12 @@ Returns one application to the seeker who owns it or the business that posted th
 {
   "success": true,
   "data": {
-    "application": { /* 11.1, gig replaced with the §11.6 summary */ }
+    "application": { /* 11.1, gig replaced with the §11.6 summary, plus `skillTrial` when the gig has a trial */ }
   }
 }
 ```
+
+The gig summary here is the one place that also carries `gig.skillTrial: { title, submissionType }` (§11.6), present only when the gig has a trial and absent otherwise; `gig` is still `null` if the gig no longer exists.
 
 The full application is returned, including the decision once made — `status`, `rejectionReasonCode` and `rejectionNote` (§11.1) shown exactly as the business wrote it, no softening, no truncation, no paraphrase.
 
@@ -2460,11 +2536,11 @@ No other failure modes — a caller who has written no reviews still gets `200` 
 
 ---
 
-## 13. Report endpoints (Sprint 3)
+## 13. Report endpoints (Sprint 3, Sprint 4)
 
-`server/src/routes/report.routes.js`, `report.controller.js`, `report.validator.js`, `report.service.js`. No business-rules brief covers this component — the rules below were agreed with the product owner at Sprint 3 planning rather than derived from a brief, and this contract section is their only written specification.
+`server/src/routes/report.routes.js`, `admin.routes.js`, `report.controller.js`, `report.validator.js`, `report.service.js`. No business-rules brief covers this component — the rules below were agreed with the product owner at Sprint 3 and Sprint 4 planning rather than derived from a brief, and this contract section is their only written specification.
 
-A report targets a user (reported from their public profile) or a gig (reported from gig detail). Reviews, applications and messages are deliberately not reportable — reviews in particular are permanent, with no edit, delete or respond path anywhere, and correcting one is a Sprint 4 dispute rather than a report. Status is `open` only this sprint: resolve and dismiss are Sprint 4 actions, so nothing in this component writes any other value. The reported party is never told — filing a report sends no email and touches no field on the target's profile, gig, rating or applications — and nothing about a report reaches anyone but its own reporter this sprint (an admin reading the Sprint 4 moderation queue is a separate component with its own boundary, out of scope here).
+A report targets a user (reported from their public profile) or a gig (reported from gig detail). Reviews, applications and messages are deliberately not reportable — reviews in particular are permanent, with no edit, delete or respond path anywhere, and correcting one is a Sprint 4 dispute rather than a report. A report is filed `open`; an admin later closes it, once and finally, as `resolved` or `dismissed` with a note (§13.5, §13.6). The reported party is never told — filing a report sends no email and touches no field on the target's profile, gig, rating or applications — and nothing about a report reaches anyone but its own reporter and an admin. Closing one doesn't either: resolve and dismiss only record the admin's decision. Suspending an account or taking a gig down are separate admin actions, and the note is where the admin records what they did.
 
 ### 13.1 Report shape
 
@@ -2481,14 +2557,18 @@ A report targets a user (reported from their public profile) or a gig (reported 
 }
 ```
 
-- `reporter` — always the caller, taken from the token; never accepted from the request body, the same as a gig's `postedBy` (§10.1) and a review's `author` (§7). Visible only to the reporter themself (§13.3) and, outside this story's scope, an admin — never to the reported party.
+- `reporter` — always the caller, taken from the token; never accepted from the request body, the same as a gig's `postedBy` (§10.1) and a review's `author` (§7). Visible only to the reporter themself (§13.3) and an admin (§13.4) — never to the reported party.
 - `targetType` — exactly `user` or `gig`. No other value is accepted, and none is added: reviews, applications and messages are all deliberately out.
 - `targetId` — the id of the reported user or gig. Existence is checked before anything else server-side (§13.2) — a bad id 404s and never reaches any rule below it.
 - `reasonCode` — required, one of the closed list in §6.11. A separate vocabulary from the rejection reason codes (§6.8) — the shape is similar by design, the lists are unrelated and never shared.
 - `note` — optional free text, up to 300 characters, matching the rejection-note limit. Stored and shown back exactly as written.
-- `status` — `open` on creation. This sprint has no code path that writes anything else; `resolved` and `dismissed` exist in the wider vocabulary for Sprint 4 but nothing here can reach them.
-- `createdAt` — set once, on creation. There is no `updatedAt`: like a review, a report is a permanent record of what someone said, with no edit or delete path — not this sprint and not planned.
-- At most one **open** report per `(reporter, targetType, targetId)` — a unique index enforces it outright, not partial on `status`. Sprint 4 adds resolve and dismiss; a partial index would then quietly allow a second report once the first was resolved, which may be the right rule but is a Sprint 4 decision this sprint must not pre-empt.
+- `status` — `open` on creation; `resolved` or `dismissed` once an admin closes it (§13.5, §13.6), and never back to `open`. This stored value is shown only to an admin. The reporter sees `open` or `reviewed` instead (§13.3).
+- `resolutionNote` — the admin's note on closing: 1–300 characters, must contain something other than whitespace, stored and shown back exactly as written (not trimmed). **Admin only.**
+- `closedAt` — when the report was closed. **Admin only.**
+- `closedBy` — the closing admin's user id, taken from the token. **Admin only.**
+- The three closing fields are absent (not `null`) while a report is `open`, and are set together, once, when it closes. None of them ever reaches the reporter (§13.3) or the reported party.
+- `createdAt` — set once, on creation. There is no `updatedAt`: like a review, a report is a permanent record of what someone said, with no edit or delete path — not this sprint and not planned. Closing a report adds the closing fields; it never changes what the reporter wrote.
+- At most one **open** report per `(reporter, targetType, targetId)` — a unique index enforces it, partial on `status: 'open'` (decided at Sprint 4 planning). A second open report is refused with `409 REPORT_ALREADY_EXISTS` (§13.2), but once the earlier report is resolved or dismissed it no longer blocks the same reporter filing a new one against the same target. This replaced a Sprint 3 index with the same keys that was unique outright; `server/scripts/rebuild-report-index.js` drops the old index and builds this one on an existing database.
 
 ### 13.2 Create a report — `POST /api/reports`
 
@@ -2567,7 +2647,7 @@ Files a report against a user or a gig. Requires `Authorization: Bearer <accessT
 }
 ```
 
-**Failure — `409 Conflict`** (an open report from this caller against this exact target already exists — the unique index in §13.1 enforces it; the duplicate-key error is translated here, never a `500`, the same trap `POST /api/auth/register` and `POST /api/gigs/:gigId/applications` have both been caught by):
+**Failure — `409 Conflict`** (an open report from this caller against this exact target already exists — the partial unique index in §13.1 enforces it, so a resolved or dismissed earlier report doesn't count; the duplicate-key error is translated here, never a `500`, the same trap `POST /api/auth/register` and `POST /api/gigs/:gigId/applications` have both been caught by):
 
 ```json
 {
@@ -2610,25 +2690,256 @@ The reports the signed-in caller has filed — never anyone else's, and no param
 }
 ```
 
+Each report is built field by field for the reporter — exactly the fields above, plus `target` — so nothing added to the model later reaches them by default.
+
+- `status` — `open` or `reviewed`, nothing else. A report that's `resolved` and one that's `dismissed` both read as `reviewed`: the reporter is told a decision was made, never which one.
+- Never included: `resolutionNote`, `closedAt`, `closedBy` or the stored `status`. What an admin decided and did is kept between the admin and the reported party.
+- `note` is the reporter's own note from §13.2, returned as they wrote it — not the admin's `resolutionNote`.
+
 Newest first (`createdAt` descending, `_id` descending tiebreak). Every report carries a `target` summary alongside the bare `targetType`/`targetId` it's stored with: a public identity (`{ id, name, photo }`, §8.2's shape) for a `user` target, or the trimmed gig summary (§11.6's shape) for a `gig` target — `null` if that gig has since been deleted. A report never carries anything about who else reported the same target — no count, no "N others reported this". That would leak another reporter's action, and would double as a way to gauge how much attention a target is drawing.
 
 **Failure — `401 Unauthorized`** (guest) — as in §8.6.
 
 No other failure modes — a caller who has filed no reports still gets `200` with `"reports": []`.
 
-### 13.4 Error codes for these endpoints
+### 13.4 Admin report queue — `GET /api/admin/reports`
+
+The moderation queue. Requires `Authorization: Bearer <accessToken>` for an **admin** — `requireRole('admin')` is applied once, on the whole `/api/admin` router (`admin.routes.js`), so every endpoint in §13.4–§13.6 shares the same gate.
+
+**Query parameters**
+
+| Param | Rule |
+|---|---|
+| `status` | Optional, `open` (the default) or `closed`. Any other value is `400`. `closed` means `resolved` and `dismissed` together; there's no parameter for one without the other. The value only picks one of two fixed filters server-side; it's never passed into the database query. |
+| `page` | Optional, 1-based. Anything missing or not a positive integer falls back to `1` rather than failing. |
+
+Unknown parameters are ignored.
+
+**Success — `200 OK`**, with `status=closed`:
+
+```json
+{
+  "success": true,
+  "data": {
+    "reports": [
+      {
+        "id": "64f1a2b3c4d5e6f7a8b9c0d5",
+        "reporter": { "id": "64f1a2b3c4d5e6f7a8b9c0d1", "name": "Nimali Perera", "photo": null },
+        "targetType": "gig",
+        "targetId": "64f1a2b3c4d5e6f7a8b9c0d6",
+        "reasonCode": "misleading_gig_details",
+        "note": "The pay listed doesn't match what they offered in person.",
+        "status": "resolved",
+        "createdAt": "2026-08-12T09:15:00.000Z",
+        "resolutionNote": "Confirmed with the business; gig taken down separately.",
+        "closedAt": "2026-09-28T10:02:00.000Z",
+        "closedBy": "64f1a2b3c4d5e6f7a8b9c0a1",
+        "target": {
+          "id": "64f1a2b3c4d5e6f7a8b9c0d6",
+          "title": "Weekend event helper",
+          "business": { "id": "64f1a2b3c4d5e6f7a8b9c0d2", "name": "Colombo Events Co.", "photo": null }
+        }
+      }
+    ],
+    "total": 1,
+    "page": 1,
+    "limit": 10
+  }
+}
+```
+
+This is the **admin shape**, which resolve and dismiss return too. It's §13.1's full stored shape, with two ids replaced by summaries:
+
+- `reporter` — the reporter's public identity, `{ id, name, photo }` (§8.2's shape).
+- `target` — for a `user` target, that user's public identity `{ id, name, photo }`. For a `gig` target, `{ id, title, business }`, where `business` is the posting business's public identity. A gig that has since been hard-deleted reads as `"target": null`. The report still renders with its `targetType` and `targetId`, and the request doesn't fail. A `user` target whose profile has gone reads with `name` and `photo` both `null`.
+- On `status=open` every row has `"status": "open"`, and the closing fields are absent. On `status=closed` every row carries its `status` (`resolved` or `dismissed`), `resolutionNote`, `closedAt` and `closedBy`. `closedBy` is the admin's bare user id, not a summary.
+
+Ten per page. `total` counts every report in the selected view across all pages, matching §10.4's and §12.2's shape. Ordering:
+
+- `open` — newest filed first (`createdAt` descending, `_id` descending tiebreak).
+- `closed` — most recently closed first (`closedAt` descending, `_id` descending tiebreak).
+
+A report leaves the open view the moment it's closed and appears in the closed view. It's never in both.
+
+**Failure — `401 Unauthorized`** (guest) — as in §8.6.
+
+**Failure — `403 Forbidden`** (signed in as a seeker or business):
+
+```json
+{
+  "success": false,
+  "error": { "code": "FORBIDDEN", "message": "You do not have permission to perform this action." }
+}
+```
+
+**Failure — `400 Bad Request`** (`status` is anything other than `open` or `closed` — including the stored values `resolved` and `dismissed`):
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Request validation failed.",
+    "errors": [{ "field": "status", "message": "status must be one of [open, closed]" }]
+  }
+}
+```
+
+### 13.5 Resolve a report — `PATCH /api/admin/reports/:id/resolve`
+
+Closes an open report as `resolved`, with a note. Admin only, behind the same router-level gate as §13.4. This only records the decision. It doesn't suspend anyone, take anything down or notify anyone; those are separate admin actions.
+
+**Request body**
+
+```json
+{ "note": "Warned the business about misleading pay; will suspend on a repeat." }
+```
+
+| Field | Rule |
+|---|---|
+| `note` | Required, 1–300 characters, and must contain something other than whitespace. Not trimmed — stored exactly as sent, surrounding spaces included. |
+
+Every other field is silently stripped (§10.3's convention). The new `status` comes from the route, `closedBy` from the token and `closedAt` from the server clock. None of them is accepted from the body.
+
+**Success — `200 OK`** — `data.report`, in §13.4's admin shape, with `"status": "resolved"` and `resolutionNote`, `closedAt` and `closedBy` set.
+
+The status change is made in a single update that only matches while the report is still `open`. If two admins close the same report at once, exactly one succeeds and the other gets `409 REPORT_ALREADY_CLOSED`.
+
+**Failure — `401 Unauthorized`** (guest) — as in §8.6.
+
+**Failure — `403 Forbidden`** (signed in as a seeker or business) — as in §13.4.
+
+**Failure — `400 Bad Request`** (`note` missing, empty, whitespace-only, or over 300 characters). The request body is validated before the report is looked up, so a bad note is a `400` even against an unknown id:
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Request validation failed.",
+    "errors": [{ "field": "note", "message": "note must not be blank" }]
+  }
+}
+```
+
+**Failure — `404 Not Found`** (no report with this id, or the id isn't a syntactically valid Mongo id — both answer identically, never `400`):
+
+```json
+{
+  "success": false,
+  "error": { "code": "NOT_FOUND", "message": "Report not found." }
+}
+```
+
+**Failure — `409 Conflict`** (the report is already `resolved` or `dismissed`). Closing is once and final: there's no reopen and no way to edit the note.
+
+```json
+{
+  "success": false,
+  "error": { "code": "REPORT_ALREADY_CLOSED", "message": "This report has already been closed." }
+}
+```
+
+### 13.6 Dismiss a report — `PATCH /api/admin/reports/:id/dismiss`
+
+Closes an open report as `dismissed`, with a note: the admin looked into it and decided no action was warranted. Identical to §13.5 in every respect — gate, request body, validation, success shape, atomicity and every failure — except that the report is set to `"status": "dismissed"`. A report already closed either way is `409 REPORT_ALREADY_CLOSED`, so a resolved report can't later be dismissed or the other way round.
+
+### 13.7 Error codes for these endpoints
 
 | Status | Code | When |
 |---|---|---|
-| `400` | `VALIDATION_ERROR` | `POST` — `targetType`/`reasonCode`/`note` failed schema validation (always carries `errors`), or the caller is reporting themselves or their own gig (also carries `errors`, on the `targetId` field). |
-| `401` | `AUTH_HEADER_MISSING` / `AUTH_HEADER_MALFORMED` / `TOKEN_EXPIRED` / `TOKEN_INVALID` | No/malformed/expired/invalid token on either endpoint — both require one. |
-| `403` | `FORBIDDEN` | `POST` by a signed-in admin. Not returned by `GET /reports/mine` — any signed-in seeker or business may read their own list back (an admin technically may too, but never has anything to see, since no path lets one create a report). |
-| `404` | `NOT_FOUND` | `POST` for a `targetId` that doesn't resolve to an existing user/gig of the given `targetType`, or has a malformed id. Checked before every other rule. |
-| `409` | `REPORT_ALREADY_EXISTS` | `POST` for a `(reporter, targetType, targetId)` pair that already has an open report. |
+| `400` | `VALIDATION_ERROR` | `POST` — `targetType`/`reasonCode`/`note` failed schema validation (always carries `errors`), or the caller is reporting themselves or their own gig (also carries `errors`, on the `targetId` field). `GET /admin/reports` — `status` other than `open`/`closed` (on the `status` field). Resolve/dismiss — `note` missing, empty, whitespace-only or over 300 characters (on the `note` field). |
+| `401` | `AUTH_HEADER_MISSING` / `AUTH_HEADER_MALFORMED` / `TOKEN_EXPIRED` / `TOKEN_INVALID` | No/malformed/expired/invalid token on any endpoint in this section — all require one. |
+| `403` | `FORBIDDEN` | `POST` by a signed-in admin. Any `/api/admin/reports` endpoint by a seeker or business. Not returned by `GET /reports/mine` — any signed-in seeker or business may read their own list back (an admin technically may too, but never has anything to see, since no path lets one create a report). |
+| `404` | `NOT_FOUND` | `POST` for a `targetId` that doesn't resolve to an existing user/gig of the given `targetType`, or has a malformed id — checked before every other rule. Resolve/dismiss for an unknown or malformed report id. |
+| `409` | `REPORT_ALREADY_EXISTS` | `POST` for a `(reporter, targetType, targetId)` pair that already has an open report. A resolved or dismissed one doesn't count. |
+| `409` | `REPORT_ALREADY_CLOSED` | Resolve/dismiss on a report that's already `resolved` or `dismissed`. |
 
 ---
 
-## 14. Adding a new endpoint later
+## 14. Admin endpoints (Sprint 4)
+
+`server/src/routes/admin.routes.js`, `admin.controller.js`. Every route on this router sits behind `requireAuth` then `requireRole('admin')`, applied once at the router rather than per-handler (the same shape `GET /api/admin/reports` already uses) — a seeker or business token gets `403`, no token gets `401`, on every endpoint below, and none of that is repeated per-handler in this section.
+
+### 14.1 Take down a gig — `PATCH /api/admin/gigs/:id/close`
+
+Admins only. This is the action behind an admin acting on a reported gig — E6's report-actions button calls it — but it takes no `reasonCode`, `note` or report id itself: filing the report (§13.2) and taking the gig down are separate steps, and nothing from the report ever reaches the gig or its business. No request body.
+
+**Has exactly the effect of the business's own `PATCH /api/gigs/:id/close` (§10.8):** `status` becomes `closed`, the gig leaves `GET /api/gigs` (§10.4), applying and saving are both refused with `409 GIG_CLOSED` (§10.10, §11.7), and every existing application is untouched — the business can still open and decide them (§11.12). The status vocabulary (§6.5) gains nothing new; `closed` is still the only value either close path ever writes.
+
+**What it adds is `closedByAdminAt` (§10.1)** — a timestamp of *this action specifically*, independent of whatever moved `status`, so the business's own screens can say "Closed by Gig Lanka" instead of a plain "Closed" that could look like their own action or a bug. No reason and no reporter is ever attached to the gig or returned from this endpoint, matching §13's rule that the reported party is never told who filed.
+
+**Existence is checked first**, before role or current status is considered: an unknown id, or one that isn't a syntactically valid Mongo id, is `404` either way — the same ordering `findOwnedGig` uses for the owner-scoped gig endpoints (§10.9), even though this endpoint has no ownership check of its own to order against.
+
+Three outcomes once the gig is found, keyed on its current state:
+
+| Current state | Result |
+|---|---|
+| `open` or `filled` | `200`. `status` moves to `closed`, `closedByAdminAt` is set. |
+| `closed`, `closedByAdminAt` still `null` (the business closed it itself) | `200`. `closedByAdminAt` is set; `status` is already `closed` and doesn't move. The takedown is still recorded even though there's nowhere further for `status` to go. |
+| `closedByAdminAt` already set (already taken down) | `409 GIG_ALREADY_TAKEN_DOWN`. Not idempotent by design — a second takedown call is treated as a caller mistake to surface, not a no-op to swallow silently. |
+
+**Success — `200 OK`** — `data.gig`, the shape in §10.1. `closedByAdminAt` is present on this response even though the caller is an admin, not the owner: §10.1's owner-only visibility rule governs who can *read* the field back later, not the response to the call that just wrote it, and hiding it here from the one caller who has permission to set it would serve nobody.
+
+```json
+{
+  "success": true,
+  "data": {
+    "gig": {
+      "id": "64f1a2b3c4d5e6f7a8b9c0d8",
+      "title": "Weekend event helper",
+      "status": "closed",
+      "closedByAdminAt": "2026-08-20T10:02:00.000Z",
+      "postedBy": "64f1a2b3c4d5e6f7a8b9c0d4",
+      "applicantCount": 3,
+      "createdAt": "2026-08-12T09:15:00.000Z",
+      "updatedAt": "2026-08-20T10:02:00.000Z"
+    }
+  }
+}
+```
+
+**Failure — `401 Unauthorized`** (no token) — `AUTH_HEADER_MISSING` etc., as in §5.8.
+
+**Failure — `403 Forbidden`** (a seeker or business token):
+
+```json
+{
+  "success": false,
+  "error": { "code": "FORBIDDEN", "message": "You do not have permission to perform this action." }
+}
+```
+
+**Failure — `404 Not Found`** (no gig with that id, or the id is malformed):
+
+```json
+{
+  "success": false,
+  "error": { "code": "NOT_FOUND", "message": "Gig not found." }
+}
+```
+
+**Failure — `409 Conflict`** (`GIG_ALREADY_TAKEN_DOWN`) — the gig already has `closedByAdminAt` set:
+
+```json
+{
+  "success": false,
+  "error": { "code": "GIG_ALREADY_TAKEN_DOWN", "message": "This gig has already been taken down." }
+}
+```
+
+### 14.2 Error codes for this endpoint
+
+| Status | Code | When |
+|---|---|---|
+| `401` | `AUTH_HEADER_MISSING` / `AUTH_HEADER_MALFORMED` / `TOKEN_EXPIRED` / `TOKEN_INVALID` | No/malformed/expired/invalid token — every endpoint on this router requires one. |
+| `403` | `FORBIDDEN` | Authenticated as a seeker or business — every endpoint on this router is admin-only. |
+| `404` | `NOT_FOUND` | `PATCH .../gigs/:id/close` for a gig that doesn't exist, or has a malformed id. Checked before role or status. |
+| `409` | `GIG_ALREADY_TAKEN_DOWN` | `PATCH .../gigs/:id/close` called on a gig that already has `closedByAdminAt` set. See §3 for the shared definition. |
+
+---
+
+## 15. Adding a new endpoint later
 
 1. Pick a plural, lowercase, hyphenated resource name.
 2. Reuse the envelopes in sections 2 and 3 exactly — don't invent a new outer shape.

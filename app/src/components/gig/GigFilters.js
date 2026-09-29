@@ -41,6 +41,7 @@ export default function GigFilters({
   sort,
   city,
   minPay,
+  hasSearchText,
   onClear,
   onApply,
 }) {
@@ -76,6 +77,15 @@ export default function GigFilters({
     setDraftMinPay('');
     onClear();
   };
+
+  // best_match is relevance ordering - it's meaningless without a search
+  // term, so it's only offered as a sort choice while the search field
+  // (owned by BrowseGigsScreen, not this sheet) has text. BrowseGigsScreen
+  // itself falls back to Newest the moment the search is cleared, so
+  // draftSort can never already be 'best_match' while this evaluates false.
+  const sortOrders = hasSearchText
+    ? GIG_SORT_ORDERS
+    : GIG_SORT_ORDERS.filter((item) => item.value !== 'best_match');
 
   const handleShowGigs = () => {
     onApply({
@@ -150,7 +160,7 @@ export default function GigFilters({
               </FilterGroup>
 
               <FilterGroup label="Sort by">
-                {GIG_SORT_ORDERS.map((item) => (
+                {sortOrders.map((item) => (
                   <Chip
                     key={item.value}
                     selected={draftSort === item.value}

@@ -380,6 +380,9 @@ export default function ApplicantDetailScreen() {
               </View>
               <Text className="text-[13.5px] font-medium text-muted-dark">
                 {formatRating(profileSnapshot?.rating)}
+                {profileSnapshot?.rating?.completedGigCount > 0
+                  ? ` · ${profileSnapshot.rating.completedGigCount} ${profileSnapshot.rating.completedGigCount === 1 ? 'gig' : 'gigs'}`
+                  : ''}
               </Text>
             </View>
           </HeroHeader>

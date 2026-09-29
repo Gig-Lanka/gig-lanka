@@ -1,6 +1,9 @@
 import { Router } from 'express';
-import { getOpenReports } from '../controllers/report.controller.js';
+import { closeGigAsAdmin } from '../controllers/admin.controller.js';
+import { getAdminReports, resolveReport, dismissReport } from '../controllers/report.controller.js';
 import { requireAuth, requireRole } from '../middleware/auth.middleware.js';
+import { validate, validateQuery } from '../middleware/validate.middleware.js';
+import { adminReportsQuerySchema, closeReportSchema } from '../validators/report.validator.js';
 
 const router = Router();
 
@@ -11,9 +14,16 @@ const router = Router();
 // instead of repeating the gate per-handler.
 router.use(requireAuth, requireRole('admin'));
 
-// Read-only by design. This is the whole route for Sprint 3: no resolve,
-// dismiss, suspend, warn or assign verb is mounted here or anywhere else on
-// this router — every action on a report is Sprint 4 dispute handling.
-router.get('/reports', getOpenReports);
+// GL-443: ?status=open|closed, defaulting to open.
+router.get('/reports', validateQuery(adminReportsQuerySchema), getAdminReports);
+
+// GL-442: close a report, once and final. Both take { note }; there is no
+// reopen or edit route.
+router.patch('/reports/:id/resolve', validate(closeReportSchema), resolveReport);
+router.patch('/reports/:id/dismiss', validate(closeReportSchema), dismissReport);
+
+// GL-434. The admin takedown — status: 'closed' with a closedByAdminAt
+// marker, per gig.service.js's takedownGig.
+router.patch('/gigs/:id/close', closeGigAsAdmin);
 
 export default router;

@@ -296,4 +296,64 @@ describe('DELETE /api/gigs/:id', () => {
       .set('Authorization', `Bearer ${owner.accessToken}`);
     expect(mineRes.body.data.gigs.map((g) => g.id)).not.toContain(gig.id);
   });
+
+  it('refuses to delete a gig with a live application, leaving the gig and application intact', async () => {
+    const owner = await registerBusiness('delete-owner-live-app@example.com');
+    const seekerToken = await registerSeeker('delete-seeker-live-app@example.com');
+    const gig = await createGig(owner.accessToken);
+
+    const applyRes = await request(app)
+      .post(`/api/gigs/${gig.id}/applications`)
+      .set('Authorization', `Bearer ${seekerToken}`)
+      .send();
+    const applicationId = applyRes.body.data.application.id;
+
+    const res = await request(app)
+      .delete(`/api/gigs/${gig.id}`)
+      .set('Authorization', `Bearer ${owner.accessToken}`);
+
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe('GIG_HAS_APPLICANTS');
+
+    const detailRes = await request(app).get(`/api/gigs/${gig.id}`);
+    expect(detailRes.status).toBe(200);
+
+    const appRes = await request(app)
+      .get(`/api/applications/${applicationId}`)
+      .set('Authorization', `Bearer ${seekerToken}`);
+    expect(appRes.status).toBe(200);
+    expect(appRes.body.data.application.status).toBe('applied');
+  });
+
+  it('refuses to delete a gig with only a withdrawn application, leaving the gig and application intact', async () => {
+    const owner = await registerBusiness('delete-owner-withdrawn-app@example.com');
+    const seekerToken = await registerSeeker('delete-seeker-withdrawn-app@example.com');
+    const gig = await createGig(owner.accessToken);
+
+    const applyRes = await request(app)
+      .post(`/api/gigs/${gig.id}/applications`)
+      .set('Authorization', `Bearer ${seekerToken}`)
+      .send();
+    const applicationId = applyRes.body.data.application.id;
+
+    await request(app)
+      .patch(`/api/applications/${applicationId}/withdraw`)
+      .set('Authorization', `Bearer ${seekerToken}`);
+
+    const res = await request(app)
+      .delete(`/api/gigs/${gig.id}`)
+      .set('Authorization', `Bearer ${owner.accessToken}`);
+
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe('GIG_HAS_APPLICANTS');
+
+    const detailRes = await request(app).get(`/api/gigs/${gig.id}`);
+    expect(detailRes.status).toBe(200);
+
+    const appRes = await request(app)
+      .get(`/api/applications/${applicationId}`)
+      .set('Authorization', `Bearer ${seekerToken}`);
+    expect(appRes.status).toBe(200);
+    expect(appRes.body.data.application.status).toBe('withdrawn');
+  });
 });

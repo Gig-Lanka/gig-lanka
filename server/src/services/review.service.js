@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 import { ApiError } from '../utils/ApiError.js';
 import { Review } from '../models/review.model.js';
-import { getApplicationWithParties } from './application.service.js';
+import { countCompletedApplications, getApplicationWithParties } from './application.service.js';
 import { getPublicIdentity, setRatingSummary } from './profile.service.js';
 import {
   SEEKER_TO_BUSINESS_CATEGORIES,
@@ -20,7 +20,7 @@ const STAR_VALUES = [1, 2, 3, 4, 5];
 const TOP_CATEGORIES_LIMIT = 3;
 const zeroedDistribution = () =>
   STAR_VALUES.reduce((distribution, star) => ({ ...distribution, [star]: 0 }), {});
-const ZEROED_RATING_AGGREGATE = {
+const ZEROED_REVIEW_FIELDS = {
   averageRating: 0,
   reviewCount: 0,
   topCategories: [],
@@ -72,11 +72,19 @@ const computeTopCategories = (reviews) => {
 // every time and this collection is small. Filtered on `subject`, never
 // `author`: a user's aggregate counts reviews about them, not reviews they
 // wrote, and the two never mix.
-export const computeRatingAggregate = async (subjectId) => {
-  const reviews = await Review.find({ subject: subjectId }).select('rating categories').lean();
+//
+// GL-447: `completedGigCount` is counted for every user, reviews or not —
+// someone with work done but no reviews yet is not brand new — so a user
+// with no reviews gets zeroed review fields, not a zeroed aggregate. `role`
+// is the subject's role, which decides how their completed gigs are counted.
+export const computeRatingAggregate = async (subjectId, role) => {
+  const [reviews, completedGigCount] = await Promise.all([
+    Review.find({ subject: subjectId }).select('rating categories').lean(),
+    countCompletedApplications(subjectId, role),
+  ]);
 
   if (reviews.length === 0) {
-    return ZEROED_RATING_AGGREGATE;
+    return { ...ZEROED_REVIEW_FIELDS, completedGigCount };
   }
 
   const sum = reviews.reduce((total, review) => total + review.rating, 0);
@@ -86,6 +94,7 @@ export const computeRatingAggregate = async (subjectId) => {
     reviewCount: reviews.length,
     topCategories: computeTopCategories(reviews),
     distribution: computeDistribution(reviews),
+    completedGigCount,
   };
 };
 
@@ -93,13 +102,25 @@ export const computeRatingAggregate = async (subjectId) => {
 // a failure here must never fail the review creation that already succeeded
 // and was reported to the user — the same best-effort, log-and-continue
 // pattern GL-114 used for deleting a replaced profile photo.
-const recomputeRatingSummary = async (subjectId) => {
+const recomputeRatingSummary = async (subjectId, role) => {
   try {
-    const ratingSummary = await computeRatingAggregate(subjectId);
+    const ratingSummary = await computeRatingAggregate(subjectId, role);
     await setRatingSummary(subjectId, ratingSummary);
   } catch (err) {
     console.error(`Failed to recompute rating summary for user ${subjectId}:`, err);
   }
+};
+
+// GL-447: called by completeApplication once a hire is marked Completed, so
+// both parties' `completedGigCount` moves with it. Best-effort for the same
+// reason as above — the completion is the fact, the count is derived from
+// it, and a failure here is logged and never fails the completion. Each
+// party is recomputed independently, so one failing never blocks the other.
+export const recomputeCompletedGigCounts = async (applicantId, businessId) => {
+  await Promise.all([
+    recomputeRatingSummary(applicantId, 'seeker'),
+    businessId ? recomputeRatingSummary(businessId, 'business') : undefined,
+  ]);
 };
 
 const assertCategoriesMatchDirection = (categories, direction) => {
@@ -169,7 +190,7 @@ export const createReview = async (applicationId, actor, body) => {
       text: body.text,
     });
 
-    await recomputeRatingSummary(subject);
+    await recomputeRatingSummary(subject, isApplicant ? 'business' : 'seeker');
 
     return review.toJSON();
   } catch (err) {
