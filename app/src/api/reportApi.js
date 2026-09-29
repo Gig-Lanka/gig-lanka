@@ -32,14 +32,16 @@ async function getMyReports() {
 }
 
 /**
- * `GET /api/admin/reports` - the open-reports moderation queue (GL-370).
- * Admin-only (the server 403s any other role), open reports only, newest
- * first, ten per page - `page` is the only parameter this endpoint reads.
- * Each report carries a resolved `reporter` identity and `target` summary,
- * with `target` coming back `null` when the reported gig or user is gone.
+ * `GET /api/admin/reports` - the moderation queue (GL-370, §13.4).
+ * Admin-only (the server 403s any other role), ten per page. `status` is
+ * `'open'` (the default - newest filed first) or `'closed'` (resolved and
+ * dismissed together, most recently closed first, each row also carrying
+ * `status`, `resolutionNote`, `closedAt` and `closedBy`). Each report
+ * carries a resolved `reporter` identity and `target` summary, with
+ * `target` coming back `null` when the reported gig or user is gone.
  */
-async function getOpenReports(page) {
-  const response = await client.get('/admin/reports', { params: { page } });
+async function getOpenReports(page, status = 'open') {
+  const response = await client.get('/admin/reports', { params: { page, status } });
   return response.data.data;
 }
 
