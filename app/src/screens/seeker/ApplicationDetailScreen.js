@@ -5,6 +5,7 @@ import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/nativ
 
 import applicationApi from '../../api/applicationApi';
 import ApplicationTracker from '../../components/application/ApplicationTracker';
+import SkillTrialSubmission from '../../components/application/SkillTrialSubmission';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import EmptyState from '../../components/ui/EmptyState';
 import HeroHeader, { HeroSheet, HeroStickyBar } from '../../components/ui/HeroHeader';
@@ -79,8 +80,17 @@ export default function ApplicationDetailScreen() {
     try {
       const { application: updated } = await applicationApi.withdrawApplication(application.id);
       // Updates in place - no refetch - so this matches the row on the list
-      // screen, which silently refetches on its own next focus (GL-188).
-      setApplication(updated);
+      // screen, which silently refetches on its own next focus (GL-188). The
+      // withdraw response's gig summary doesn't carry `skillTrial` (§11.6 -
+      // only the single read does), so it's kept from what's already loaded
+      // rather than dropping the trial's title off the screen.
+      setApplication({
+        ...updated,
+        gig:
+          updated.gig && application.gig?.skillTrial
+            ? { ...updated.gig, skillTrial: application.gig.skillTrial }
+            : updated.gig,
+      });
       setWithdrawVisible(false);
     } catch (error) {
       const isConflict = error.response?.status === 409;
@@ -114,7 +124,13 @@ export default function ApplicationDetailScreen() {
     );
   }
 
-  const { gig, status: applicationStatus, rejectionReasonCode, rejectionNote } = application;
+  const {
+    gig,
+    status: applicationStatus,
+    rejectionReasonCode,
+    rejectionNote,
+    skillTrialSubmission,
+  } = application;
   const isRejected = applicationStatus === 'rejected';
 
   return (
@@ -180,6 +196,12 @@ export default function ApplicationDetailScreen() {
               <Text className="mt-2 text-desc text-muted">This gig is no longer available.</Text>
             )}
           </View>
+
+          <SkillTrialSubmission
+            skillTrial={gig?.skillTrial}
+            submission={skillTrialSubmission}
+            className="mt-5"
+          />
 
           {WITHDRAWABLE_STATUSES.has(applicationStatus) ? (
             <View className="mt-5">
