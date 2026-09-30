@@ -105,7 +105,7 @@ export const updateMyProfile = async (user, body) => {
 // it, instead of leaking the day it lands. Email never appears because it lives
 // on User and is never read into this shape.
 const PUBLIC_SHARED_FIELDS = ['photo', 'name', 'city', 'bio'];
-const PUBLIC_SEEKER_FIELDS = ['skills', 'workExperience', 'education', 'skillTrialResults'];
+const PUBLIC_SEEKER_FIELDS = ['skills', 'workExperience', 'education'];
 const PUBLIC_BUSINESS_FIELDS = ['category'];
 
 const toPublicProfile = (user, profile) => {
@@ -173,27 +173,6 @@ export const setRatingSummary = async (userId, ratingSummary) => {
 
   const profile = await getOrCreateProfile(user);
   profile.ratingSummary = ratingSummary;
-  await profile.save();
-};
-
-// GL-353: the single writer of Profile.skillTrialResults — the mirror image
-// of setRatingSummary above, called only by application.service.js's
-// reviewSkillTrial, and only after a trial is marked `passed`. Narrow by
-// design: this appends one badge and nothing else, so the ownership
-// boundary with Application & Hiring is expressed in code the same way the
-// rating aggregate's already is (no import of profile.model.js from outside
-// this file). `skill` is the gig's category **value**, not its label, so
-// the client renders the label from the enum like everywhere else. A
-// `not_passed`, `skipped` or unmarked trial never reaches here — the caller
-// only calls this on a pass — and marking is once and final, so there is no
-// corresponding un-writing path.
-export const addSkillTrialResult = async (userId, { skill, completedAt }) => {
-  const user = await User.findById(userId);
-
-  if (!user) return;
-
-  const profile = await getOrCreateProfile(user);
-  profile.skillTrialResults.push({ skill, passed: true, completedAt });
   await profile.save();
 };
 

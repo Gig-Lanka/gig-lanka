@@ -216,14 +216,6 @@ export default function PublicProfileScreen() {
 
           {bio ? <Text className="text-desc leading-[21px] text-muted">{bio}</Text> : null}
 
-          {/*
-            Skill Trial badges - read-only, no route into anything. Same
-            discipline as the own-profile screens: the per-entry shape isn't
-            published by Application & Hiring yet and skillTrialResults is
-            empty until Sprint 3, so nothing is rendered here rather than a
-            guessed shape.
-          */}
-
           {isBusinessSubject ? (
             <>
               {category ? (

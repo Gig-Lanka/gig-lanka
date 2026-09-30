@@ -207,14 +207,6 @@ export default function ProfileScreen() {
 
           <RatingSummary rating={ratingSummary} userId={user} className="mt-5" />
 
-          {/*
-            Skill Trial badges - read-only, no route into anything. The
-            per-entry shape isn't published by Application & Hiring yet and
-            `skillTrialResults` is empty until Sprint 3, so - same discipline
-            as the rating summary slot above - nothing is rendered here
-            rather than a guessed shape.
-          */}
-
           <Button
             variant="small"
             fullWidth={false}

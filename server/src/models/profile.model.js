@@ -19,14 +19,6 @@ const educationSchema = new mongoose.Schema({
   endDate: { type: String, match: DATE_ONLY_PATTERN },
 });
 
-// Skill Trial badges shown on a profile. Application & Hiring owns computing
-// and writing these results (Sprint 3) — this component only displays them.
-const skillTrialResultSchema = new mongoose.Schema({
-  skill: { type: String, trim: true },
-  passed: { type: Boolean },
-  completedAt: { type: Date },
-});
-
 const profileSchema = new mongoose.Schema(
   {
     user: {
@@ -79,13 +71,8 @@ const profileSchema = new mongoose.Schema(
 
     // System-set, read-only. Owned and written by other components — never
     // set by anything in User & Profile. See RATING_AGGREGATE_SHAPE for the
-    // ownership boundary with Community & Rating; skillTrialResultSchema
-    // above for the one with Application & Hiring.
+    // ownership boundary with Community & Rating.
     ratingSummary: RATING_AGGREGATE_SHAPE,
-    skillTrialResults: {
-      type: [skillTrialResultSchema],
-      default: [],
-    },
   },
   {
     timestamps: true,
