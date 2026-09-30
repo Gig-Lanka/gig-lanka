@@ -22,6 +22,10 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    suspendedAt: {
+      type: Date,
+      default: null,
+    },
   },
   {
     timestamps: true,
@@ -31,6 +35,7 @@ const userSchema = new mongoose.Schema(
         delete ret._id;
         delete ret.passwordHash;
         delete ret.isActive;
+        delete ret.suspendedAt;
         delete ret.__v;
         return ret;
       },
@@ -39,3 +44,9 @@ const userSchema = new mongoose.Schema(
 );
 
 export const User = mongoose.model('User', userSchema);
+
+// The one blocked-account rule: true when the owner deactivated themself or
+// Gig Lanka suspended them. Every access exclusion goes through this instead
+// of testing isActive on its own, so a third reason can't be missed in one
+// place.
+export const isBlocked = (user) => user.isActive === false || Boolean(user.suspendedAt);
