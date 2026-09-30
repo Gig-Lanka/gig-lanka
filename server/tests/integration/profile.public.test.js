@@ -51,7 +51,6 @@ const EXPECTED_SEEKER_KEYS = [
   'skills',
   'workExperience',
   'education',
-  'skillTrialResults',
 ].sort();
 
 const EXPECTED_BUSINESS_KEYS = ['userId', 'ratingSummary', 'photo', 'name', 'city', 'bio', 'category'].sort();
@@ -144,7 +143,6 @@ describe('GET /api/profiles/:userId', () => {
     expect(profile.skills).toBeUndefined();
     expect(profile.workExperience).toBeUndefined();
     expect(profile.education).toBeUndefined();
-    expect(profile.skillTrialResults).toBeUndefined();
   });
 
   // Deactivation guard: getPublicProfile must answer 404 — identical to a
