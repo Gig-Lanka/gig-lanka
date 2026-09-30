@@ -854,7 +854,6 @@ Returned by `GET /api/profiles/me` and `PUT /api/profiles/me`, under `data.profi
     "topCategories": [],
     "distribution": { "1": 0, "2": 0, "3": 0, "4": 0, "5": 0 }
   },
-  "skillTrialResults": [],
   "createdAt": "2026-08-12T22:31:14.195Z",
   "updatedAt": "2026-08-12T22:31:14.209Z"
 }
@@ -866,11 +865,10 @@ Returned by `GET /api/profiles/me` and `PUT /api/profiles/me`, under `data.profi
 - `bio` — max 500 characters. `city` and `category` are free text.
 - `skills`, `workExperience`, `education` — **seeker fields**. `category` — a **business field**. See 8.2 for how role decides which are readable publicly, and 8.4 for which are writable.
 - `ratingSummary` — the aggregate from §6.10. Owned by the Review component, read-only here.
-- `skillTrialResults` — Skill Trial badges, owned by Application & Hiring, read-only here. Empty until Sprint 3.
 - **Optional fields are omitted, not null.** A profile that has never set `photo`, `bio`, `city` or `category` has no such key at all. Arrays always appear, empty at minimum. Clients must treat absent and empty as the same thing.
 - **Both roles carry all the arrays.** A business's own profile includes `skills: []`, `workExperience: []` and `education: []` because they are schema defaults. They are always empty for a business — 8.4 rejects any attempt to fill them — and they are absent from a business's *public* profile.
 - Key order is not significant and varies between responses. Read by key, never by position.
-- Subdocument entries in `workExperience`, `education` and `skillTrialResults` carry `_id`, not `id` — these are the one place in the API that does not follow the `_id` → `id` convention. GL-112 needs those ids to edit an individual row.
+- Subdocument entries in `workExperience` and `education` carry `_id`, not `id` — these are the one place in the API that does not follow the `_id` → `id` convention. GL-112 needs those ids to edit an individual row.
 
 ### 8.2 Public profile shape
 
@@ -906,7 +904,6 @@ Returned by `GET /api/profiles/:userId`, under `data.profile`. Built from an exp
       "endDate": "2027-12-01"
     }
   ],
-  "skillTrialResults": [],
   "ratingSummary": {
     "averageRating": 0,
     "reviewCount": 0,
@@ -936,7 +933,7 @@ Returned by `GET /api/profiles/:userId`, under `data.profile`. Built from an exp
 ```
 
 - `userId` is the **user's** id, not the profile's. The profile's own `id` is not published — callers address a public profile by user id, which is what every other feature already holds.
-- Shared for both roles: `name`, `photo`, `city`, `bio`, `ratingSummary`. Seeker only: `skills`, `workExperience`, `education`, `skillTrialResults`. Business only: `category`.
+- Shared for both roles: `name`, `photo`, `city`, `bio`, `ratingSummary`. Seeker only: `skills`, `workExperience`, `education`. Business only: `category`.
 - **Never present, for anyone:** the email address, the account status, `role`, `passwordHash`, `createdAt`/`updatedAt`, or any contact detail. Contact details are not shown on a public profile anywhere in this product — there is no phone number or address field to expose, and if one is ever added it stays out of this shape until it is deliberately listed.
 - Optional fields are omitted rather than null, exactly as in 8.1.
 
@@ -959,7 +956,6 @@ Returns the signed-in user's full profile, creating it first if it does not exis
       "skills": [],
       "workExperience": [],
       "education": [],
-      "skillTrialResults": [],
       "ratingSummary": { "averageRating": 0, "reviewCount": 0, "topCategories": [], "distribution": { "1": 0, "2": 0, "3": 0, "4": 0, "5": 0 } },
       "createdAt": "2026-08-12T22:31:14.195Z",
       "updatedAt": "2026-08-12T22:31:14.195Z"
@@ -1055,7 +1051,7 @@ Unknown fields not listed above are ignored silently.
 
 **Success — `200 OK`** — `data.profile` is the updated profile in the shape from 8.1.
 
-**Failure — `400 Bad Request`** (a field this component does not own). `ratingSummary` and `skillTrialResults` belong to other components; `role` and `email` live on `User` and are not editable here. Each is named rather than silently dropped:
+**Failure — `400 Bad Request`** (a field this component does not own, or no longer exists). `ratingSummary` belongs to another component; `skillTrialResults` was removed from the schema (GL-430) but stays refused here so a client can't write it back in; `role` and `email` live on `User` and are not editable here. Each is named rather than silently dropped:
 
 ```json
 {
