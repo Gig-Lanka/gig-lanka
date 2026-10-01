@@ -70,6 +70,22 @@ const ACCOUNT_ERROR_MESSAGE = {
   reinstate: 'Could not reinstate this account. Try again.',
 };
 
+// §14.1's refusals. The 409 says the gig is already down, so it sets that
+// state; the 404 means there's no gig to act on, so the action goes.
+const GIG_REFUSALS = {
+  GIG_ALREADY_TAKEN_DOWN: {
+    takenDown: true,
+    message: 'This gig was already taken down.',
+  },
+  NOT_FOUND: {
+    unavailable: true,
+    variant: 'error',
+    message: 'This gig no longer exists.',
+  },
+};
+
+const GIG_ERROR_MESSAGE = 'Could not take down this gig. Try again.';
+
 // Same outcome tones as ReportsScreen's closed rows - duplicated rather than
 // shared, the rule GL-118/GL-121 set for the two gig cards' status maps.
 const OUTCOME_BADGE_VARIANT = {
@@ -121,13 +137,35 @@ function AccountAction({ suspendLabel, suspended, unavailable, busy, notice, err
   );
 }
 
+// Take down gig (destructive) or, once it's down, the "Taken down" badge and
+// nothing else - there's no undo. Same layout as AccountAction.
+function GigAction({ takenDown, unavailable, busy, notice, error, onPress }) {
+  return (
+    <View className="mt-3 gap-3">
+      {!unavailable ? (
+        <View className="flex-row items-center gap-3">
+          {takenDown ? (
+            <Badge variant="danger">Taken down</Badge>
+          ) : (
+            <Button variant="small-danger" fullWidth={false} loading={busy} onPress={onPress}>
+              Take down gig
+            </Button>
+          )}
+        </View>
+      ) : null}
+      {notice ? <Notice variant={notice.variant}>{notice.message}</Notice> : null}
+      {error ? <Text className="text-[12.5px] text-danger-ink">{error}</Text> : null}
+    </View>
+  );
+}
+
 // A person gets their photo and name; a gig its title and the business that
 // posted it; a vanished target (the queue returns `target: null`) just says
-// so, and offers no action. The account action sits under the person, or
-// under the business's name on a gig - never in the pinned Resolve /
-// Dismiss row, since acting on the target and deciding the report are
-// separate steps.
-function ReportedTarget({ targetType, target, accountAction }) {
+// so, and offers no action. The gig action sits under the gig's title, the
+// account action under the person, or under the business's name on a gig -
+// never in the pinned Resolve / Dismiss row, since acting on the target and
+// deciding the report are separate steps.
+function ReportedTarget({ targetType, target, gigAction, accountAction }) {
   if (!target) {
     return <Text className="mt-2 text-desc text-muted-dark">No longer available</Text>;
   }
@@ -136,6 +174,7 @@ function ReportedTarget({ targetType, target, accountAction }) {
     return (
       <View className="mt-2">
         <Text className="font-display text-title text-ink">{target.title}</Text>
+        {gigAction}
         {target.business?.name ? (
           <Text className="mt-1 text-desc text-muted">{target.business.name}</Text>
         ) : null}
@@ -193,6 +232,18 @@ export default function ReportDetailScreen() {
   // action while it fades out after a success.
   const [dialogAction, setDialogAction] = useState('suspend');
   const isActingOnAccountRef = useRef(false);
+
+  // The gig action, on a report about a gig. Like `suspended` above, the
+  // queue doesn't carry a takenDown flag yet, so this reads one if it's
+  // there and otherwise starts as not taken down - a 409 corrects it.
+  const gigId = report.targetType === 'gig' ? (report.target?.id ?? null) : null;
+  const [takenDown, setTakenDown] = useState(Boolean(report.target?.takenDown));
+  const [gigUnavailable, setGigUnavailable] = useState(false);
+  const [gigDialogVisible, setGigDialogVisible] = useState(false);
+  const [gigBusy, setGigBusy] = useState(false);
+  const [gigNotice, setGigNotice] = useState(null);
+  const [gigError, setGigError] = useState(null);
+  const isActingOnGigRef = useRef(false);
 
   const isClosed = isClosedStatus(report.status) || alreadyClosed;
 
@@ -317,6 +368,42 @@ export default function ReportDetailScreen() {
     setAccountDialogVisible(false);
   }
 
+  function openGigDialog() {
+    if (isActingOnGigRef.current) return;
+    setGigDialogVisible(true);
+  }
+
+  function handleCancelGigDialog() {
+    if (isActingOnGigRef.current) return;
+    setGigDialogVisible(false);
+  }
+
+  async function handleConfirmTakeDown() {
+    if (isActingOnGigRef.current) return;
+    isActingOnGigRef.current = true;
+    setGigBusy(true);
+    setGigNotice(null);
+    setGigError(null);
+
+    try {
+      await adminApi.takeDownGig(gigId);
+      setTakenDown(true);
+    } catch (error) {
+      const refusal = GIG_REFUSALS[error.response?.data?.error?.code];
+      if (refusal) {
+        if (refusal.takenDown) setTakenDown(true);
+        if (refusal.unavailable) setGigUnavailable(true);
+        setGigNotice({ variant: refusal.variant, message: refusal.message });
+      } else {
+        setGigError(GIG_ERROR_MESSAGE);
+      }
+    }
+
+    isActingOnGigRef.current = false;
+    setGigBusy(false);
+    setGigDialogVisible(false);
+  }
+
   const hasDecision = isClosedStatus(report.status);
 
   return (
@@ -337,6 +424,18 @@ export default function ReportDetailScreen() {
         <ReportedTarget
           targetType={report.targetType}
           target={report.target}
+          gigAction={
+            gigId ? (
+              <GigAction
+                takenDown={takenDown}
+                unavailable={gigUnavailable}
+                busy={gigBusy}
+                notice={gigNotice}
+                error={gigError}
+                onPress={openGigDialog}
+              />
+            ) : null
+          }
           accountAction={
             accountId ? (
               <AccountAction
@@ -426,6 +525,17 @@ export default function ReportDetailScreen() {
         cancelLabel={ACCOUNT_DIALOG[dialogAction].cancelLabel}
         onConfirm={handleConfirmAccountAction}
         onCancel={handleCancelAccountDialog}
+      />
+
+      <ConfirmDialog
+        visible={gigDialogVisible}
+        destructive
+        title="Take down this gig?"
+        body="The gig is closed and hidden from Browse. Existing applicants are unaffected. The business sees it was closed by Gig Lanka."
+        confirmLabel={gigBusy ? 'Taking down…' : 'Take down'}
+        cancelLabel="Keep it up"
+        onConfirm={handleConfirmTakeDown}
+        onCancel={handleCancelGigDialog}
       />
     </SafeAreaView>
   );
