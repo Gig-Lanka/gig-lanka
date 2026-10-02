@@ -2748,7 +2748,13 @@ Unknown parameters are ignored.
         "target": {
           "id": "64f1a2b3c4d5e6f7a8b9c0d6",
           "title": "Weekend event helper",
-          "business": { "id": "64f1a2b3c4d5e6f7a8b9c0d2", "name": "Colombo Events Co.", "photo": null }
+          "business": {
+            "id": "64f1a2b3c4d5e6f7a8b9c0d2",
+            "name": "Colombo Events Co.",
+            "photo": null,
+            "suspended": false
+          },
+          "takenDown": true
         }
       }
     ],
@@ -2762,8 +2768,9 @@ Unknown parameters are ignored.
 This is the **admin shape**, which resolve and dismiss return too. It's §13.1's full stored shape, with two ids replaced by summaries:
 
 - `reporter` — the reporter's public identity, `{ id, name, photo }` (§8.2's shape).
-- `target` — for a `user` target, that user's public identity `{ id, name, photo }`. For a `gig` target, `{ id, title, business }`, where `business` is the posting business's public identity. A gig that has since been hard-deleted reads as `"target": null`. The report still renders with its `targetType` and `targetId`, and the request doesn't fail. A `user` target whose profile has gone reads with `name` and `photo` both `null`.
+- `target` — for a `user` target, that user's public identity plus its suspension state, `{ id, name, photo, suspended }`. For a `gig` target, `{ id, title, business, takenDown }`, where `business` is the posting business's public identity plus its own `suspended`. A gig that has since been hard-deleted reads as `"target": null`. The report still renders with its `targetType` and `targetId`, and the request doesn't fail. A `user` target whose profile has gone reads with `name` and `photo` both `null`.
 - On `status=open` every row has `"status": "open"`, and the closing fields are absent. On `status=closed` every row carries its `status` (`resolved` or `dismissed`), `resolutionNote`, `closedAt` and `closedBy`. `closedBy` is the admin's bare user id, not a summary.
+- `suspended` (GL-455) is `true` while Gig Lanka has suspended that account (§14.2) and `false` once it's reinstated (§14.3). A self-deactivated account reads `false`: it isn't suspended, and there's nothing to reinstate. `takenDown` is `true` once an admin has taken the gig down (§14.1). A gig its business closed itself reads `false`. Both reflect the target's state now, not when the report was filed, so a closed report shows them too. They exist only in this admin shape. §13.3's reporter shape never carries them.
 
 Ten per page. `total` counts every report in the selected view across all pages, matching §10.4's and §12.2's shape. Ordering:
 

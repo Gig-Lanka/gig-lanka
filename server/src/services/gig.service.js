@@ -554,12 +554,18 @@ export const assertGigIsOpen = async (id) => {
 // query for the gigs, one for their posters' identities) rather than one
 // lookup per row. A gig that's since been hard-deleted is simply absent from
 // the returned map; the caller reads that as the target having vanished.
+//
+// GL-455: `takenDown` says whether an admin has already closed it (GL-434's
+// closedByAdminAt), so the report detail opens knowing there's no gig action
+// left. Admin-only: this summary never reaches GET /api/reports/mine.
 export const getGigSummariesByIds = async (gigIds) => {
   const uniqueIds = [...new Set(gigIds.map((id) => id.toString()))];
 
   if (uniqueIds.length === 0) return new Map();
 
-  const gigs = await Gig.find({ _id: { $in: uniqueIds } }).select('title postedBy').lean();
+  const gigs = await Gig.find({ _id: { $in: uniqueIds } })
+    .select('title postedBy closedByAdminAt')
+    .lean();
   const businesses = await getPublicIdentities(gigs.map((gig) => gig.postedBy));
 
   return new Map(
@@ -569,6 +575,7 @@ export const getGigSummariesByIds = async (gigIds) => {
         id: gig._id.toString(),
         title: gig.title,
         business: businesses.get(gig.postedBy.toString()),
+        takenDown: Boolean(gig.closedByAdminAt),
       },
     ]),
   );

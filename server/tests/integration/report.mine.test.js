@@ -155,7 +155,7 @@ describe('GET /api/reports/mine', () => {
     expect(res.body.data.reports).toEqual([]);
   });
 
-  it("never carries anything about who else reported the same target", async () => {
+  it('never carries anything about who else reported the same target', async () => {
     const reporterOne = await registerSeeker('mine-no-leak-reporter-one@example.com');
     const reporterTwo = await registerSeeker('mine-no-leak-reporter-two@example.com');
     const target = await registerSeeker('mine-no-leak-target@example.com');
@@ -181,6 +181,45 @@ describe('GET /api/reports/mine', () => {
     expect(report).not.toHaveProperty('otherReports');
     expect(report).not.toHaveProperty('totalReports');
     expect(Object.keys(report.target ?? {})).not.toContain('reportCount');
+  });
+
+  it("never carries the admin queue's suspended or takenDown state, even once an admin has acted", async () => {
+    const admin = await createAdmin('mine-admin-state-admin@example.com');
+    const reporter = await registerSeeker('mine-admin-state-reporter@example.com');
+    const target = await registerSeeker('mine-admin-state-target@example.com');
+    const business = await registerBusiness('mine-admin-state-business@example.com');
+    const gig = await createGig(business.accessToken);
+
+    await postReport(reporter.accessToken, {
+      targetType: 'user',
+      targetId: target.userId,
+      reasonCode: 'spam_or_scam',
+    });
+    await postReport(reporter.accessToken, {
+      targetType: 'gig',
+      targetId: gig.id,
+      reasonCode: 'misleading_gig_details',
+    });
+
+    await request(app)
+      .patch(`/api/admin/users/${target.userId}/suspend`)
+      .set('Authorization', `Bearer ${admin.accessToken}`);
+    await request(app)
+      .patch(`/api/admin/gigs/${gig.id}/close`)
+      .set('Authorization', `Bearer ${admin.accessToken}`);
+
+    const res = await request(app)
+      .get('/api/reports/mine')
+      .set('Authorization', `Bearer ${reporter.accessToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.reports).toHaveLength(2);
+    res.body.data.reports.forEach((report) => {
+      const target = report.target ?? {};
+      expect(target).not.toHaveProperty('suspended');
+      expect(target).not.toHaveProperty('takenDown');
+      expect(target).not.toHaveProperty('business');
+    });
   });
 
   it('is not reachable by a crafted request for another user id — no such parameter exists', async () => {
