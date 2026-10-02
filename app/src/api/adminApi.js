@@ -1,5 +1,5 @@
-// Admin account client - GL-453 (docs/api-contract.md §14). The only place
-// screens talk to the network for admin actions on an account; `client`
+// Admin client - GL-453, GL-454 (docs/api-contract.md §14). The only place
+// screens talk to the network for admin actions on an account or a gig; `client`
 // handles auth headers the same way it does for reports (see ./client.js).
 // Every endpoint here is admin-only - the server 403s any other role.
 
@@ -27,7 +27,20 @@ async function reinstateUser(userId) {
   return response.data.data;
 }
 
+/**
+ * `PATCH /api/admin/gigs/:id/close` - take down a gig (§14.1). No body.
+ * Closes it the way a business close does and records `closedByAdminAt`, so
+ * the business sees "Closed by Gig Lanka". There's no undo. An unknown id
+ * comes back 404 `NOT_FOUND`, and a gig that's already been taken down 409
+ * `GIG_ALREADY_TAKEN_DOWN`. Returns the gig (§10.1).
+ */
+async function takeDownGig(gigId) {
+  const response = await client.patch(`/admin/gigs/${gigId}/close`);
+  return response.data.data.gig;
+}
+
 export default {
   suspendUser,
   reinstateUser,
+  takeDownGig,
 };
