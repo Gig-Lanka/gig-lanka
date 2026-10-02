@@ -1,18 +1,22 @@
 {
   "expo": {
-    "name": "app",
-    "slug": "app",
+    "name": "Gig Lanka",
+    "slug": "gig-lanka",
+    "owner": "giglanka",
+    "scheme": "giglanka",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.bineth.app"
+      "bundleIdentifier": "com.giglanka.app"
     },
     "android": {
+      "package": "com.giglanka.app",
+      "versionCode": 1,
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#FF4A1C",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -24,6 +28,14 @@
     "plugins": [
       "expo-secure-store",
       "expo-font",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 240,
+          "backgroundColor": "#101114"
+        }
+      ],
       [
         "@react-native-community/datetimepicker",
         {
@@ -57,6 +69,11 @@
           "microphonePermission": false
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "d374b145-9bad-4def-bb27-e6e4f2be2859"
+      }
+    }
   }
 }
