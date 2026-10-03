@@ -57,7 +57,7 @@ Set these in the dashboard under **Environment** — never commit them, and neve
 | `EMAIL_TRANSPORT`           | Yes — `brevo`          | Anything other than `brevo`, including unset, selects the no-op transport, which reports success but sends no real mail.                                           |
 | `EMAIL_FROM`                | Yes                    | The sender address on outgoing mail. It must be a sender verified in Brevo, or Brevo rejects the message.                                                          |
 | `BREVO_API_KEY`             | Yes when using Brevo   | Brevo API key. The server fails on startup if `EMAIL_TRANSPORT=brevo` and this is missing.                                                                         |
-| `PASSWORD_RESET_URL_BASE`   | Yes                    | Base of the link in password-reset emails: the production URL followed by `/reset-password`. If unset it falls back to a placeholder domain the team does not own. |
+| `PASSWORD_RESET_URL_BASE`   | Yes                    | Base of the link in password-reset emails: the server's own bridge page. Production is `https://gig-lanka.onrender.com/reset-password`. If unset it falls back to `http://localhost:<PORT>/reset-password`. |
 
 ### Adding or changing an environment variable
 
