@@ -7,7 +7,7 @@ import {
   REJECTION_REASON_CODES,
 } from '../models/application.model.js';
 import { assertGigIsOpen, findOwnedGig, markGigFilled } from './gig.service.js';
-import { getMyProfile, addSkillTrialResult } from './profile.service.js';
+import { getMyProfile } from './profile.service.js';
 import { isStorageUrl } from './storage.service.js';
 import { recomputeCompletedGigCounts } from './review.service.js';
 
@@ -797,10 +797,9 @@ const RESULT_NOTE_MAX_LENGTH = 300;
 // already `passed`/`not_passed`, or never eligible in the first place
 // (`skipped`, or no submission at all) — is refused with the same
 // TRIAL_ALREADY_REVIEWED code, the same way INVALID_APPLICATION_TRANSITION
-// covers every unreachable status move under one code. A pass writes a
-// badge to the seeker's profile — the gig's category and the moment it was
-// marked — through profile.service.js's narrow writer, never by importing
-// profile.model.js directly; a fail or a skip writes nothing there.
+// covers every unreachable status move under one code. GL-430: marking a
+// trial, in either direction, writes nothing to the profile — the result
+// lives only on the application, at skillTrialSubmission.result.
 export const reviewSkillTrial = async (id, actor, body) => {
   const { application, businessId } = await getApplicationWithParties(id);
 
@@ -848,13 +847,6 @@ export const reviewSkillTrial = async (id, actor, body) => {
   await application.save();
 
   const gig = await Gig.findById(application.gig);
-
-  if (result === 'passed') {
-    await addSkillTrialResult(application.applicant, {
-      skill: gig?.category,
-      completedAt: reviewedAt,
-    });
-  }
 
   return {
     application: { ...application.toJSON(), gig: toGigSummary(gig) },

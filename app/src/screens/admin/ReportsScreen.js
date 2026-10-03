@@ -217,6 +217,29 @@ export default function ReportsScreen() {
     return () => clearTimeout(timeoutId);
   }, [closedReportId, load]);
 
+  // GL-455: ReportDetail pops back with `targetChangedAt` once the admin has
+  // suspended, reinstated or taken down its target without closing the
+  // report. Every row about that target - this one included - still carries
+  // the old `suspended` / `takenDown`, so reopening one would show the wrong
+  // action. Reloaded from page one exactly as above; the timestamp makes
+  // each return fire once.
+  const targetChangedAt = route.params?.targetChangedAt;
+  const handledTargetChangedAtRef = useRef(null);
+  useEffect(() => {
+    if (!targetChangedAt || targetChangedAt === handledTargetChangedAtRef.current) {
+      return undefined;
+    }
+    handledTargetChangedAtRef.current = targetChangedAt;
+
+    const timeoutId = setTimeout(() => {
+      generationRef.current += 1;
+      isFetchingRef.current = false;
+      load(1, 'refresh');
+    }, 0);
+
+    return () => clearTimeout(timeoutId);
+  }, [targetChangedAt, load]);
+
   const handleOpenReport = useCallback(
     (report) => navigation.navigate('ReportDetail', { report }),
     [navigation],

@@ -430,8 +430,8 @@ describe('PATCH /api/applications/:id/trial-review', () => {
   });
 });
 
-describe('Skill trial profile write (GL-353)', () => {
-  it('writes a skillTrialResults entry carrying the gig category on a pass', async () => {
+describe('Skill trial profile write removed (GL-430)', () => {
+  it('leaves the profile unchanged when a trial is marked passed', async () => {
     const business = await registerBusiness('trial-profile-pass-business@example.com');
     const seeker = await registerSeeker('trial-profile-pass-seeker@example.com');
     const gig = await postGigAsBusiness(business, {
@@ -441,37 +441,45 @@ describe('Skill trial profile write (GL-353)', () => {
     const applied = await applyAsSeeker(seeker, gig.id, {
       skillTrialSubmission: { textResponse: VALID_TEXT_RESPONSE },
     });
+    const before = await Profile.findOne({ user: seeker.userId }).lean();
 
-    await reviewTrial(business, applied.body.data.application.id, { result: 'passed' });
+    const res = await reviewTrial(business, applied.body.data.application.id, {
+      result: 'passed',
+    });
 
-    const profile = await Profile.findOne({ user: seeker.userId }).lean();
-    expect(profile.skillTrialResults).toHaveLength(1);
-    expect(profile.skillTrialResults[0]).toMatchObject({ skill: 'tutoring', passed: true });
-    expect(profile.skillTrialResults[0].completedAt).toBeTruthy();
+    expect(res.status).toBe(200);
+    const after = await Profile.findOne({ user: seeker.userId }).lean();
+    expect(after).toEqual(before);
+    expect(after).not.toHaveProperty('skillTrialResults');
   });
 
-  it('writes nothing to the profile on a not_passed result', async () => {
+  it('leaves the profile unchanged when a trial is marked not_passed', async () => {
     const business = await registerBusiness('trial-profile-fail-business@example.com');
     const seeker = await registerSeeker('trial-profile-fail-seeker@example.com');
     const gig = await postGigAsBusiness(business, { skillTrial: validSkillTrial() });
     const applied = await applyAsSeeker(seeker, gig.id, {
       skillTrialSubmission: { textResponse: VALID_TEXT_RESPONSE },
     });
+    const before = await Profile.findOne({ user: seeker.userId }).lean();
 
-    await reviewTrial(business, applied.body.data.application.id, { result: 'not_passed' });
+    const res = await reviewTrial(business, applied.body.data.application.id, {
+      result: 'not_passed',
+    });
 
-    const profile = await Profile.findOne({ user: seeker.userId }).lean();
-    expect(profile?.skillTrialResults ?? []).toHaveLength(0);
+    expect(res.status).toBe(200);
+    const after = await Profile.findOne({ user: seeker.userId }).lean();
+    expect(after).toEqual(before);
+    expect(after).not.toHaveProperty('skillTrialResults');
   });
 
-  it('writes nothing to the profile when the trial was skipped', async () => {
+  it('leaves the profile unchanged when the trial was skipped', async () => {
     const business = await registerBusiness('trial-profile-skip-business@example.com');
     const seeker = await registerSeeker('trial-profile-skip-seeker@example.com');
     const gig = await postGigAsBusiness(business, { skillTrial: validSkillTrial() });
     await applyAsSeeker(seeker, gig.id);
 
     const profile = await Profile.findOne({ user: seeker.userId }).lean();
-    expect(profile?.skillTrialResults ?? []).toHaveLength(0);
+    expect(profile).not.toHaveProperty('skillTrialResults');
   });
 });
 
@@ -529,7 +537,7 @@ describe('Skill trial submission visibility', () => {
     expect(res.status).toBe(403);
   });
 
-  it('publishes only {skill, passed, completedAt} on the public profile, never the submission body or note', async () => {
+  it('never exposes the trial result on the public profile after a pass (GL-430)', async () => {
     const { seeker } = await setupReviewedApplication('public-profile');
     const viewer = await registerBusiness('trial-visibility-public-viewer@example.com');
 
@@ -538,16 +546,10 @@ describe('Skill trial submission visibility', () => {
       .set('Authorization', `Bearer ${viewer.accessToken}`);
 
     expect(res.status).toBe(200);
-    expect(res.body.data.profile.skillTrialResults).toEqual([
-      expect.objectContaining({ skill: 'tutoring', passed: true }),
-    ]);
-    const badge = res.body.data.profile.skillTrialResults[0];
-    expect(badge).not.toHaveProperty('resultNote');
-    expect(badge).not.toHaveProperty('textResponse');
-    expect(badge).not.toHaveProperty('fileUrl');
+    expect(res.body.data.profile).not.toHaveProperty('skillTrialResults');
   });
 
-  it('never publishes a not_passed or skipped trial on the public profile', async () => {
+  it('never exposes the trial result on the public profile after a not_passed result (GL-430)', async () => {
     const business = await registerBusiness('trial-visibility-not-passed-business@example.com');
     const seeker = await registerSeeker('trial-visibility-not-passed-seeker@example.com');
     const viewer = await registerBusiness('trial-visibility-not-passed-viewer@example.com');
@@ -562,7 +564,7 @@ describe('Skill trial submission visibility', () => {
       .set('Authorization', `Bearer ${viewer.accessToken}`);
 
     expect(res.status).toBe(200);
-    expect(res.body.data.profile.skillTrialResults).toEqual([]);
+    expect(res.body.data.profile).not.toHaveProperty('skillTrialResults');
   });
 });
 

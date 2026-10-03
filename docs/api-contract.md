@@ -115,6 +115,9 @@ Every error response — regardless of cause — returns the same outer shape:
 | `GIG_TAKEN_DOWN` | `PUT /api/gigs/:id` attempted on a gig an admin has taken down (§10.7, §14.1). Always `409`. Checked before every other rule on that endpoint, including `GIG_HAS_APPLICANTS` above — a taken-down gig cannot be edited at all, not even a field that would otherwise be free to change, so the business can never reopen it or otherwise undo the takedown by editing. |
 | `GIG_ALREADY_TAKEN_DOWN` | `PATCH /api/admin/gigs/:id/close` (§14.1) called on a gig that already has `closedByAdminAt` set. Always `409`. Distinct from the `200` a takedown gets on a gig the business already closed itself (§14.1) — that call still has something new to record; a second admin takedown doesn't, and is treated as a mistake to surface rather than a no-op to swallow. |
 | `REPORT_ALREADY_CLOSED` | `PATCH /api/admin/reports/:id/resolve` or `/dismiss` (§13.5, §13.6) on a report that is already `resolved` or `dismissed`. Always `409`. Closing is once and final — there is no reopen and no edit of the note, and the loser of two admins racing to close the same report gets this code. |
+| `ACCOUNT_SUSPENDED` | `POST /api/auth/login` with correct credentials for a suspended account (§5.2). Always `403`, checked after the password (so it can't be used to find out which emails are suspended) and before `ACCOUNT_DEACTIVATED` — an account can be both suspended and self-deactivated (suspending one is allowed, §14.2), and the admin's action is the more relevant reason to surface. `requireAuth` refuses a suspended user's still-valid access token too (§5.8), reusing `TOKEN_INVALID` rather than this code, exactly as it already does for deactivation. |
+| `ACCOUNT_ALREADY_SUSPENDED` | `PATCH /api/admin/users/:id/suspend` (§14.2) called on an account that already has `suspendedAt` set. Always `409`. |
+| `ACCOUNT_NOT_SUSPENDED` | `PATCH /api/admin/users/:id/reinstate` (§14.3) called on an account that isn't currently suspended. Always `409`. |
 
 New codes may be added for later sprints' resources; existing codes are never repurposed for a different meaning.
 
@@ -240,6 +243,18 @@ Creates a new user account.
   "error": {
     "code": "INVALID_CREDENTIALS",
     "message": "Email or password is incorrect."
+  }
+}
+```
+
+**Failure — `403 Forbidden`** (correct credentials, but Gig Lanka has suspended the account — checked before the deactivation case below, so an account that is both still gets this one, since the admin's action is the more relevant reason to surface)
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "ACCOUNT_SUSPENDED",
+    "message": "Your account has been suspended by Gig Lanka."
   }
 }
 ```
@@ -462,7 +477,7 @@ Sets `isActive` to `false` and revokes every refresh token belonging to the user
 
 `server/src/middleware/auth.middleware.js` exports three middleware:
 
-- **`requireAuth`** — rejects. No token, a malformed header, an expired token, an invalid/tampered token, a token whose user no longer exists, or a token whose user has since been deactivated each 401 with one of `AUTH_HEADER_MISSING`, `AUTH_HEADER_MALFORMED`, `TOKEN_EXPIRED`, `TOKEN_INVALID`. The deactivated case reuses `TOKEN_INVALID` rather than `ACCOUNT_DEACTIVATED` (§3) — that code is reserved for the login refusal (§5.2), and the user is reloaded from the database rather than trusted from the token's claim so this catches an access token minted before deactivation and still inside its expiry window. A valid token loads the user from the database and sets `req.user`. Used on every endpoint that requires a signed-in caller.
+- **`requireAuth`** — rejects. No token, a malformed header, an expired token, an invalid/tampered token, a token whose user no longer exists, or a token whose user has since been deactivated or suspended each 401 with one of `AUTH_HEADER_MISSING`, `AUTH_HEADER_MALFORMED`, `TOKEN_EXPIRED`, `TOKEN_INVALID`. The deactivated and suspended cases both reuse `TOKEN_INVALID` rather than `ACCOUNT_DEACTIVATED` or `ACCOUNT_SUSPENDED` (§3) — those codes are reserved for the login refusal (§5.2), and the user is reloaded from the database rather than trusted from the token's claim so this catches an access token minted before either state and still inside its expiry window. A valid token loads the user from the database and sets `req.user`. Used on every endpoint that requires a signed-in caller.
 - **`optionalAuth`** — never rejects. A valid token sets `req.user` exactly as `requireAuth` does. Every other case — no header, a malformed header, an expired token, an invalid/tampered token, or a token whose user no longer exists — leaves `req.user` undefined and calls `next()` with no error. For a public endpoint that wants to know who's asking without requiring anyone to be. The only endpoint using it is `GET /api/gigs/:id` (§10.5).
 - **`requireRole(...roles)`** — placed after `requireAuth` or `optionalAuth`. Fails closed: `401 UNAUTHENTICATED` if `req.user` is absent, `403 FORBIDDEN` if `req.user.role` isn't in the allowed list.
 
@@ -839,7 +854,6 @@ Returned by `GET /api/profiles/me` and `PUT /api/profiles/me`, under `data.profi
     "topCategories": [],
     "distribution": { "1": 0, "2": 0, "3": 0, "4": 0, "5": 0 }
   },
-  "skillTrialResults": [],
   "createdAt": "2026-08-12T22:31:14.195Z",
   "updatedAt": "2026-08-12T22:31:14.209Z"
 }
@@ -851,11 +865,10 @@ Returned by `GET /api/profiles/me` and `PUT /api/profiles/me`, under `data.profi
 - `bio` — max 500 characters. `city` and `category` are free text.
 - `skills`, `workExperience`, `education` — **seeker fields**. `category` — a **business field**. See 8.2 for how role decides which are readable publicly, and 8.4 for which are writable.
 - `ratingSummary` — the aggregate from §6.10. Owned by the Review component, read-only here.
-- `skillTrialResults` — Skill Trial badges, owned by Application & Hiring, read-only here. Empty until Sprint 3.
 - **Optional fields are omitted, not null.** A profile that has never set `photo`, `bio`, `city` or `category` has no such key at all. Arrays always appear, empty at minimum. Clients must treat absent and empty as the same thing.
 - **Both roles carry all the arrays.** A business's own profile includes `skills: []`, `workExperience: []` and `education: []` because they are schema defaults. They are always empty for a business — 8.4 rejects any attempt to fill them — and they are absent from a business's *public* profile.
 - Key order is not significant and varies between responses. Read by key, never by position.
-- Subdocument entries in `workExperience`, `education` and `skillTrialResults` carry `_id`, not `id` — these are the one place in the API that does not follow the `_id` → `id` convention. GL-112 needs those ids to edit an individual row.
+- Subdocument entries in `workExperience` and `education` carry `_id`, not `id` — these are the one place in the API that does not follow the `_id` → `id` convention. GL-112 needs those ids to edit an individual row.
 
 ### 8.2 Public profile shape
 
@@ -891,7 +904,6 @@ Returned by `GET /api/profiles/:userId`, under `data.profile`. Built from an exp
       "endDate": "2027-12-01"
     }
   ],
-  "skillTrialResults": [],
   "ratingSummary": {
     "averageRating": 0,
     "reviewCount": 0,
@@ -921,7 +933,7 @@ Returned by `GET /api/profiles/:userId`, under `data.profile`. Built from an exp
 ```
 
 - `userId` is the **user's** id, not the profile's. The profile's own `id` is not published — callers address a public profile by user id, which is what every other feature already holds.
-- Shared for both roles: `name`, `photo`, `city`, `bio`, `ratingSummary`. Seeker only: `skills`, `workExperience`, `education`, `skillTrialResults`. Business only: `category`.
+- Shared for both roles: `name`, `photo`, `city`, `bio`, `ratingSummary`. Seeker only: `skills`, `workExperience`, `education`. Business only: `category`.
 - **Never present, for anyone:** the email address, the account status, `role`, `passwordHash`, `createdAt`/`updatedAt`, or any contact detail. Contact details are not shown on a public profile anywhere in this product — there is no phone number or address field to expose, and if one is ever added it stays out of this shape until it is deliberately listed.
 - Optional fields are omitted rather than null, exactly as in 8.1.
 
@@ -944,7 +956,6 @@ Returns the signed-in user's full profile, creating it first if it does not exis
       "skills": [],
       "workExperience": [],
       "education": [],
-      "skillTrialResults": [],
       "ratingSummary": { "averageRating": 0, "reviewCount": 0, "topCategories": [], "distribution": { "1": 0, "2": 0, "3": 0, "4": 0, "5": 0 } },
       "createdAt": "2026-08-12T22:31:14.195Z",
       "updatedAt": "2026-08-12T22:31:14.195Z"
@@ -1040,7 +1051,7 @@ Unknown fields not listed above are ignored silently.
 
 **Success — `200 OK`** — `data.profile` is the updated profile in the shape from 8.1.
 
-**Failure — `400 Bad Request`** (a field this component does not own). `ratingSummary` and `skillTrialResults` belong to other components; `role` and `email` live on `User` and are not editable here. Each is named rather than silently dropped:
+**Failure — `400 Bad Request`** (a field this component does not own, or no longer exists). `ratingSummary` belongs to another component; `skillTrialResults` was removed from the schema (GL-430) but stays refused here so a client can't write it back in; `role` and `email` live on `User` and are not editable here. Each is named rather than silently dropped:
 
 ```json
 {
@@ -2737,7 +2748,13 @@ Unknown parameters are ignored.
         "target": {
           "id": "64f1a2b3c4d5e6f7a8b9c0d6",
           "title": "Weekend event helper",
-          "business": { "id": "64f1a2b3c4d5e6f7a8b9c0d2", "name": "Colombo Events Co.", "photo": null }
+          "business": {
+            "id": "64f1a2b3c4d5e6f7a8b9c0d2",
+            "name": "Colombo Events Co.",
+            "photo": null,
+            "suspended": false
+          },
+          "takenDown": true
         }
       }
     ],
@@ -2751,8 +2768,9 @@ Unknown parameters are ignored.
 This is the **admin shape**, which resolve and dismiss return too. It's §13.1's full stored shape, with two ids replaced by summaries:
 
 - `reporter` — the reporter's public identity, `{ id, name, photo }` (§8.2's shape).
-- `target` — for a `user` target, that user's public identity `{ id, name, photo }`. For a `gig` target, `{ id, title, business }`, where `business` is the posting business's public identity. A gig that has since been hard-deleted reads as `"target": null`. The report still renders with its `targetType` and `targetId`, and the request doesn't fail. A `user` target whose profile has gone reads with `name` and `photo` both `null`.
+- `target` — for a `user` target, that user's public identity plus its suspension state, `{ id, name, photo, suspended }`. For a `gig` target, `{ id, title, business, takenDown }`, where `business` is the posting business's public identity plus its own `suspended`. A gig that has since been hard-deleted reads as `"target": null`. The report still renders with its `targetType` and `targetId`, and the request doesn't fail. A `user` target whose profile has gone reads with `name` and `photo` both `null`.
 - On `status=open` every row has `"status": "open"`, and the closing fields are absent. On `status=closed` every row carries its `status` (`resolved` or `dismissed`), `resolutionNote`, `closedAt` and `closedBy`. `closedBy` is the admin's bare user id, not a summary.
+- `suspended` (GL-455) is `true` while Gig Lanka has suspended that account (§14.2) and `false` once it's reinstated (§14.3). A self-deactivated account reads `false`: it isn't suspended, and there's nothing to reinstate. `takenDown` is `true` once an admin has taken the gig down (§14.1). A gig its business closed itself reads `false`. Both reflect the target's state now, not when the report was filed, so a closed report shows them too. They exist only in this admin shape. §13.3's reporter shape never carries them.
 
 Ten per page. `total` counts every report in the selected view across all pages, matching §10.4's and §12.2's shape. Ordering:
 
@@ -2928,14 +2946,110 @@ Three outcomes once the gig is found, keyed on its current state:
 }
 ```
 
-### 14.2 Error codes for this endpoint
+### 14.2 Suspend an account — `PATCH /api/admin/users/:id/suspend`
+
+Admins only. No request body — the target comes from the path alone, and nothing about the decision (a reason, a duration) is captured yet (out of scope for this sprint).
+
+Sets `suspendedAt` to the current time and revokes every refresh token belonging to the user through `revokeAllRefreshTokensForUser`, signing them out of every device immediately — the same revocation §5.7's self-deactivation already uses. Never touches `isActive`: suspending a self-deactivated account is allowed on purpose, since it records the moderation decision even though the account already cannot sign in either way, and reinstating it later (§14.3) must not undo the owner's own choice to deactivate.
+
+**Existence is checked first**, before the target's role or current suspension state — the same ordering §14.1 uses for a gig id: an unknown id, or one that isn't a syntactically valid Mongo id, is `404` either way.
+
+**Success — `200 OK`**
+
+```json
+{
+  "success": true,
+  "data": {
+    "userId": "64f1a2b3c4d5e6f7a8b9c0d4",
+    "status": "suspended",
+    "suspendedAt": "2026-08-20T10:02:00.000Z"
+  }
+}
+```
+
+**Failure — `401 Unauthorized`** (no token) — as in §5.8.
+
+**Failure — `403 Forbidden`** (a seeker or business token):
+
+```json
+{
+  "success": false,
+  "error": { "code": "FORBIDDEN", "message": "You do not have permission to perform this action." }
+}
+```
+
+**Failure — `403 Forbidden`** (the target id belongs to an admin — admins cannot suspend admins):
+
+```json
+{
+  "success": false,
+  "error": { "code": "FORBIDDEN", "message": "Admins cannot be suspended." }
+}
+```
+
+**Failure — `404 Not Found`** (no user with that id, or the id is malformed):
+
+```json
+{
+  "success": false,
+  "error": { "code": "NOT_FOUND", "message": "User not found." }
+}
+```
+
+**Failure — `409 Conflict`** (`ACCOUNT_ALREADY_SUSPENDED`) — the account already has `suspendedAt` set:
+
+```json
+{
+  "success": false,
+  "error": { "code": "ACCOUNT_ALREADY_SUSPENDED", "message": "This account is already suspended." }
+}
+```
+
+### 14.3 Reinstate an account — `PATCH /api/admin/users/:id/reinstate`
+
+Admins only. No request body.
+
+Clears `suspendedAt`. Never touches `isActive`, so an account that deactivated itself before being suspended stays deactivated afterwards — this endpoint undoes only the suspension (§14.2), never a user's own choice to leave. No refresh tokens are issued or revoked here: reinstating restores the ability to sign in and to be found again, it doesn't sign anyone into anything.
+
+**Existence is checked first**, the same as §14.2.
+
+**Success — `200 OK`**
+
+```json
+{
+  "success": true,
+  "data": {
+    "userId": "64f1a2b3c4d5e6f7a8b9c0d4",
+    "status": "active"
+  }
+}
+```
+
+**Failure — `401 Unauthorized`** (no token) — as in §5.8.
+
+**Failure — `403 Forbidden`** (a seeker or business token) — same shape as §14.2.
+
+**Failure — `404 Not Found`** (no user with that id, or the id is malformed) — same shape as §14.2.
+
+**Failure — `409 Conflict`** (`ACCOUNT_NOT_SUSPENDED`) — the account isn't currently suspended:
+
+```json
+{
+  "success": false,
+  "error": { "code": "ACCOUNT_NOT_SUSPENDED", "message": "This account is not suspended." }
+}
+```
+
+### 14.4 Error codes for these endpoints
 
 | Status | Code | When |
 |---|---|---|
 | `401` | `AUTH_HEADER_MISSING` / `AUTH_HEADER_MALFORMED` / `TOKEN_EXPIRED` / `TOKEN_INVALID` | No/malformed/expired/invalid token — every endpoint on this router requires one. |
-| `403` | `FORBIDDEN` | Authenticated as a seeker or business — every endpoint on this router is admin-only. |
-| `404` | `NOT_FOUND` | `PATCH .../gigs/:id/close` for a gig that doesn't exist, or has a malformed id. Checked before role or status. |
+| `403` | `FORBIDDEN` | Authenticated as a seeker or business — every endpoint on this router is admin-only. Also returned by `.../users/:id/suspend` (§14.2) when the target id belongs to an admin. |
+| `404` | `NOT_FOUND` | `.../gigs/:id/close`, `.../users/:id/suspend` or `.../users/:id/reinstate` for a target that doesn't exist, or has a malformed id. Checked before role, status, or the target's own role. |
 | `409` | `GIG_ALREADY_TAKEN_DOWN` | `PATCH .../gigs/:id/close` called on a gig that already has `closedByAdminAt` set. See §3 for the shared definition. |
+| `409` | `ACCOUNT_ALREADY_SUSPENDED` | `PATCH .../users/:id/suspend` (§14.2) called on an account that already has `suspendedAt` set. See §3. |
+| `409` | `ACCOUNT_NOT_SUSPENDED` | `PATCH .../users/:id/reinstate` (§14.3) called on an account that isn't suspended. See §3. |
 
 ---
 

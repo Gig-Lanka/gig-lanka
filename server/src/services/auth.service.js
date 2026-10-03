@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import { env } from '../config/env.js';
-import { User } from '../models/user.model.js';
+import { User, isBlocked } from '../models/user.model.js';
 import {
   PasswordResetToken,
   PASSWORD_RESET_TOKEN_TTL_MINUTES,
@@ -58,6 +58,19 @@ export const loginUser = async ({ email, password }) => {
   // above protects unknown accounts, but the caller here has already proven
   // they hold the right credentials, so they're the account's owner, not an
   // attacker probing for addresses.
+  //
+  // GL-428: suspension is checked first. A suspended account can also be
+  // self-deactivated (GL-397 AC4 allows suspending one), and the admin's
+  // action is the more relevant reason to surface — a plain "deactivated"
+  // message would read as reversible by the owner, which suspension isn't.
+  if (user.suspendedAt) {
+    throw new ApiError(
+      403,
+      'ACCOUNT_SUSPENDED',
+      'Your account has been suspended by Gig Lanka.',
+    );
+  }
+
   if (user.isActive === false) {
     throw new ApiError(403, 'ACCOUNT_DEACTIVATED', 'This account has been deactivated.');
   }
@@ -103,7 +116,7 @@ export const changeUserPassword = async (user, { currentPassword, newPassword })
 export const requestPasswordReset = async ({ email }) => {
   const user = await User.findOne({ email });
 
-  if (!user || user.isActive === false) {
+  if (!user || isBlocked(user)) {
     return;
   }
 
