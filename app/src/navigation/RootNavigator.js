@@ -6,10 +6,12 @@ import AuthStack from './AuthStack';
 import BusinessTabs from './BusinessTabs';
 import SeekerTabs from './SeekerTabs';
 import { navigationRef } from './navigationRef';
+import useResetLinkRedirect from './useResetLinkRedirect';
 import Loader from '../components/ui/Loader';
 import ComponentDemoScreen from '../screens/dev/ComponentDemoScreen';
 import ApplicationDetailScreen from '../screens/seeker/ApplicationDetailScreen';
 import ApplyScreen from '../screens/seeker/ApplyScreen';
+import ResetLinkSignedInScreen from '../screens/auth/ResetLinkSignedInScreen';
 import AccountSettingsScreen from '../screens/shared/AccountSettingsScreen';
 import ApplicantDetailScreen from '../screens/business/ApplicantDetailScreen';
 import ApplicantsScreen from '../screens/business/ApplicantsScreen';
@@ -63,6 +65,8 @@ function AppStack({ role }) {
       {/* Either role can file a report (§13.2), so the reporter's own list
           (GL-446) is registered once here, reached from Account settings. */}
       <Stack.Screen name="MyReports" component={MyReportsScreen} />
+      {/* A reset link opened while signed in (GL-396); see useResetLinkRedirect. */}
+      <Stack.Screen name="ResetLinkSignedIn" component={ResetLinkSignedInScreen} />
       {role === 'business' ? (
         <>
           <Stack.Screen
@@ -148,6 +152,12 @@ export default function RootNavigator() {
     navigationRef.navigate('GigDetail', { gigId: pendingGigIdRef.current });
     pendingGigIdRef.current = null;
   }, [status]);
+
+  useResetLinkRedirect({
+    status,
+    guestMode,
+    onLeaveGuestMode: () => setGuestMode(false),
+  });
 
   if (status === AUTH_STATUS.LOADING) {
     return <Loader fullScreen />;
