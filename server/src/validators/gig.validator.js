@@ -18,6 +18,29 @@ const SCHEDULE_TAG_VALUES = ['weekday_mornings', 'weekday_evenings', 'weekends',
 
 const COMMITMENT_VALUES = ['one_off', 'under_a_week', 'one_to_four_weeks', 'ongoing'];
 
+// No 'required' value: product decided a skill trial is never mandatory to
+// apply, only ever absent or optional. See GL-341's PR / Jira note.
+const SKILL_TRIAL_REQUIREMENT_VALUES = ['none', 'optional'];
+
+const SKILL_TRIAL_SUBMISSION_TYPE_VALUES = ['text', 'file', 'text_and_file'];
+
+const SKILL_TRIAL_EFFORT_ESTIMATE_VALUES = ['under_30_minutes', '30_to_60_minutes', '1_to_2_hours'];
+
+const GIG_SORT_ORDER_VALUES = ['newest', 'highest_pay', 'starting_soon', 'best_match'];
+
+// best_match is relevance ordering, and relevance to nothing is meaningless -
+// it's only offered while `q` carries a real (non-empty, non-whitespace)
+// search term. Modelling this as a conditional valid-list on `sort` itself
+// (rather than a `.custom()` on `sort`, or a `.when()` on `q`) is deliberate:
+// Joi's `.valid()` short-circuits every later rule - including `.custom()` -
+// once a value matches, so a `sort`-level custom validator silently never
+// runs for a matched enum value. Swapping the valid list itself via `.when()`
+// keeps the failure on `sort` (as the contract requires: "400 VALIDATION_ERROR
+// naming sort"), not on `q`.
+const GIG_SORT_ORDER_VALUES_WITHOUT_BEST_MATCH = GIG_SORT_ORDER_VALUES.filter(
+  (value) => value !== 'best_match',
+);
+
 const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 const isValidCalendarDate = (value) => {
@@ -52,6 +75,31 @@ const futureOrTodayDateOnly = () =>
       'date.past': 'cannot be in the past',
     });
 
+// When requirement is 'none' the other four fields are forbidden, not just
+// optional - a trial that isn't required shouldn't carry leftover task
+// details. Mirrors the pre('validate') guard on skillTrialSchema in
+// gig.model.js.
+const skillTrialSchema = Joi.object({
+  requirement: Joi.string()
+    .valid(...SKILL_TRIAL_REQUIREMENT_VALUES)
+    .default('none'),
+  taskTitle: Joi.string()
+    .trim()
+    .max(80)
+    .when('requirement', { is: 'none', then: Joi.forbidden(), otherwise: Joi.required() }),
+  taskBrief: Joi.string()
+    .trim()
+    .min(20)
+    .max(1000)
+    .when('requirement', { is: 'none', then: Joi.forbidden(), otherwise: Joi.required() }),
+  submissionType: Joi.string()
+    .valid(...SKILL_TRIAL_SUBMISSION_TYPE_VALUES)
+    .when('requirement', { is: 'none', then: Joi.forbidden(), otherwise: Joi.required() }),
+  effortEstimate: Joi.string()
+    .valid(...SKILL_TRIAL_EFFORT_ESTIMATE_VALUES)
+    .when('requirement', { is: 'none', then: Joi.forbidden(), otherwise: Joi.required() }),
+});
+
 export const gigSchema = Joi.object({
   title: Joi.string().trim().max(80).required(),
   description: Joi.string().trim().min(20).max(2000).required(),
@@ -79,8 +127,57 @@ export const gigSchema = Joi.object({
   positions: Joi.number().integer().min(1).default(1),
   startDate: dateOnly().optional(),
   applicationsCloseDate: futureOrTodayDateOnly().optional(),
+  skillTrial: skillTrialSchema.optional(),
 });
 
 export const createGigSchema = gigSchema;
 
 export const updateGigSchema = gigSchema;
+
+// Wire format for a multi-value query parameter is a comma-separated list
+// (`?category=tech,creative`), documented in the contract at §10.4 so GL-216
+// builds against the same shape. Each item is matched against the closed
+// vocabulary so an unrecognised value 400s naming the field, rather than
+// silently filtering it out into an empty result.
+const commaSeparatedEnum = (values) =>
+  Joi.string()
+    .custom((raw, helpers) => {
+      const items = raw
+        .split(',')
+        .map((item) => item.trim())
+        .filter((item) => item.length > 0);
+
+      if (items.length === 0) {
+        return helpers.error('any.empty');
+      }
+
+      const invalid = items.find((item) => !values.includes(item));
+      if (invalid) {
+        return helpers.error('any.only');
+      }
+
+      return items;
+    })
+    .messages({
+      'any.empty': 'must not be empty',
+      'any.only': `must only contain: ${values.join(', ')}`,
+    });
+
+export const listGigsQuerySchema = Joi.object({
+  page: Joi.any().optional(),
+  q: Joi.string().trim().max(200).optional(),
+  category: commaSeparatedEnum(GIG_CATEGORY_VALUES).optional(),
+  schedule: commaSeparatedEnum(SCHEDULE_TAG_VALUES).optional(),
+  payType: commaSeparatedEnum(PAY_TYPE_VALUES).optional(),
+  commitment: commaSeparatedEnum(COMMITMENT_VALUES).optional(),
+  remote: Joi.boolean().optional(),
+  city: Joi.string().trim().max(120).optional(),
+  minPay: Joi.number().min(0).optional(),
+  sort: Joi.string()
+    .when('q', {
+      is: Joi.string().trim().min(1).required(),
+      then: Joi.valid(...GIG_SORT_ORDER_VALUES),
+      otherwise: Joi.valid(...GIG_SORT_ORDER_VALUES_WITHOUT_BEST_MATCH),
+    })
+    .default('newest'),
+});

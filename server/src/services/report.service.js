@@ -1,0 +1,310 @@
+import mongoose from 'mongoose';
+import { ApiError } from '../utils/ApiError.js';
+import { Report } from '../models/report.model.js';
+import { User } from '../models/user.model.js';
+import { Gig } from '../models/gig.model.js';
+import { getPublicIdentity, getPublicIdentities } from './profile.service.js';
+import { getGigSummariesByIds } from './gig.service.js';
+import { getSuspendedUserIdSet } from './account.service.js';
+
+// Matches review.service.js and gig.service.js — ten per page everywhere
+// pagination shows up in this API.
+const PAGE_SIZE = 10;
+
+// Checked before anything else — including who's asking — so a report
+// against a bad id always 404s the same way, and refusal codes can never be
+// used to probe which ids exist. Mirrors the existence-then-everything-else
+// ordering gig.service.js's findOwnedGig already uses for update, close and
+// delete. A malformed id is indistinguishable from an unknown one here: both
+// 404, never 400.
+const assertTargetExists = async (targetType, targetId) => {
+  if (!mongoose.isValidObjectId(targetId)) {
+    throw new ApiError(
+      404,
+      'NOT_FOUND',
+      targetType === 'user' ? 'User not found.' : 'Gig not found.',
+    );
+  }
+
+  if (targetType === 'user') {
+    const user = await User.findById(targetId);
+    if (!user) {
+      throw new ApiError(404, 'NOT_FOUND', 'User not found.');
+    }
+    return user;
+  }
+
+  const gig = await Gig.findById(targetId);
+  if (!gig) {
+    throw new ApiError(404, 'NOT_FOUND', 'Gig not found.');
+  }
+  return gig;
+};
+
+// A user reporting themselves, or a business reporting its own gig, is
+// refused before a report is ever written. Not a rule the unique index could
+// enforce — that index only stops a *second* report against the same
+// target, and a first self-report would pass it cleanly.
+const assertNotReportingSelf = (targetType, target, actorId) => {
+  const targetOwnerId = targetType === 'user' ? target._id : target.postedBy;
+
+  if (targetOwnerId.toString() === actorId.toString()) {
+    const message =
+      targetType === 'user' ? 'You cannot report yourself.' : 'You cannot report your own gig.';
+
+    throw new ApiError(400, 'VALIDATION_ERROR', message, [{ field: 'targetId', message }]);
+  }
+};
+
+// GL-367: creates a report for any signed-in user, either role — admins are
+// kept out at the route via requireRole, not here. Existence and
+// self-reporting are both resolved before the write is attempted, so the
+// unique-index 409 below only ever fires for a genuine repeat report against
+// a real, distinct target.
+//
+// Nothing here notifies the reported party or touches their profile, rating,
+// gigs or applications: a report is a write to this collection alone, read
+// back only by its own reporter (and, outside this story's scope, an admin).
+export const createReport = async (actor, body) => {
+  const { targetType, targetId, reasonCode, note } = body;
+
+  const target = await assertTargetExists(targetType, targetId);
+  assertNotReportingSelf(targetType, target, actor.id);
+
+  try {
+    const report = await Report.create({
+      reporter: actor.id,
+      targetType,
+      targetId,
+      reasonCode,
+      note,
+    });
+
+    return report.toJSON();
+  } catch (err) {
+    // The unique (reporter, targetType, targetId) index is what actually
+    // enforces "one open report per reporter per target" — the duplicate-key
+    // error is translated here rather than reaching the client as a 500, the
+    // same trap POST /api/auth/register and the apply endpoint have both
+    // been caught by.
+    if (err.code === 11000) {
+      throw new ApiError(
+        409,
+        'REPORT_ALREADY_EXISTS',
+        'You already have an open report against this target.',
+      );
+    }
+    throw err;
+  }
+};
+
+// Never the full gig — just enough to recognise which posting a report
+// belongs to, the same trimmed shape application.service.js's toGigSummary
+// uses. A deleted gig (a business can delete its own) reads back as null
+// rather than breaking the response.
+const toGigSummary = (gig) => {
+  if (!gig) return null;
+
+  const gigJson = gig.toJSON();
+
+  return {
+    id: gigJson.id,
+    title: gigJson.title,
+    payAmount: gigJson.payAmount,
+    payType: gigJson.payType,
+    city: gigJson.city,
+    status: gigJson.status,
+  };
+};
+
+// The target summary carried on each of the caller's own reports — a public
+// identity for a user target, a gig summary for a gig target. Deliberately
+// nothing about any *other* report against the same target: no count, no
+// "N others reported this". That's another reporter's action, not this
+// caller's own, and surfacing it would double as a way to gauge how much
+// attention a target is drawing.
+const getTargetSummary = async (targetType, targetId) => {
+  if (targetType === 'user') {
+    return getPublicIdentity(targetId);
+  }
+
+  const gig = await Gig.findById(targetId);
+  return toGigSummary(gig);
+};
+
+// GL-443: what a reporter sees of their own report. Built field by field, so
+// nothing added to the model later reaches the reporter by default. Status is
+// only `open` or `reviewed` — resolved and dismissed both read as reviewed —
+// and resolutionNote, closedAt, closedBy and the internal status are never
+// included: the outcome of a report is kept between the admin and the
+// reported party.
+const toReporterReport = (report) => {
+  const reportJson = report.toJSON();
+
+  return {
+    id: reportJson.id,
+    reporter: reportJson.reporter,
+    targetType: reportJson.targetType,
+    targetId: reportJson.targetId,
+    reasonCode: reportJson.reasonCode,
+    note: reportJson.note,
+    status: reportJson.status === 'open' ? 'open' : 'reviewed',
+    createdAt: reportJson.createdAt,
+  };
+};
+
+// GL-368: the reports the signed-in caller has filed, newest first, each
+// with its target's summary attached. Scoped to `reporter: callerId` only —
+// there is no parameter that reaches another reporter's reports, matching
+// listMyApplications and listMyReviews. Unpaginated, like those two: a
+// caller's own list is expected to return in full.
+//
+// GL-443: each report is mapped to the reporter's shape explicitly rather
+// than handed over as toJSON(), which would now carry the closing fields.
+export const listMyReports = async (callerId) => {
+  const reports = await Report.find({ reporter: callerId }).sort({ createdAt: -1, _id: -1 });
+
+  const reportsWithTarget = await Promise.all(
+    reports.map(async (report) => ({
+      ...toReporterReport(report),
+      target: await getTargetSummary(report.targetType, report.targetId),
+    })),
+  );
+
+  return { reports: reportsWithTarget };
+};
+
+// The admin shape: each report with its reporter's identity and a summary of
+// its target attached. Shared by the queue and by resolve/dismiss (GL-442),
+// so a closed report comes back looking exactly like a queue row.
+const toAdminReports = async (reports) => {
+  const reportsJson = reports.map((report) => report.toJSON());
+
+  const userTargetIds = reportsJson
+    .filter((report) => report.targetType === 'user')
+    .map((report) => report.targetId);
+  const gigTargetIds = reportsJson
+    .filter((report) => report.targetType === 'gig')
+    .map((report) => report.targetId);
+
+  const [reporterIdentities, userTargetIdentities, gigTargetSummaries] = await Promise.all([
+    getPublicIdentities(reportsJson.map((report) => report.reporter)),
+    getPublicIdentities(userTargetIds),
+    getGigSummariesByIds(gigTargetIds),
+  ]);
+
+  // GL-455: whether each account the admin could act on is suspended — the
+  // person on a user report, the posting business on a gig report — so the
+  // report detail opens showing Reinstate rather than Suspend. One more
+  // batched query, after the gig summaries since that's where the business
+  // ids come from.
+  const suspendedUserIds = await getSuspendedUserIdSet([
+    ...userTargetIds,
+    ...[...gigTargetSummaries.values()].map((gig) => gig.business.id),
+  ]);
+
+  const withSuspended = (identity) => ({
+    ...identity,
+    suspended: suspendedUserIds.has(identity.id),
+  });
+
+  return reportsJson.map((report) => {
+    const targetId = report.targetId.toString();
+    let targetSummary = null;
+
+    if (report.targetType === 'user' && userTargetIdentities.has(targetId)) {
+      targetSummary = withSuspended(userTargetIdentities.get(targetId));
+    } else if (report.targetType === 'gig' && gigTargetSummaries.has(targetId)) {
+      const gig = gigTargetSummaries.get(targetId);
+      targetSummary = { ...gig, business: withSuspended(gig.business) };
+    }
+
+    return {
+      ...report,
+      reporter: reporterIdentities.get(report.reporter.toString()) ?? null,
+      target: targetSummary,
+    };
+  });
+};
+
+// GL-443: the admin queue's two views. The filter and sort are looked up
+// from this closed map by the already-validated `status` — the query value
+// is never passed into Mongo itself. Open is newest-filed first; closed is
+// most-recently-closed first.
+const ADMIN_QUEUE_VIEWS = {
+  open: { filter: { status: 'open' }, sort: { createdAt: -1, _id: -1 } },
+  closed: {
+    filter: { status: { $in: ['resolved', 'dismissed'] } },
+    sort: { closedAt: -1, _id: -1 },
+  },
+};
+
+// GL-370: the admin queue. The query object is only ever consulted for
+// `page` and `status`, and `status` only selects one of the fixed views
+// above (validated to `open` or `closed`, defaulting to `open`, at the
+// route). Ten per page, same shape §10.4 and §12.2 already return.
+// Read-only; resolve and dismiss are closeReport below. Closed rows carry
+// their status, resolutionNote, closedAt and closedBy through toJSON().
+//
+// GL-371: each row carries the reporter's identity and a summary of its
+// target, resolved through the same narrow boundaries every other component
+// reads through — getPublicIdentity(-ies) in profile.service.js for people,
+// getGigSummariesByIds in gig.service.js for gigs. Neither profile.model.js
+// nor gig.model.js is imported here for this. Resolved in one batched pass
+// per page (ids grouped by type, fetched once, mapped back) rather than one
+// lookup per row, so a page costs a constant number of queries regardless of
+// its mix of target types. A target that's vanished — a hard-deleted gig, a
+// user row that's gone — is simply absent from its lookup map and reads back
+// as a null target rather than failing the request; the report itself still
+// renders, the same tolerance GET /api/applications/mine has for a deleted gig.
+export const listAdminReports = async (query) => {
+  const page = Math.max(1, parseInt(query.page, 10) || 1);
+  const { filter, sort } = ADMIN_QUEUE_VIEWS[query.status] ?? ADMIN_QUEUE_VIEWS.open;
+
+  const [reports, total] = await Promise.all([
+    Report.find(filter)
+      .sort(sort)
+      .skip((page - 1) * PAGE_SIZE)
+      .limit(PAGE_SIZE),
+    Report.countDocuments(filter),
+  ]);
+
+  const enrichedReports = await toAdminReports(reports);
+
+  return { reports: enrichedReports, total, page, limit: PAGE_SIZE };
+};
+
+// GL-442: resolve and dismiss. `status` is `resolved` or `dismissed`, fixed by
+// the route, never read from the request. The status change is conditional
+// on `status: 'open'` in the update itself, so two admins racing on the same
+// report can't both close it — the loser matches nothing and gets the 409.
+// Closing is once and final: nothing here, or anywhere, reopens a report or
+// edits its note afterwards.
+//
+// This only records the decision. It doesn't suspend anyone or take anything
+// down — those are separate admin actions, and the note is where the admin
+// records what they did.
+export const closeReport = async (reportId, adminId, status, note) => {
+  // A malformed id is indistinguishable from an unknown one: both 404.
+  if (!mongoose.isValidObjectId(reportId)) {
+    throw new ApiError(404, 'NOT_FOUND', 'Report not found.');
+  }
+
+  const report = await Report.findOneAndUpdate(
+    { _id: reportId, status: 'open' },
+    { $set: { status, resolutionNote: note, closedAt: new Date(), closedBy: adminId } },
+    { returnDocument: 'after', runValidators: true },
+  );
+
+  if (!report) {
+    // Nothing matched: either there's no such report, or it's already closed.
+    const exists = await Report.exists({ _id: reportId });
+    if (!exists) {
+      throw new ApiError(404, 'NOT_FOUND', 'Report not found.');
+    }
+    throw new ApiError(409, 'REPORT_ALREADY_CLOSED', 'This report has already been closed.');
+  }
+
+  const [adminReport] = await toAdminReports([report]);
+  return adminReport;
+};

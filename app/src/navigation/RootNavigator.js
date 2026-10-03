@@ -1,13 +1,21 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
+import AdminStack from './AdminStack';
 import AuthStack from './AuthStack';
 import BusinessTabs from './BusinessTabs';
 import SeekerTabs from './SeekerTabs';
+import { navigationRef } from './navigationRef';
+import useResetLinkRedirect from './useResetLinkRedirect';
 import Loader from '../components/ui/Loader';
 import ComponentDemoScreen from '../screens/dev/ComponentDemoScreen';
 import ApplicationDetailScreen from '../screens/seeker/ApplicationDetailScreen';
 import ApplyScreen from '../screens/seeker/ApplyScreen';
+import ResetLinkSignedInScreen from '../screens/auth/ResetLinkSignedInScreen';
+import AccountSettingsScreen from '../screens/shared/AccountSettingsScreen';
+import ApplicantDetailScreen from '../screens/business/ApplicantDetailScreen';
+import ApplicantsScreen from '../screens/business/ApplicantsScreen';
+import ChangePasswordScreen from '../screens/shared/ChangePasswordScreen';
 import EditGigScreen from '../screens/business/EditGigScreen';
 import EditProfileScreen from '../screens/shared/EditProfileScreen';
 import EducationFormScreen from '../screens/seeker/EducationFormScreen';
@@ -15,26 +23,50 @@ import ExperienceFormScreen from '../screens/seeker/ExperienceFormScreen';
 import ManageEducationScreen from '../screens/seeker/ManageEducationScreen';
 import ManageExperienceScreen from '../screens/seeker/ManageExperienceScreen';
 import PostGigScreen from '../screens/business/PostGigScreen';
+import CompletedGigsScreen from '../screens/shared/CompletedGigsScreen';
 import GigDetailScreen from '../screens/shared/GigDetailScreen';
+import MyReportsScreen from '../screens/shared/MyReportsScreen';
 import RateFlowNavigator from '../screens/shared/rate/RateFlowNavigator';
 import PublicProfileScreen from '../screens/shared/PublicProfileScreen';
+import ReviewsScreen from '../screens/shared/ReviewsScreen';
+import SkillTrialScreen from '../screens/seeker/SkillTrialScreen';
+import TrialReviewScreen from '../screens/business/TrialReviewScreen';
 import useAuth from '../hooks/useAuth';
 import { AUTH_STATUS } from '../store/AuthContext';
 
 const Stack = createNativeStackNavigator();
 
+// Only ever rendered for 'business' or 'seeker' - the third role branch
+// (GL-384/§7.12) diverts 'admin' to AdminStack before this component is
+// reached at all, rather than adding a third RoleTabs case in here, because
+// every screen below is registered unconditionally for whichever role is
+// passed in, and none of them (AccountSettings, EditProfile, GigDetail,
+// PublicProfile, ...) are safe for an admin, who has no profile.
 function AppStack({ role }) {
   const RoleTabs = role === 'business' ? BusinessTabs : SeekerTabs;
 
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="Main" component={RoleTabs} />
+      <Stack.Screen name="AccountSettings" component={AccountSettingsScreen} />
+      <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} />
       <Stack.Screen name="EditProfile" component={EditProfileScreen} />
       <Stack.Screen name="GigDetail" component={GigDetailScreen} />
       {/* Either role can be the one rating (GL-203), so this is registered
           once here rather than duplicated under both branches below. */}
       <Stack.Screen name="RateFlow" component={RateFlowNavigator} />
+      {/* Both roles read it (GL-271) - a seeker from My Applications, a
+          business from My Gigs - so it's registered once here too. */}
+      <Stack.Screen name="CompletedGigs" component={CompletedGigsScreen} />
       <Stack.Screen name="PublicProfile" component={PublicProfileScreen} />
+      {/* Either role can be the subject read about (GL-374), so this is
+          registered once here too, rather than duplicated below. */}
+      <Stack.Screen name="Reviews" component={ReviewsScreen} />
+      {/* Either role can file a report (§13.2), so the reporter's own list
+          (GL-446) is registered once here, reached from Account settings. */}
+      <Stack.Screen name="MyReports" component={MyReportsScreen} />
+      {/* A reset link opened while signed in (GL-396); see useResetLinkRedirect. */}
+      <Stack.Screen name="ResetLinkSignedIn" component={ResetLinkSignedInScreen} />
       {role === 'business' ? (
         <>
           <Stack.Screen
@@ -43,6 +75,12 @@ function AppStack({ role }) {
             options={{ presentation: 'modal' }}
           />
           <Stack.Screen name="EditGig" component={EditGigScreen} />
+          {/* Its own route name, distinct from the "Applicants" tab, so the
+              tab can never inherit a gigId left over from this pushed,
+              gig-scoped instance (GL-257). */}
+          <Stack.Screen name="GigApplicants" component={ApplicantsScreen} />
+          <Stack.Screen name="ApplicantDetail" component={ApplicantDetailScreen} />
+          <Stack.Screen name="TrialReview" component={TrialReviewScreen} />
         </>
       ) : (
         <>
@@ -52,6 +90,7 @@ function AppStack({ role }) {
           <Stack.Screen name="EducationForm" component={EducationFormScreen} />
           <Stack.Screen name="ApplicationDetail" component={ApplicationDetailScreen} />
           <Stack.Screen name="Apply" component={ApplyScreen} />
+          <Stack.Screen name="SkillTrial" component={SkillTrialScreen} />
         </>
       )}
 
@@ -84,6 +123,15 @@ export default function RootNavigator() {
   // goes through the same bootstrap/login/logout status transitions either
   // way, so it stays local UI state here instead of touching AuthContext.
   const [guestMode, setGuestMode] = useState(false);
+  // GL-340: which gig sent a guest to sign-in, so they land back on it
+  // instead of the tab home once authenticated. A ref, not state - reading
+  // it never needs to trigger a render, only the one-shot effect below,
+  // and mutating it there would otherwise be a same-effect setState.
+  // Set by the guest Apply action and by tapping a guest's star on Browse
+  // (both call handleGuestSignIn with a real gig id); every other sign-in
+  // path calls it with none, so a guest who never touched a gig keeps
+  // landing on Main as before.
+  const pendingGigIdRef = useRef(null);
 
   if (status !== prevStatus) {
     setPrevStatus(status);
@@ -93,11 +141,37 @@ export default function RootNavigator() {
     }
   }
 
+  // Fires once AppStack has mounted for this authentication. navigate()
+  // pushes GigDetail on top of AppStack's default initial route (Main), so
+  // back from it returns to the tab home rather than exiting - the same
+  // shape as reaching GigDetail from Browse.
+  useEffect(() => {
+    if (status !== AUTH_STATUS.AUTHENTICATED || !pendingGigIdRef.current) return;
+    if (!navigationRef.isReady()) return;
+
+    navigationRef.navigate('GigDetail', { gigId: pendingGigIdRef.current });
+    pendingGigIdRef.current = null;
+  }, [status]);
+
+  useResetLinkRedirect({
+    status,
+    guestMode,
+    onLeaveGuestMode: () => setGuestMode(false),
+  });
+
   if (status === AUTH_STATUS.LOADING) {
     return <Loader fullScreen />;
   }
 
   if (status === AUTH_STATUS.AUTHENTICATED) {
+    // An admin has no profile - every profile endpoint 403s them by design -
+    // so AppStack's shared screens (AccountSettings, EditProfile, GigDetail,
+    // PublicProfile, ...) are all wrong for them. AdminStack is a fully
+    // separate branch, not a third RoleTabs case inside AppStack, so none of
+    // those screens are ever registered for an admin (GL-384/§7.12).
+    if (user?.role === 'admin') {
+      return <AdminStack />;
+    }
     return <AppStack role={user?.role} />;
   }
 
@@ -105,13 +179,24 @@ export default function RootNavigator() {
   // bare, as before GL-122) so a guest can still reach GigDetail from
   // Browse - a screen outside the tab navigator itself.
   if (guestMode) {
+    // Passed straight through to SeekerTabs and GigDetailScreen - both are
+    // safe to call this with or without a gig id. SeekerTabs' own SignInGate
+    // calls it as `onSignIn?.()` (no argument, since Button's onPress would
+    // otherwise hand it the press event); Browse's star and GigDetail's
+    // Apply action each call it with a real gig id, GL-340's "land back on
+    // this gig" case.
+    const handleGuestSignIn = (gigId) => {
+      pendingGigIdRef.current = gigId ?? null;
+      setGuestMode(false);
+    };
+
     return (
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         <Stack.Screen name="Main">
-          {() => <SeekerTabs guest onSignIn={() => setGuestMode(false)} />}
+          {() => <SeekerTabs guest onSignIn={handleGuestSignIn} />}
         </Stack.Screen>
         <Stack.Screen name="GigDetail">
-          {() => <GigDetailScreen onSignIn={() => setGuestMode(false)} />}
+          {() => <GigDetailScreen onSignIn={handleGuestSignIn} />}
         </Stack.Screen>
       </Stack.Navigator>
     );

@@ -11,6 +11,13 @@ const GENERIC_FORM_ERROR = 'Could not post this gig. Check your connection and t
 
 // Only fields the create endpoint accepts (§10.3) - status and postedBy are
 // server-set and rejected if sent from the client.
+//
+// skillTrial is included only when a trial is actually being attached
+// (GL-343). Create has no "leave unchanged" concept the way update does
+// (GL-342), so the simplest way to keep "no trial stores nothing" (GL-341)
+// true is to never send the key at all for the 'none' case, rather than
+// sending `{ requirement: 'none' }` and relying on server-side normalisation
+// that createGig doesn't do.
 function buildGigPayload(values) {
   const payload = {
     title: values.title.trim(),
@@ -28,6 +35,16 @@ function buildGigPayload(values) {
   if ((values.area || '').trim()) payload.area = values.area.trim();
   if (values.startDate) payload.startDate = values.startDate;
   if (values.applicationsCloseDate) payload.applicationsCloseDate = values.applicationsCloseDate;
+
+  if (values.skillTrialRequirement === 'optional') {
+    payload.skillTrial = {
+      requirement: 'optional',
+      taskTitle: values.skillTrialTaskTitle.trim(),
+      taskBrief: values.skillTrialTaskBrief.trim(),
+      submissionType: values.skillTrialSubmissionType,
+      effortEstimate: values.skillTrialEffortEstimate,
+    };
+  }
 
   return payload;
 }

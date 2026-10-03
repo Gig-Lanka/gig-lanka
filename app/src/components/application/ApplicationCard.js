@@ -6,12 +6,14 @@ import { formatPay, formatRelativeTime } from '../../utils/format';
 
 // §12 of the mockup source: Applied and Viewed neutral, Shortlisted and
 // Hired positive, Rejected / Withdrawn / Closed muted grey - never alarm
-// red, even for a rejection.
+// red, even for a rejection. Completed carries the same positive variant as
+// Hired - the mockups predate GL-218 and have no frame for this status.
 const BADGE_VARIANT_BY_STATUS = {
   applied: 'neutral',
   viewed: 'neutral',
   shortlisted: 'positive',
   hired: 'positive',
+  completed: 'positive',
   rejected: 'muted',
   withdrawn: 'muted',
   closed_filled: 'muted',

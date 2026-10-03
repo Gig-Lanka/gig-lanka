@@ -10,9 +10,13 @@ const requireEnv = (key) => {
   return value;
 };
 
+const emailTransport = process.env.EMAIL_TRANSPORT === 'brevo' ? 'brevo' : 'noop';
+
+const port = process.env.PORT || 3000;
+
 export const env = {
   nodeEnv: process.env.NODE_ENV || 'development',
-  port: process.env.PORT || 3000,
+  port,
   mongoUri: process.env.MONGODB_URI,
   jwtAccessSecret: process.env.JWT_ACCESS_SECRET,
   jwtRefreshSecret: process.env.JWT_REFRESH_SECRET,
@@ -21,4 +25,9 @@ export const env = {
   supabaseUrl: requireEnv('SUPABASE_URL'),
   supabaseServiceRoleKey: requireEnv('SUPABASE_SERVICE_ROLE_KEY'),
   supabaseBucketName: requireEnv('SUPABASE_BUCKET_NAME'),
+  emailTransport,
+  emailFrom: process.env.EMAIL_FROM,
+  brevoApiKey: emailTransport === 'brevo' ? requireEnv('BREVO_API_KEY') : process.env.BREVO_API_KEY,
+  passwordResetUrlBase:
+    process.env.PASSWORD_RESET_URL_BASE || `http://localhost:${port}/reset-password`,
 };

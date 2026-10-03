@@ -24,21 +24,54 @@ This is where express code exists (Back-end)
 5. To simulate an expired token, sign one directly with `jsonwebtoken` using a negative `expiresIn` instead of waiting for a real token to expire (see `auth.tokens.test.js`).
 6. Run `npm test` to confirm it passes, then check it also passes with `node --experimental-vm-modules node_modules/jest/bin/jest.js --randomize` if it depends on data another test might create, to make sure ordering isn't accidentally required.
 
-## Deployed dev environment
+## Deployment (production)
 
-The API is deployed from `dev-release` to Render, auto-deploying on every push.
+The API runs as a single Render web service, and the app's release builds point at it.
 
-- **Public URL**: https://gig-lanka.onrender.com
-- **Dashboard**: https://dashboard.render.com/web/srv-d9olmnjl550s73etkmg0
-- **Health check**: https://gig-lanka.onrender.com/api/health
+- **Render service**: the web service served at the URL below — find it at https://dashboard.render.com
+- **Public URL**: https://gig-lanka-u1kg.onrender.com
+- **Health check**: https://gig-lanka-u1kg.onrender.com/api/health
+- **Branch deployed**: `dev-release`
+- **Start command**: `npm start` (`node src/server.js`)
 
-### Adding an environment variable
+### How a deploy is triggered
 
-In the dashboard, go to **Environment** in the left sidebar, add the key/value pair, and save — Render redeploys automatically to apply it. Never commit secrets to `.env`; they're set through the dashboard only.
+Render auto-deploys on every push to `dev-release`, so merging `develop` into `dev-release` is the release. A deploy can also be started by hand from the service's **Manual Deploy** menu in the dashboard, and changing an environment variable redeploys automatically. After any deploy, check the health check URL answers `{"status":"ok", ...}`.
+
+### Environment variables
+
+Set these in the dashboard under **Environment** — never commit them, and never write their values in this file. "Required" means the server refuses to start (or cannot sign users in) without it.
+
+| Variable                    | Required               | Purpose                                                                                                                                                            |
+| --------------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `NODE_ENV`                  | Yes — `production`     | Switches the server out of development mode. Defaults to `development` if unset.                                                                                   |
+| `PORT`                      | No                     | Render supplies this itself; leave it unset.                                                                                                                       |
+| `MONGODB_URI`               | Yes                    | MongoDB Atlas connection string for the shared cluster. The database connection fails without it.                                                                  |
+| `JWT_ACCESS_SECRET`         | Yes                    | Signs and verifies access tokens. Must differ from the refresh secret. Not checked at startup — if missing, sign-in and every protected call fail.                 |
+| `JWT_REFRESH_SECRET`        | Yes                    | Signs and verifies refresh tokens. Same caveat as above.                                                                                                           |
+| `JWT_ACCESS_EXPIRES_IN`     | No — defaults to `15m` | Lifetime of an access token.                                                                                                                                       |
+| `JWT_REFRESH_EXPIRES_IN`    | No — defaults to `7d`  | Lifetime of a refresh token.                                                                                                                                       |
+| `SUPABASE_URL`              | Yes                    | Supabase project URL, used for file storage. The server fails on startup without it.                                                                               |
+| `SUPABASE_SERVICE_ROLE_KEY` | Yes                    | Supabase service-role key. Server-side only; it bypasses row-level security. Fails on startup without it.                                                          |
+| `SUPABASE_BUCKET_NAME`      | Yes                    | Name of the storage bucket uploads go to. Fails on startup without it.                                                                                             |
+| `EMAIL_TRANSPORT`           | Yes — `brevo`          | Anything other than `brevo`, including unset, selects the no-op transport, which reports success but sends no real mail.                                           |
+| `EMAIL_FROM`                | Yes                    | The sender address on outgoing mail. It must be a sender verified in Brevo, or Brevo rejects the message.                                                          |
+| `BREVO_API_KEY`             | Yes when using Brevo   | Brevo API key. The server fails on startup if `EMAIL_TRANSPORT=brevo` and this is missing.                                                                         |
+| `PASSWORD_RESET_URL_BASE`   | Yes                    | Base of the link in password-reset emails: the server's own bridge page. Production is `https://gig-lanka.onrender.com/reset-password`. If unset it falls back to `http://localhost:<PORT>/reset-password`. |
+
+### Adding or changing an environment variable
+
+In the dashboard, go to **Environment** in the left sidebar, add or edit the key/value pair, and save — Render redeploys automatically to apply it. Secrets are set through the dashboard only. The template for local development is `.env.example`.
 
 ### Cold starts
 
-This is a free-tier instance, so it sleeps after periods of inactivity. The first request after a quiet period can take several seconds to respond while the instance spins back up — this is expected, not a bug.
+This is a free-tier instance, so it sleeps after a period without traffic. A first request to a sleeping instance took about **33 seconds** to answer (measured 2 October 2026, `GET /api/health`); once awake, requests answer in well under a second. This is expected, not a bug.
+
+Before a demo, pre-warm the service and wait for it to answer:
+
+```bash
+curl https://gig-lanka-u1kg.onrender.com/api/health
+```
 
 ## Seeding test data
 

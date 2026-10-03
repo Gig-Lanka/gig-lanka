@@ -8,7 +8,12 @@ import {
   updateGig as updateGigService,
   closeGig as closeGigService,
   deleteGig as deleteGigService,
+  saveGig as saveGigService,
+  unsaveGig as unsaveGigService,
+  listSavedGigs,
+  getViewerSaved,
 } from '../services/gig.service.js';
+import { getViewerApplication, getWaitingOnYouCounts } from '../services/application.service.js';
 
 export const createGig = asyncHandler(async (req, res) => {
   const gig = await createGigService(req.body, req.user.id);
@@ -16,22 +21,51 @@ export const createGig = asyncHandler(async (req, res) => {
   sendSuccess(res, { gig }, 201);
 });
 
+// optionalAuth (GL-333) sits on this route so listOpenGigs can batch a
+// signed-in seeker's viewerSaved flags onto the page; a guest leaves
+// req.user unset and the service skips the lookup entirely.
 export const listGigs = asyncHandler(async (req, res) => {
-  const result = await listOpenGigs(req.query);
+  const result = await listOpenGigs(req.query, req.user);
 
   sendSuccess(res, result, 200);
 });
 
+// optionalAuth (GL-213) sits on this route so req.user is set for a valid
+// signed-in caller and left unset for a guest or an expired/invalid token -
+// either way this composes gig.service.js's read with application.service.js's
+// viewerApplication read here, rather than gig.service.js importing the
+// application service, which would close an import cycle (application.service.js
+// already imports gig.service.js for assertGigIsOpen).
 export const getGig = asyncHandler(async (req, res) => {
-  const result = await getGigById(req.params.id);
+  const result = await getGigById(req.params.id, req.user);
+  const viewerApplication = await getViewerApplication(req.params.id, req.user);
+  const viewerSaved = await getViewerSaved(req.params.id, req.user);
 
-  sendSuccess(res, result, 200);
+  sendSuccess(res, { ...result, viewerApplication, viewerSaved }, 200);
 });
 
+// GL-347: composes gig.service.js's list with application.service.js's
+// waiting-on-you counts here, the same reason getGig composes
+// viewerApplication here rather than gig.service.js importing the
+// application service — that import would close a cycle, since
+// application.service.js already imports gig.service.js for assertGigIsOpen.
 export const getMyGigs = asyncHandler(async (req, res) => {
-  const result = await listMyGigs(req.user.id);
+  const { gigs } = await listMyGigs(req.user.id);
+  const waitingCounts = await getWaitingOnYouCounts(gigs.map((gig) => gig.id));
 
-  sendSuccess(res, result, 200);
+  const gigsWithWaitingCount = gigs.map((gig) => {
+    const gigJson = gig.toJSON();
+    return {
+      ...gigJson,
+      // GL-434: this list is always the caller's own gigs (listMyGigs
+      // filters by postedBy: req.user.id), so closedByAdminAt — stripped by
+      // toJSON for everyone — is always safe to layer back on here.
+      closedByAdminAt: gig.closedByAdminAt,
+      waitingOnYouCount: waitingCounts.get(gigJson.id.toString()) ?? 0,
+    };
+  });
+
+  sendSuccess(res, { gigs: gigsWithWaitingCount }, 200);
 });
 
 export const updateGig = asyncHandler(async (req, res) => {
@@ -50,4 +84,22 @@ export const deleteGig = asyncHandler(async (req, res) => {
   await deleteGigService(req.params.id, req.user.id);
 
   sendSuccess(res, null, 200);
+});
+
+export const saveGig = asyncHandler(async (req, res) => {
+  await saveGigService(req.params.id, req.user.id);
+
+  sendSuccess(res, null, 200);
+});
+
+export const unsaveGig = asyncHandler(async (req, res) => {
+  await unsaveGigService(req.params.id, req.user.id);
+
+  sendSuccess(res, null, 200);
+});
+
+export const getSavedGigs = asyncHandler(async (req, res) => {
+  const result = await listSavedGigs(req.user.id);
+
+  sendSuccess(res, result, 200);
 });

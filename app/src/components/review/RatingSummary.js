@@ -1,4 +1,5 @@
 import { Text, View } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 
 import Button from '../ui/Button';
 import Chip from '../ui/Chip';
@@ -14,15 +15,28 @@ const CATEGORY_LABELS = [...BUSINESS_REVIEW_CATEGORIES, ...YOUTH_WORKER_REVIEW_C
   {},
 );
 
-export default function RatingSummary({ rating, className, ...props }) {
+// GL-449 - "1 completed gig", "20 completed gigs". Counted from completed
+// applications on the server (§6.10), not from reviews, so it can be
+// non-zero for someone nobody has reviewed yet.
+const completedGigsLabel = (count) => `${count} completed ${count === 1 ? 'gig' : 'gigs'}`;
+
+export default function RatingSummary({ rating, userId, variant = 'full', className, ...props }) {
+  const navigation = useNavigation();
   const {
     averageRating = 0,
     reviewCount = 0,
     topCategories = [],
     distribution = {},
+    completedGigCount = 0,
   } = rating ?? {};
 
   if (reviewCount === 0) {
+    // Compact is for a strip with no room for "New to Gig Lanka", and a
+    // guessed or zeroed score is worse than an absent one — so it renders
+    // nothing rather than any placeholder (GigBusinessBlock's reason for
+    // leaving its slot empty until now).
+    if (variant === 'compact') return null;
+
     return (
       <View
         className={['items-center gap-1 rounded-ds-lg bg-haze px-4 py-5', className]
@@ -31,6 +45,12 @@ export default function RatingSummary({ rating, className, ...props }) {
         {...props}
       >
         <Text className="text-center text-[13px] font-semibold text-ink">New to Gig Lanka</Text>
+        {/* Work done but not reviewed yet isn't the same as brand new. */}
+        {completedGigCount > 0 ? (
+          <Text className="text-center text-[12.5px] text-muted">
+            {completedGigsLabel(completedGigCount)}
+          </Text>
+        ) : null}
         <Text className="text-center text-[12.5px] text-muted">
           Ratings appear here once a completed gig is reviewed.
         </Text>
@@ -39,6 +59,24 @@ export default function RatingSummary({ rating, className, ...props }) {
   }
 
   const reviewLabel = reviewCount === 1 ? 'review' : 'reviews';
+
+  if (variant === 'compact') {
+    return (
+      <View
+        className={['flex-row items-center gap-[6px]', className].filter(Boolean).join(' ')}
+        {...props}
+      >
+        <Text className="text-[13px] font-semibold text-ink">{averageRating.toFixed(1)}</Text>
+        <StarRating value={Math.round(averageRating)} size="sm" />
+        <Text className="text-[12.5px] text-muted">
+          ({reviewCount} {reviewLabel})
+          {completedGigCount > 0
+            ? ` · ${completedGigCount} ${completedGigCount === 1 ? 'gig' : 'gigs'}`
+            : ''}
+        </Text>
+      </View>
+    );
+  }
 
   return (
     <View className={['gap-4', className].filter(Boolean).join(' ')} {...props}>
@@ -49,7 +87,7 @@ export default function RatingSummary({ rating, className, ...props }) {
         <View>
           <StarRating value={Math.round(averageRating)} size="sm" />
           <Text className="mt-[6px] text-[12.5px] text-muted">
-            {reviewCount} {reviewLabel}
+            {reviewCount} {reviewLabel} · {completedGigsLabel(completedGigCount)}
           </Text>
         </View>
       </View>
@@ -72,8 +110,7 @@ export default function RatingSummary({ rating, className, ...props }) {
         </View>
       ) : null}
 
-      {/* No reviews list screen until Sprint 2 - stays disabled, no onPress. */}
-      <Button variant="small" disabled>
+      <Button variant="small" onPress={() => navigation.navigate('Reviews', { userId })}>
         {`See all ${reviewCount} ${reviewLabel}`}
       </Button>
     </View>

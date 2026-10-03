@@ -4,6 +4,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import ApplicantsScreen from '../screens/business/ApplicantsScreen';
 import MyGigsScreen from '../screens/business/MyGigsScreen';
 import ProfileScreen from '../screens/business/ProfileScreen';
+import { TAB_BAR_SCREEN_OPTIONS } from './tabBarTheme';
 
 const Tab = createBottomTabNavigator();
 
@@ -18,8 +19,7 @@ export default function BusinessTabs() {
     <Tab.Navigator
       screenOptions={({ route }) => ({
         headerShown: false,
-        tabBarActiveTintColor: '#5b4bff',
-        tabBarInactiveTintColor: '#6b7280',
+        ...TAB_BAR_SCREEN_OPTIONS,
         tabBarIcon: ({ color, size, focused }) => (
           <Ionicons
             name={focused ? ICONS[route.name] : `${ICONS[route.name]}-outline`}

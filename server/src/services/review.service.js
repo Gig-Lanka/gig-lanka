@@ -1,8 +1,8 @@
 import mongoose from 'mongoose';
 import { ApiError } from '../utils/ApiError.js';
 import { Review } from '../models/review.model.js';
-import { getApplicationWithParties } from './application.service.js';
-import { getPublicIdentity } from './profile.service.js';
+import { countCompletedApplications, getApplicationWithParties } from './application.service.js';
+import { getPublicIdentity, setRatingSummary } from './profile.service.js';
 import {
   SEEKER_TO_BUSINESS_CATEGORIES,
   BUSINESS_TO_SEEKER_CATEGORIES,
@@ -14,6 +14,114 @@ const CATEGORIES_BY_DIRECTION = {
 };
 
 const PAGE_SIZE = 10;
+const RATING_WINDOW_DAYS = 14;
+const RATING_WINDOW_MS = RATING_WINDOW_DAYS * 24 * 60 * 60 * 1000;
+const STAR_VALUES = [1, 2, 3, 4, 5];
+const TOP_CATEGORIES_LIMIT = 3;
+const zeroedDistribution = () =>
+  STAR_VALUES.reduce((distribution, star) => ({ ...distribution, [star]: 0 }), {});
+const ZEROED_REVIEW_FIELDS = {
+  averageRating: 0,
+  reviewCount: 0,
+  topCategories: [],
+  distribution: zeroedDistribution(),
+};
+
+// One decimal place, rounded half up: 4.25 becomes 4.3, never 4.2. Every
+// rating is a whole number, so the only place a fraction appears at all is
+// this division — stating the rule here is what keeps it a decision instead
+// of whatever the float happens to land on.
+const roundToOneDecimal = (value) => Math.round(value * 10) / 10;
+
+// Count of reviews at each star value, 1 to 5. Always all five keys, so the
+// five counts sum to reviewCount even when a star value was never selected.
+const computeDistribution = (reviews) => {
+  const distribution = zeroedDistribution();
+
+  reviews.forEach((review) => {
+    distribution[review.rating] += 1;
+  });
+
+  return distribution;
+};
+
+// The most frequently selected categories, capped at TOP_CATEGORIES_LIMIT.
+// Ties are broken alphabetically by category value, never by insertion order
+// or Mongo's return order — either would make the same profile render a
+// different order on two consecutive loads.
+const computeTopCategories = (reviews) => {
+  const counts = new Map();
+
+  reviews.forEach((review) => {
+    review.categories.forEach((category) => {
+      counts.set(category, (counts.get(category) ?? 0) + 1);
+    });
+  });
+
+  return [...counts.entries()]
+    .sort(([categoryA, countA], [categoryB, countB]) => {
+      return countB - countA || categoryA.localeCompare(categoryB);
+    })
+    .slice(0, TOP_CATEGORIES_LIMIT)
+    .map(([category]) => category);
+};
+
+// The full aggregate for one user, recomputed from every review about them —
+// never adjusted incrementally, since a running counter drifts silently and
+// can't be repaired without a migration, while a recomputation is correct
+// every time and this collection is small. Filtered on `subject`, never
+// `author`: a user's aggregate counts reviews about them, not reviews they
+// wrote, and the two never mix.
+//
+// GL-447: `completedGigCount` is counted for every user, reviews or not —
+// someone with work done but no reviews yet is not brand new — so a user
+// with no reviews gets zeroed review fields, not a zeroed aggregate. `role`
+// is the subject's role, which decides how their completed gigs are counted.
+export const computeRatingAggregate = async (subjectId, role) => {
+  const [reviews, completedGigCount] = await Promise.all([
+    Review.find({ subject: subjectId }).select('rating categories').lean(),
+    countCompletedApplications(subjectId, role),
+  ]);
+
+  if (reviews.length === 0) {
+    return { ...ZEROED_REVIEW_FIELDS, completedGigCount };
+  }
+
+  const sum = reviews.reduce((total, review) => total + review.rating, 0);
+
+  return {
+    averageRating: roundToOneDecimal(sum / reviews.length),
+    reviewCount: reviews.length,
+    topCategories: computeTopCategories(reviews),
+    distribution: computeDistribution(reviews),
+    completedGigCount,
+  };
+};
+
+// Criterion 11: the review is the fact, the aggregate is derived from it, so
+// a failure here must never fail the review creation that already succeeded
+// and was reported to the user — the same best-effort, log-and-continue
+// pattern GL-114 used for deleting a replaced profile photo.
+const recomputeRatingSummary = async (subjectId, role) => {
+  try {
+    const ratingSummary = await computeRatingAggregate(subjectId, role);
+    await setRatingSummary(subjectId, ratingSummary);
+  } catch (err) {
+    console.error(`Failed to recompute rating summary for user ${subjectId}:`, err);
+  }
+};
+
+// GL-447: called by completeApplication once a hire is marked Completed, so
+// both parties' `completedGigCount` moves with it. Best-effort for the same
+// reason as above — the completion is the fact, the count is derived from
+// it, and a failure here is logged and never fails the completion. Each
+// party is recomputed independently, so one failing never blocks the other.
+export const recomputeCompletedGigCounts = async (applicantId, businessId) => {
+  await Promise.all([
+    recomputeRatingSummary(applicantId, 'seeker'),
+    businessId ? recomputeRatingSummary(businessId, 'business') : undefined,
+  ]);
+};
 
 const assertCategoriesMatchDirection = (categories, direction) => {
   const allowed = CATEGORIES_BY_DIRECTION[direction];
@@ -27,7 +135,7 @@ const assertCategoriesMatchDirection = (categories, direction) => {
 };
 
 // The single gate that makes a rating worth reading: a review can only be
-// created against an application that reached Hired, by one of the two
+// created against an application that reached Completed, by one of the two
 // people who were actually party to it. Direction, author and subject are
 // all derived here from the application and the caller — never accepted
 // from the request body — so nobody can attach a review to a gig they
@@ -42,11 +150,25 @@ export const createReview = async (applicationId, actor, body) => {
     throw new ApiError(403, 'FORBIDDEN', 'You do not have permission to perform this action.');
   }
 
-  if (application.status !== 'hired') {
+  if (application.status !== 'completed') {
     throw new ApiError(
       409,
-      'APPLICATION_NOT_HIRED',
-      'A review requires a completed hire — this application has not reached Hired.',
+      'APPLICATION_NOT_COMPLETED',
+      'A review requires a completed gig — this application has not reached Completed.',
+    );
+  }
+
+  // A window creates urgency to review, and review volume is what the whole
+  // reputation system runs on — a rating nobody gets round to writing is a
+  // profile nobody can trust. Measured from completedAt, never decidedAt:
+  // decidedAt holds the moment of hire, not the moment the work finished.
+  // Checked after the status gate above, so an application that never
+  // completed is told that, not that its (nonexistent) window has closed.
+  if (Date.now() - application.completedAt.getTime() > RATING_WINDOW_MS) {
+    throw new ApiError(
+      409,
+      'REVIEW_WINDOW_EXPIRED',
+      `The ${RATING_WINDOW_DAYS}-day window to review this gig has closed.`,
     );
   }
 
@@ -68,6 +190,8 @@ export const createReview = async (applicationId, actor, body) => {
       text: body.text,
     });
 
+    await recomputeRatingSummary(subject, isApplicant ? 'business' : 'seeker');
+
     return review.toJSON();
   } catch (err) {
     if (err.code === 11000) {
@@ -81,6 +205,20 @@ export const createReview = async (applicationId, actor, body) => {
   }
 };
 
+// The reviews the caller themself wrote, newest first, each carrying its
+// application id — the answer to "have I already rated this application?"
+// for the completed-gigs screen, in one request instead of one per card.
+// Filtered on `author`, never `subject`: rating is per direction (the
+// unique index is on (application, direction)), so a seeker's own review of
+// a business on an application says nothing about whether the business has
+// rated the seeker back on that same application — each side's "already
+// rated" is decided only by its own authored reviews.
+export const listMyReviews = async (callerId) => {
+  const reviews = await Review.find({ author: callerId }).sort({ createdAt: -1, _id: -1 });
+
+  return { reviews: reviews.map((review) => review.toJSON()) };
+};
+
 // The reviews written about a user, newest first. Deliberately doesn't check
 // that the user still exists or is active — a deactivated user's reviews are
 // unaffected by deactivation (they're read through the subject id on the
@@ -92,6 +230,14 @@ export const listUserReviews = async (userId, query) => {
 
   const page = Math.max(1, parseInt(query.page, 10) || 1);
   const filter = { subject: userId };
+
+  // Narrows the query itself, not the page already fetched — a matching
+  // review on page 4 must stay reachable (GL-215/GL-216). `total` is counted
+  // against this same filter below, so the number beside a star tab and the
+  // list behind it can never disagree.
+  if (query.rating !== undefined) {
+    filter.rating = query.rating;
+  }
 
   const [reviews, total] = await Promise.all([
     Review.find(filter)

@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 import { Profile } from '../models/profile.model.js';
-import { User } from '../models/user.model.js';
+import { User, isBlocked } from '../models/user.model.js';
 import { ApiError } from '../utils/ApiError.js';
 import { removeFile } from './storage.service.js';
 
@@ -105,7 +105,7 @@ export const updateMyProfile = async (user, body) => {
 // it, instead of leaking the day it lands. Email never appears because it lives
 // on User and is never read into this shape.
 const PUBLIC_SHARED_FIELDS = ['photo', 'name', 'city', 'bio'];
-const PUBLIC_SEEKER_FIELDS = ['skills', 'workExperience', 'education', 'skillTrialResults'];
+const PUBLIC_SEEKER_FIELDS = ['skills', 'workExperience', 'education'];
 const PUBLIC_BUSINESS_FIELDS = ['category'];
 
 const toPublicProfile = (user, profile) => {
@@ -133,7 +133,7 @@ export const getPublicProfile = async (userId) => {
     throw profileNotFound();
   }
 
-  // Read lean so the isActive check below sees the stored document rather than
+  // Read lean so the blocked check below sees the stored document rather than
   // only the paths the schema declares today — a hydrated document hides fields
   // the schema has not caught up with, which would silently disable that guard.
   const user = await User.findById(userId).lean();
@@ -144,11 +144,12 @@ export const getPublicProfile = async (userId) => {
     throw profileNotFound();
   }
 
-  // Criterion 13, written before the flag exists: isActive arrives in Sprint 3,
-  // so only an explicit false hides a profile and accounts stored without the
-  // field stay visible. The 404 is identical to a missing profile on purpose —
-  // a deactivated account must not be distinguishable from one that never was.
-  if (user.isActive === false) {
+  // Criterion 13, written before the flag existed: isActive arrives in Sprint 3
+  // and suspendedAt in Sprint 4, so only an explicit block hides a profile and
+  // accounts stored without either field stay visible. The 404 is identical to
+  // a missing profile on purpose — a deactivated or suspended account must not
+  // be distinguishable from one that never was.
+  if (isBlocked(user)) {
     throw profileNotFound();
   }
 
@@ -157,23 +158,75 @@ export const getPublicProfile = async (userId) => {
   return toPublicProfile(user, profile);
 };
 
-// The name and photo any other feature embeds when it shows who someone is —
-// a gig's business block, and later an application or review author. This is
-// the only shape other components should read a profile through, so when the
-// public identity changes it changes in one place instead of in every caller.
+// The single writer of Profile.ratingSummary (GL-222/GL-265) — called only by
+// review.service.js after it recomputes a subject's aggregate from their
+// reviews. Narrow by design: this sets ratingSummary alone, never a general
+// profile write. Goes through getOrCreateProfile rather than a plain
+// updateOne so a subject who has never read their own profile still gets one
+// created here — otherwise the aggregate would silently not persist, and a
+// later lazy read would create a fresh, zeroed profile that looks like it was
+// never reviewed.
+export const setRatingSummary = async (userId, ratingSummary) => {
+  const user = await User.findById(userId);
+
+  if (!user) return;
+
+  const profile = await getOrCreateProfile(user);
+  profile.ratingSummary = ratingSummary;
+  await profile.save();
+};
+
+// The name, photo and rating any other feature embeds when it shows who
+// someone is — a gig's business block, and later an application or review
+// author. This is the only shape other components should read a profile
+// through, so when the public identity changes it changes in one place
+// instead of in every caller.
 //
 // Read-only and non-creating on purpose: callers include public, unauthenticated
 // endpoints (GET /api/gigs/:id), and a public read must never write. A user with
-// no profile yet returns nulls rather than being lazily created here.
+// no profile yet returns nulls rather than being lazily created here — including
+// ratingSummary, which reads back null rather than a fabricated zeroed aggregate
+// when there is no profile document to read it from (GL-377).
 //
 // userId is trusted to be a valid ObjectId — callers that take an id from a
 // request validate it at that boundary and 404 there, the way gig.service does.
 export const getPublicIdentity = async (userId) => {
-  const profile = await Profile.findOne({ user: userId }).select('name photo').lean();
+  const profile = await Profile.findOne({ user: userId })
+    .select('name photo ratingSummary')
+    .lean();
 
   return {
     id: userId.toString(),
     name: profile?.name ?? null,
     photo: profile?.photo ?? null,
+    ratingSummary: profile?.ratingSummary ?? null,
   };
+};
+
+// Batched sibling of getPublicIdentity, for a caller that needs several
+// people's identities at once (GL-371: an admin report page's reporters,
+// user targets and gig-poster businesses) — one query for the whole set
+// instead of one per id. Same contract per id as the single-id version,
+// including the no-profile-yet fallback to nulls; returned as a Map keyed by
+// the string id so a caller can look up a raw ObjectId reference either way.
+export const getPublicIdentities = async (userIds) => {
+  const uniqueIds = [...new Set(userIds.map((id) => id.toString()))];
+
+  if (uniqueIds.length === 0) return new Map();
+
+  const profiles = await Profile.find({ user: { $in: uniqueIds } })
+    .select('user name photo')
+    .lean();
+  const byUserId = new Map(profiles.map((profile) => [profile.user.toString(), profile]));
+
+  return new Map(
+    uniqueIds.map((id) => [
+      id,
+      {
+        id,
+        name: byUserId.get(id)?.name ?? null,
+        photo: byUserId.get(id)?.photo ?? null,
+      },
+    ]),
+  );
 };

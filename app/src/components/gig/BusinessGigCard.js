@@ -1,23 +1,36 @@
 import { Pressable, Text, View } from 'react-native';
 
 import Badge from '../ui/Badge';
-import { GIG_STATUSES } from '../../constants/enums';
 import { formatDeadline, formatPay } from '../../utils/format';
-
-const BADGE_VARIANT_BY_STATUS = {
-  open: 'positive',
-  filled: 'strong',
-  closed: 'muted',
-  draft: 'neutral',
-};
-
-function statusLabel(status) {
-  return GIG_STATUSES.find((entry) => entry.value === status)?.label ?? status;
-}
+import { GIG_STATUS_BADGE_VARIANT, getGigStatusLabel } from '../../utils/gigStatus';
 
 export default function BusinessGigCard({ gig, onPress, className, ...props }) {
-  const { title, payAmount, payType, status, applicantCount = 0, applicationsCloseDate } = gig;
-  const deadline = applicationsCloseDate ? formatDeadline(applicationsCloseDate) : null;
+  const {
+    title,
+    payAmount,
+    payType,
+    status,
+    closedByAdminAt,
+    applicantCount = 0,
+    applicationsCloseDate,
+    waitingOnYouCount = 0,
+  } = gig;
+  const isOpen = status === 'open';
+  // Application & Hiring brief §6: once a gig is filled, anyone still
+  // shortlisted or sitting on a submitted skill trial is owed a personal
+  // answer. This has no dismiss and no expiry - it's not a nudge, it's a
+  // standing fact about the gig that only goes away once E4's sweep resolves
+  // those applications. waitingOnYouCount comes from that story; this card
+  // only renders it.
+  const isWaitingOnBusiness = status === 'filled' && waitingOnYouCount > 0;
+  // GL-283: same reasoning as GigDetailScreen - once not open, the deadline
+  // chip shows the same status-derived "Applications closed" the badge
+  // already shows, rather than a second, independently date-derived label.
+  const deadline = isOpen
+    ? applicationsCloseDate
+      ? formatDeadline(applicationsCloseDate)
+      : null
+    : { label: 'Applications closed', urgent: false };
   const Container = onPress ? Pressable : View;
 
   return (
@@ -30,7 +43,9 @@ export default function BusinessGigCard({ gig, onPress, className, ...props }) {
     >
       <View className="flex-row items-start justify-between gap-3">
         <Text className="flex-1 font-display text-title text-ink">{title}</Text>
-        <Badge variant={BADGE_VARIANT_BY_STATUS[status] ?? 'neutral'}>{statusLabel(status)}</Badge>
+        <Badge variant={GIG_STATUS_BADGE_VARIANT[status] ?? 'neutral'}>
+          {getGigStatusLabel({ status, closedByAdminAt })}
+        </Badge>
       </View>
 
       <Text className="mt-[5px] text-desc text-muted">{formatPay(payAmount, payType)}</Text>
@@ -50,6 +65,14 @@ export default function BusinessGigCard({ gig, onPress, className, ...props }) {
           </Text>
         ) : null}
       </View>
+
+      {isWaitingOnBusiness ? (
+        <View className="mt-3 rounded-ds-md bg-warning-soft px-[14px] py-[11px]">
+          <Text className="text-[13.5px] font-medium text-warning-ink">
+            {`${waitingOnYouCount} ${waitingOnYouCount === 1 ? 'applicant' : 'applicants'} still waiting on you`}
+          </Text>
+        </View>
+      ) : null}
     </Container>
   );
 }

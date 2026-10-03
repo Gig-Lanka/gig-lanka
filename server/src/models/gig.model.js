@@ -20,6 +20,14 @@ const COMMITMENT_LENGTHS = ['one_off', 'under_a_week', 'one_to_four_weeks', 'ong
 
 const GIG_STATUSES = ['draft', 'open', 'closed', 'filled'];
 
+// No 'required' value: product decided a skill trial is never mandatory to
+// apply, only ever absent or optional. See GL-341's PR / Jira note.
+const SKILL_TRIAL_REQUIREMENTS = ['none', 'optional'];
+
+const SKILL_TRIAL_SUBMISSION_TYPES = ['text', 'file', 'text_and_file'];
+
+const SKILL_TRIAL_EFFORT_ESTIMATES = ['under_30_minutes', '30_to_60_minutes', '1_to_2_hours'];
+
 const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 const isNotPastDate = (value) => {
@@ -27,6 +35,67 @@ const isNotPastDate = (value) => {
   const today = new Date().toISOString().slice(0, 10);
   return value >= today;
 };
+
+const skillTrialSchema = new mongoose.Schema(
+  {
+    requirement: {
+      type: String,
+      enum: SKILL_TRIAL_REQUIREMENTS,
+      default: 'none',
+    },
+    taskTitle: {
+      type: String,
+      trim: true,
+      maxlength: 80,
+      required: function () {
+        return this.requirement !== 'none';
+      },
+    },
+    taskBrief: {
+      type: String,
+      trim: true,
+      minlength: 20,
+      maxlength: 1000,
+      required: function () {
+        return this.requirement !== 'none';
+      },
+    },
+    submissionType: {
+      type: String,
+      enum: SKILL_TRIAL_SUBMISSION_TYPES,
+      required: function () {
+        return this.requirement !== 'none';
+      },
+    },
+    effortEstimate: {
+      type: String,
+      enum: SKILL_TRIAL_EFFORT_ESTIMATES,
+      required: function () {
+        return this.requirement !== 'none';
+      },
+    },
+  },
+  { _id: false },
+);
+
+// When requirement is 'none' the other four fields are not just optional but
+// forbidden, per Application & Hiring brief §4 - a trial that isn't required
+// shouldn't silently carry leftover task details.
+// Mongoose 9 dropped callback-style ("next") pre hooks - middleware must be
+// synchronous or return a promise, so this takes no `next` argument.
+skillTrialSchema.pre('validate', function () {
+  if (this.requirement === 'none') {
+    const disallowedField = ['taskTitle', 'taskBrief', 'submissionType', 'effortEstimate'].find(
+      (field) => this[field] !== undefined,
+    );
+    if (disallowedField) {
+      this.invalidate(
+        disallowedField,
+        `${disallowedField} must not be set when requirement is "none"`,
+      );
+    }
+  }
+});
 
 const gigSchema = new mongoose.Schema(
   {
@@ -117,6 +186,16 @@ const gigSchema = new mongoose.Schema(
       enum: GIG_STATUSES,
       default: 'open',
     },
+    // GL-434: set only by the admin takedown, never by the business's own
+    // close. This is *who* closed it, layered on top of `status` rather than
+    // replacing it - a takedown still lands on the same 'closed' value a
+    // business close does, per the Marketplace brief's status vocabulary.
+    // Stripped in toJSON below and added back only for the gig's owner, the
+    // same layering viewerSaved and viewerApplication use per caller.
+    closedByAdminAt: {
+      type: Date,
+      default: null,
+    },
     postedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
@@ -127,6 +206,13 @@ const gigSchema = new mongoose.Schema(
       type: Number,
       default: 0,
       min: 0,
+    },
+    // Optional: a gig with no trial stores nothing (stays undefined) rather
+    // than an empty object, so `gig.skillTrial` reads falsy - see the guard
+    // in application.service.js's assertValidRejection.
+    skillTrial: {
+      type: skillTrialSchema,
+      required: false,
     },
     // Sprint 2 (saving a gig) writes user ids here. Declared now, guarded now:
     // `select: false` keeps it out of every default query, and the toJSON
@@ -148,6 +234,7 @@ const gigSchema = new mongoose.Schema(
         delete ret._id;
         delete ret.__v;
         delete ret.savedBy;
+        delete ret.closedByAdminAt;
         return ret;
       },
     },

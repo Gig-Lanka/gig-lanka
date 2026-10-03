@@ -6,6 +6,7 @@ export const APPLICATION_STATUSES = [
   'viewed',
   'shortlisted',
   'hired',
+  'completed',
   'rejected',
   'withdrawn',
   'closed_filled',
@@ -22,6 +23,20 @@ export const REJECTION_REASON_CODES = [
   'another_applicant_closer_fit',
   'role_no_longer_needed',
   'positions_filled',
+];
+
+// The brief's closed five-value trial-result vocabulary (GL-297 §4/§8),
+// mirrored in app/src/constants/enums.js as a frozen labelled list.
+// `submitted` and `skipped` are set by the applicant's own action at apply
+// time; `passed`/`not_passed` are set only by the business, once, through
+// the trial review endpoint. The review is a result, not a status — these
+// values never join APPLICATION_STATUSES or TRANSITION_RULES.
+export const SKILL_TRIAL_RESULTS = [
+  'not_submitted',
+  'submitted',
+  'passed',
+  'not_passed',
+  'skipped',
 ];
 
 const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
@@ -62,6 +77,26 @@ const profileSnapshotSchema = new mongoose.Schema(
   { _id: false },
 );
 
+// Belongs to the application, not the gig — editing a gig's trial after
+// applications exist does not change what anyone already submitted
+// (GL-297 §4). Content validation against the gig's submissionType and the
+// apply-time / review-time writers are other sub-tasks; this only shapes
+// the field.
+const skillTrialSubmissionSchema = new mongoose.Schema(
+  {
+    textResponse: { type: String, trim: true },
+    fileUrl: { type: String, trim: true },
+    submittedAt: { type: Date },
+    result: { type: String, enum: SKILL_TRIAL_RESULTS },
+    // Free text up to 300 characters, shown to the seeker verbatim —
+    // deliberately not trimmed so it is stored exactly as written, the same
+    // rule as rejectionNote below.
+    resultNote: { type: String, maxlength: 300 },
+    reviewedAt: { type: Date },
+  },
+  { _id: false },
+);
+
 const applicationSchema = new mongoose.Schema(
   {
     gig: {
@@ -97,6 +132,14 @@ const applicationSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    // The moment the business marked the work finished. `decidedAt` cannot
+    // carry it — that one is already occupied by the hire and guarded against
+    // being overwritten — so completion needs a stamp of its own. Set once,
+    // the first time `completed` is reached, and never cleared afterwards.
+    completedAt: {
+      type: Date,
+      default: null,
+    },
     rejectionReasonCode: {
       type: String,
       enum: REJECTION_REASON_CODES,
@@ -106,6 +149,23 @@ const applicationSchema = new mongoose.Schema(
     rejectionNote: {
       type: String,
       maxlength: 300,
+    },
+    // Optional: an application to a gig with no trial stores nothing (stays
+    // undefined) rather than an empty object.
+    skillTrialSubmission: {
+      type: skillTrialSubmissionSchema,
+      required: false,
+    },
+    // Optional: an application without a resume stores nothing. Never a
+    // gate — profileIncomplete derives only from experience and education
+    // (GL-300 §15 rule 3) — and never copied into profileSnapshot, which is
+    // frozen against later profile edits; a file uploaded at submission time
+    // is already immutable by nature. Origin-validated against the
+    // configured storage host at apply time (application.service.js), never
+    // fetched to inspect.
+    resumeUrl: {
+      type: String,
+      trim: true,
     },
   },
   {

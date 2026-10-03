@@ -36,10 +36,10 @@ export default function GigActionRow({ gig, onGigUpdated, className }) {
         </Pressable>
 
         <Pressable
-          disabled
-          className="h-9 flex-1 items-center justify-center rounded-ds-sm bg-haze opacity-40"
+          onPress={() => navigation.navigate('GigApplicants', { gigId: gig.id })}
+          className="h-9 flex-1 items-center justify-center rounded-ds-sm border-[1.5px] border-line bg-paper"
         >
-          <Text className="text-label text-muted-dark" numberOfLines={1}>
+          <Text className="text-label text-ink" numberOfLines={1}>
             Applicants ({gig.applicantCount ?? 0})
           </Text>
         </Pressable>

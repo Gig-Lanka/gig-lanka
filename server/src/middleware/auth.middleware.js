@@ -1,6 +1,6 @@
 import jwt from 'jsonwebtoken';
 import { env } from '../config/env.js';
-import { User } from '../models/user.model.js';
+import { User, isBlocked } from '../models/user.model.js';
 import { ApiError } from '../utils/ApiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 
@@ -34,11 +34,43 @@ export const requireAuth = asyncHandler(async (req, res, next) => {
 
   const user = await User.findById(decoded.id);
 
-  if (!user) {
+  // Re-loaded from the database rather than trusted from the token's claim,
+  // so a token minted before the account was blocked and still inside its
+  // expiry window is refused the moment isActive flips or suspendedAt is
+  // set, instead of working for up to fifteen more minutes.
+  if (!user || isBlocked(user)) {
     throw new ApiError(401, 'TOKEN_INVALID', 'Access token is invalid.');
   }
 
   req.user = user;
+  next();
+});
+
+// GL-213: for the handful of endpoints that must stay public but still want
+// to know who's asking. Never throws - a missing header, a malformed one, an
+// expired or invalid token, or a token whose user no longer exists all fall
+// through to the guest case (`req.user` left unset) rather than a 401.
+// requireAuth stays the one that rejects; this one only ever adds
+// information, never removes access.
+export const optionalAuth = asyncHandler(async (req, res, next) => {
+  const header = req.headers.authorization;
+
+  if (!header || !header.startsWith('Bearer ') || !header.slice(7).trim()) {
+    return next();
+  }
+
+  let decoded;
+  try {
+    decoded = jwt.verify(header.slice(7), env.jwtAccessSecret);
+  } catch {
+    return next();
+  }
+
+  const user = await User.findById(decoded.id);
+  if (user) {
+    req.user = user;
+  }
+
   next();
 });
 

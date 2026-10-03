@@ -3,6 +3,7 @@ import { sendSuccess } from '../utils/response.js';
 import {
   createReview as createReviewService,
   listUserReviews as listUserReviewsService,
+  listMyReviews as listMyReviewsService,
 } from '../services/review.service.js';
 
 export const createReview = asyncHandler(async (req, res) => {
@@ -14,6 +15,12 @@ export const createReview = asyncHandler(async (req, res) => {
 
 export const getUserReviews = asyncHandler(async (req, res) => {
   const result = await listUserReviewsService(req.params.userId, req.query);
+
+  sendSuccess(res, result, 200);
+});
+
+export const getMyReviews = asyncHandler(async (req, res) => {
+  const result = await listMyReviewsService(req.user.id);
 
   sendSuccess(res, result, 200);
 });

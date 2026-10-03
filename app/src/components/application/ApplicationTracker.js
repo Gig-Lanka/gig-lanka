@@ -10,13 +10,15 @@ function statusLabel(value) {
   return APPLICATION_STATUSES.find((entry) => entry.value === value)?.label ?? value;
 }
 
-// §11.1 only ever records `appliedAt`, `viewedAt` and `decidedAt` - there is
-// no `shortlistedAt`. A live application's own `status` says exactly which
-// path step it's on. A decided one only proves `applied` (always) and
-// `viewed` (iff `viewedAt` is set); whether it passed through `shortlisted`
-// on its way to hired/rejected/withdrawn is undecidable from the data alone
-// except for `hired`, which has no other route in (§11.3). An undetermined
-// step renders as not reached rather than assuming it happened.
+// §11.1 only ever records `appliedAt`, `viewedAt`, `decidedAt` and
+// `completedAt` - there is no `shortlistedAt`. A live application's own
+// `status` says exactly which path step it's on. A decided one only proves
+// `applied` (always) and `viewed` (iff `viewedAt` is set); whether it passed
+// through `shortlisted` on its way to hired/completed/rejected/withdrawn is
+// undecidable from the data alone except for `hired` and `completed`, which
+// have no other route in (§11.3: completed's only source is hired, and
+// hired's only source is shortlisted). An undetermined step renders as not
+// reached rather than assuming it happened.
 function buildSteps(application) {
   const { status, viewedAt } = application;
   const isTerminal = !isLiveApplication(application);
@@ -31,7 +33,10 @@ function buildSteps(application) {
     } else if (value === 'viewed') {
       state = viewedAt ? 'done' : 'todo';
     } else {
-      state = status === 'hired' ? 'done' : 'todo';
+      // Hired and completed can only have arrived through shortlisted -
+      // completed's own outgoing move starts at hired (§11.3) - so showing
+      // this step unreached on either would be a lie the data disproves.
+      state = status === 'hired' || status === 'completed' ? 'done' : 'todo';
     }
     return { key: value, label: statusLabel(value), state };
   });
@@ -47,12 +52,13 @@ function buildSteps(application) {
 }
 
 function buildSummary(application) {
-  const { status, viewedAt, decidedAt } = application;
+  const { status, viewedAt, decidedAt, completedAt } = application;
 
   if (status === 'applied') return 'Not opened yet.';
   if (status === 'viewed') return `Viewed ${formatRelativeTime(viewedAt)}.`;
   if (status === 'shortlisted') return `Shortlisted. Viewed ${formatRelativeTime(viewedAt)}.`;
   if (status === 'hired') return `Hired ${formatRelativeTime(decidedAt)}.`;
+  if (status === 'completed') return `Completed ${formatRelativeTime(completedAt)}.`;
   if (status === 'rejected') {
     return `Decided ${formatRelativeTime(decidedAt)}. This gig is finished for you.`;
   }

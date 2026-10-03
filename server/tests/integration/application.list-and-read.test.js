@@ -44,6 +44,17 @@ const registerSeeker = async (email) => {
   return { accessToken: res.body.data.accessToken, userId: res.body.data.user.id };
 };
 
+const validSkillTrial = (overrides = {}) => ({
+  requirement: 'optional',
+  taskTitle: 'Plan a stock check',
+  taskBrief: 'Describe how you would run a stock check before opening the counter.',
+  submissionType: 'text',
+  effortEstimate: 'under_30_minutes',
+  ...overrides,
+});
+
+const GIG_SUMMARY_KEYS = ['city', 'id', 'payAmount', 'payType', 'status', 'title'];
+
 const createGigDoc = async (postedBy, overrides = {}) =>
   Gig.create({ ...validGigPayload(overrides), postedBy });
 
@@ -117,6 +128,37 @@ describe('GET /api/applications/mine', () => {
     expect(res.status).toBe(200);
     expect(res.body.data.applications).toHaveLength(1);
     expect(res.body.data.applications[0].applicant).toBe(seekerB.userId);
+  });
+
+  it('leaves the gig summary at six fields even for a gig with a skill trial', async () => {
+    const business = await registerBusiness('mine-trial-summary-business@example.com');
+    const seeker = await registerSeeker('mine-trial-summary-seeker@example.com');
+    const gig = await createGigDoc(business.userId, { skillTrial: validSkillTrial() });
+    await createApplicationDoc(gig.id, seeker.userId);
+
+    const res = await request(app)
+      .get('/api/applications/mine')
+      .set('Authorization', `Bearer ${seeker.accessToken}`);
+
+    expect(res.status).toBe(200);
+    expect(Object.keys(res.body.data.applications[0].gig).sort()).toEqual(GIG_SUMMARY_KEYS);
+  });
+});
+
+describe('GET /api/applications/for-my-gigs', () => {
+  it('leaves the gig summary at six fields even for a gig with a skill trial', async () => {
+    const business = await registerBusiness('formygigs-trial-summary-business@example.com');
+    const seeker = await registerSeeker('formygigs-trial-summary-seeker@example.com');
+    const gig = await createGigDoc(business.userId, { skillTrial: validSkillTrial() });
+    await createApplicationDoc(gig.id, seeker.userId);
+
+    const res = await request(app)
+      .get('/api/applications/for-my-gigs')
+      .set('Authorization', `Bearer ${business.accessToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.applications).toHaveLength(1);
+    expect(Object.keys(res.body.data.applications[0].gig).sort()).toEqual(GIG_SUMMARY_KEYS);
   });
 });
 
@@ -201,6 +243,58 @@ describe('GET /api/applications/:id', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.data.application.id).toBe(application.id);
+  });
+
+  it('names the skill trial on the gig summary when the gig has one', async () => {
+    const business = await registerBusiness('read-trial-gig-business@example.com');
+    const seeker = await registerSeeker('read-trial-gig-seeker@example.com');
+    const gig = await createGigDoc(business.userId, {
+      skillTrial: validSkillTrial({ submissionType: 'text_and_file' }),
+    });
+    const application = await createApplicationDoc(gig.id, seeker.userId);
+
+    const res = await request(app)
+      .get(`/api/applications/${application.id}`)
+      .set('Authorization', `Bearer ${seeker.accessToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.application.gig.skillTrial).toEqual({
+      title: 'Plan a stock check',
+      submissionType: 'text_and_file',
+    });
+    expect(Object.keys(res.body.data.application.gig).sort()).toEqual(
+      [...GIG_SUMMARY_KEYS, 'skillTrial'].sort(),
+    );
+  });
+
+  it('omits skillTrial from the gig summary when the gig has no trial', async () => {
+    const business = await registerBusiness('read-no-trial-gig-business@example.com');
+    const seeker = await registerSeeker('read-no-trial-gig-seeker@example.com');
+    const gig = await createGigDoc(business.userId);
+    const application = await createApplicationDoc(gig.id, seeker.userId);
+
+    const res = await request(app)
+      .get(`/api/applications/${application.id}`)
+      .set('Authorization', `Bearer ${seeker.accessToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.application.gig).not.toHaveProperty('skillTrial');
+    expect(Object.keys(res.body.data.application.gig).sort()).toEqual(GIG_SUMMARY_KEYS);
+  });
+
+  it('keeps gig null, with no trial to read, when the gig has been deleted', async () => {
+    const business = await registerBusiness('read-deleted-trial-gig-business@example.com');
+    const seeker = await registerSeeker('read-deleted-trial-gig-seeker@example.com');
+    const gig = await createGigDoc(business.userId, { skillTrial: validSkillTrial() });
+    const application = await createApplicationDoc(gig.id, seeker.userId);
+    await Gig.deleteOne({ _id: gig.id });
+
+    const res = await request(app)
+      .get(`/api/applications/${application.id}`)
+      .set('Authorization', `Bearer ${seeker.accessToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.application.gig).toBeNull();
   });
 
   it('shows the rejection reason and note verbatim once decided', async () => {
