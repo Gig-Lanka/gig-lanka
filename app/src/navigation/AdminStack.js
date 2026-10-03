@@ -2,6 +2,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import ReportDetailScreen from '../screens/admin/ReportDetailScreen';
 import ReportsScreen from '../screens/admin/ReportsScreen';
+import ResetLinkSignedInScreen from '../screens/auth/ResetLinkSignedInScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -18,6 +19,8 @@ export default function AdminStack() {
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="Reports" component={ReportsScreen} />
       <Stack.Screen name="ReportDetail" component={ReportDetailScreen} />
+      {/* A reset link opened while signed in (GL-396); see useResetLinkRedirect. */}
+      <Stack.Screen name="ResetLinkSignedIn" component={ResetLinkSignedInScreen} />
     </Stack.Navigator>
   );
 }

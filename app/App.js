@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -12,14 +12,28 @@ import {
 } from '@expo-google-fonts/inter-tight';
 
 import RootNavigator from './src/navigation/RootNavigator';
+import { linkingConfig } from './src/navigation/linking';
 import { navigationRef } from './src/navigation/navigationRef';
-import { AuthProvider } from './src/store/AuthContext';
+import useAuth from './src/hooks/useAuth';
+import { AUTH_STATUS, AuthProvider } from './src/store/AuthContext';
 
 SplashScreen.preventAutoHideAsync();
 
 function AppContent() {
+  const { status } = useAuth();
+
+  // While signed in, ResetPassword isn't mounted, so letting React Navigation
+  // act on a reset link would only dispatch an action nothing handles.
+  // useResetLinkRedirect shows the signed-in notice instead. During launch
+  // the status is still loading, so the cold-start link is let through; a
+  // signed-in AppStack then discards the unknown route when it mounts.
+  const linking = useMemo(
+    () => ({ ...linkingConfig, filter: () => status !== AUTH_STATUS.AUTHENTICATED }),
+    [status],
+  );
+
   return (
-    <NavigationContainer ref={navigationRef}>
+    <NavigationContainer ref={navigationRef} linking={linking}>
       <RootNavigator />
     </NavigationContainer>
   );
