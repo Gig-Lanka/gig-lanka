@@ -56,3 +56,20 @@ export const reinstateAccount = async (id) => {
 
   return { userId: user.id, status: 'active' };
 };
+
+// GL-455: which of these accounts Gig Lanka has suspended, for the admin
+// report queue's target summaries. Account status is this service's, so
+// report.service.js reads it through here rather than the User model. One
+// query for a whole page; only suspendedAt counts - a self-deactivated
+// account isn't suspended, and there's nothing for an admin to reinstate.
+export const getSuspendedUserIdSet = async (userIds) => {
+  const uniqueIds = [...new Set(userIds.map((id) => id.toString()))];
+
+  if (uniqueIds.length === 0) return new Set();
+
+  const users = await User.find({ _id: { $in: uniqueIds }, suspendedAt: { $ne: null } })
+    .select('_id')
+    .lean();
+
+  return new Set(users.map((user) => user._id.toString()));
+};

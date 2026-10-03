@@ -5,6 +5,7 @@ import { User } from '../models/user.model.js';
 import { Gig } from '../models/gig.model.js';
 import { getPublicIdentity, getPublicIdentities } from './profile.service.js';
 import { getGigSummariesByIds } from './gig.service.js';
+import { getSuspendedUserIdSet } from './account.service.js';
 
 // Matches review.service.js and gig.service.js — ten per page everywhere
 // pagination shows up in this API.
@@ -192,11 +193,31 @@ const toAdminReports = async (reports) => {
     getGigSummariesByIds(gigTargetIds),
   ]);
 
+  // GL-455: whether each account the admin could act on is suspended — the
+  // person on a user report, the posting business on a gig report — so the
+  // report detail opens showing Reinstate rather than Suspend. One more
+  // batched query, after the gig summaries since that's where the business
+  // ids come from.
+  const suspendedUserIds = await getSuspendedUserIdSet([
+    ...userTargetIds,
+    ...[...gigTargetSummaries.values()].map((gig) => gig.business.id),
+  ]);
+
+  const withSuspended = (identity) => ({
+    ...identity,
+    suspended: suspendedUserIds.has(identity.id),
+  });
+
   return reportsJson.map((report) => {
-    const targetSummary =
-      report.targetType === 'user'
-        ? (userTargetIdentities.get(report.targetId.toString()) ?? null)
-        : (gigTargetSummaries.get(report.targetId.toString()) ?? null);
+    const targetId = report.targetId.toString();
+    let targetSummary = null;
+
+    if (report.targetType === 'user' && userTargetIdentities.has(targetId)) {
+      targetSummary = withSuspended(userTargetIdentities.get(targetId));
+    } else if (report.targetType === 'gig' && gigTargetSummaries.has(targetId)) {
+      const gig = gigTargetSummaries.get(targetId);
+      targetSummary = { ...gig, business: withSuspended(gig.business) };
+    }
 
     return {
       ...report,

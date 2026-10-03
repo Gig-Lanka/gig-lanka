@@ -217,9 +217,10 @@ export default function ReportDetailScreen() {
   // get past `submitting` - this ref is the actual double-submit guard.
   const isSubmittingRef = useRef(false);
 
-  // The account action. Works the same on open and closed reports. The queue
-  // doesn't carry a suspended flag yet, so this reads one if it's there and
-  // otherwise starts as not suspended - a 409 corrects it.
+  // The account action. Works the same on open and closed reports. Starts
+  // from the queue's `suspended` on the person or the gig's business
+  // (GL-455), so an already-suspended account opens on Reinstate; a 409
+  // still corrects it if another admin acted since the queue loaded.
   const accountId = accountIdFor(report.targetType, report.target);
   const accountSummary = report.targetType === 'gig' ? report.target?.business : report.target;
   const [suspended, setSuspended] = useState(Boolean(accountSummary?.suspended));
@@ -233,9 +234,9 @@ export default function ReportDetailScreen() {
   const [dialogAction, setDialogAction] = useState('suspend');
   const isActingOnAccountRef = useRef(false);
 
-  // The gig action, on a report about a gig. Like `suspended` above, the
-  // queue doesn't carry a takenDown flag yet, so this reads one if it's
-  // there and otherwise starts as not taken down - a 409 corrects it.
+  // The gig action, on a report about a gig. Starts from the queue's
+  // `takenDown` (GL-455), so a gig that's already down opens with no action;
+  // a 409 still corrects it.
   const gigId = report.targetType === 'gig' ? (report.target?.id ?? null) : null;
   const [takenDown, setTakenDown] = useState(Boolean(report.target?.takenDown));
   const [gigUnavailable, setGigUnavailable] = useState(false);
@@ -245,6 +246,11 @@ export default function ReportDetailScreen() {
   const [gigError, setGigError] = useState(null);
   const isActingOnGigRef = useRef(false);
 
+  // Set once an action here has changed what the queue knows about the
+  // target - a success, or a refusal that corrected it - so going back
+  // reloads the queue and its rows don't reopen showing the old state.
+  const targetChangedRef = useRef(false);
+
   const isClosed = isClosedStatus(report.status) || alreadyClosed;
 
   // Once this report has been closed - here or, per the 409, by someone
@@ -253,6 +259,8 @@ export default function ReportDetailScreen() {
   function handleBack() {
     if (isClosed && !isClosedStatus(params.report.status)) {
       navigation.popTo('Reports', { closedReportId: report.id });
+    } else if (targetChangedRef.current) {
+      navigation.popTo('Reports', { targetChangedAt: Date.now() });
     } else {
       navigation.goBack();
     }
@@ -352,9 +360,11 @@ export default function ReportDetailScreen() {
         await adminApi.reinstateUser(accountId);
         setSuspended(false);
       }
+      targetChangedRef.current = true;
     } catch (error) {
       const refusal = ACCOUNT_REFUSALS[error.response?.data?.error?.code];
       if (refusal) {
+        targetChangedRef.current = true;
         if (refusal.suspended !== undefined) setSuspended(refusal.suspended);
         if (refusal.unavailable) setAccountUnavailable(true);
         setAccountNotice({ variant: refusal.variant, message: refusal.message });
@@ -388,9 +398,11 @@ export default function ReportDetailScreen() {
     try {
       await adminApi.takeDownGig(gigId);
       setTakenDown(true);
+      targetChangedRef.current = true;
     } catch (error) {
       const refusal = GIG_REFUSALS[error.response?.data?.error?.code];
       if (refusal) {
+        targetChangedRef.current = true;
         if (refusal.takenDown) setTakenDown(true);
         if (refusal.unavailable) setGigUnavailable(true);
         setGigNotice({ variant: refusal.variant, message: refusal.message });

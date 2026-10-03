@@ -143,7 +143,7 @@ describe('PATCH /api/admin/reports/:id/resolve and /dismiss', () => {
       expect(res.body.data.report.closedAt).not.toBe('2000-01-01T00:00:00.000Z');
     });
 
-    it('returns a gig target as { id, title, business } in the admin shape', async () => {
+    it('returns a gig target as { id, title, business, takenDown } in the admin shape', async () => {
       const admin = await createAdmin(`actions-${action}-gig-admin@example.com`);
       const business = await registerBusiness(
         `actions-${action}-gig-business@example.com`,
@@ -159,7 +159,13 @@ describe('PATCH /api/admin/reports/:id/resolve and /dismiss', () => {
       expect(res.body.data.report.target).toEqual({
         id: gig.id,
         title: gig.title,
-        business: { id: business.userId, name: 'Colombo Events Co.', photo: null },
+        business: {
+          id: business.userId,
+          name: 'Colombo Events Co.',
+          photo: null,
+          suspended: false,
+        },
+        takenDown: false,
       });
     });
 

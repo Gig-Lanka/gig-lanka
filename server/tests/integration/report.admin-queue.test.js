@@ -24,10 +24,7 @@ const validGigPayload = (overrides = {}) => ({
 });
 
 const setProfileName = async (accessToken, name) =>
-  request(app)
-    .put('/api/profiles/me')
-    .set('Authorization', `Bearer ${accessToken}`)
-    .send({ name });
+  request(app).put('/api/profiles/me').set('Authorization', `Bearer ${accessToken}`).send({ name });
 
 const registerSeeker = async (email, name) => {
   const res = await request(app)
@@ -250,6 +247,123 @@ describe('GET /api/admin/reports', () => {
     });
   });
 
+  it('reads an untouched user target as not suspended, and an untouched gig and its business as not taken down or suspended', async () => {
+    const admin = await createAdmin('admin-queue-state-default-admin@example.com');
+    const reporter = await registerSeeker('admin-queue-state-default-reporter@example.com');
+    const target = await registerSeeker('admin-queue-state-default-target@example.com');
+    const business = await registerBusiness('admin-queue-state-default-business@example.com');
+    const gig = await createGig(business.accessToken);
+
+    await createOpenReport(reporter.userId, target.userId);
+    await createOpenReport(reporter.userId, gig.id, { targetType: 'gig' });
+
+    const res = await request(app)
+      .get('/api/admin/reports')
+      .set('Authorization', `Bearer ${admin.accessToken}`);
+
+    expect(res.status).toBe(200);
+    const userReport = res.body.data.reports.find((report) => report.targetType === 'user');
+    const gigReport = res.body.data.reports.find((report) => report.targetType === 'gig');
+    expect(userReport.target.suspended).toBe(false);
+    expect(gigReport.target.takenDown).toBe(false);
+    expect(gigReport.target.business.suspended).toBe(false);
+  });
+
+  it('carries suspended on a user target an admin has suspended, and drops it once reinstated', async () => {
+    const admin = await createAdmin('admin-queue-suspended-admin@example.com');
+    const reporter = await registerSeeker('admin-queue-suspended-reporter@example.com');
+    const target = await registerSeeker('admin-queue-suspended-target@example.com');
+
+    await createOpenReport(reporter.userId, target.userId);
+
+    await request(app)
+      .patch(`/api/admin/users/${target.userId}/suspend`)
+      .set('Authorization', `Bearer ${admin.accessToken}`);
+
+    const suspendedRes = await request(app)
+      .get('/api/admin/reports')
+      .set('Authorization', `Bearer ${admin.accessToken}`);
+
+    expect(suspendedRes.body.data.reports[0].target).toMatchObject({
+      id: target.userId,
+      suspended: true,
+    });
+
+    await request(app)
+      .patch(`/api/admin/users/${target.userId}/reinstate`)
+      .set('Authorization', `Bearer ${admin.accessToken}`);
+
+    const reinstatedRes = await request(app)
+      .get('/api/admin/reports')
+      .set('Authorization', `Bearer ${admin.accessToken}`);
+
+    expect(reinstatedRes.body.data.reports[0].target.suspended).toBe(false);
+  });
+
+  it('does not read a self-deactivated user target as suspended', async () => {
+    const admin = await createAdmin('admin-queue-deactivated-admin@example.com');
+    const reporter = await registerSeeker('admin-queue-deactivated-reporter@example.com');
+    const target = await registerSeeker('admin-queue-deactivated-target@example.com');
+
+    await createOpenReport(reporter.userId, target.userId);
+    await User.updateOne({ _id: target.userId }, { isActive: false });
+
+    const res = await request(app)
+      .get('/api/admin/reports')
+      .set('Authorization', `Bearer ${admin.accessToken}`);
+
+    expect(res.body.data.reports[0].target.suspended).toBe(false);
+  });
+
+  it("carries suspended on a gig target's business once that business is suspended", async () => {
+    const admin = await createAdmin('admin-queue-suspended-business-admin@example.com');
+    const reporter = await registerSeeker('admin-queue-suspended-business-reporter@example.com');
+    const business = await registerBusiness('admin-queue-suspended-business@example.com');
+    const gig = await createGig(business.accessToken);
+
+    await createOpenReport(reporter.userId, gig.id, { targetType: 'gig' });
+
+    await request(app)
+      .patch(`/api/admin/users/${business.userId}/suspend`)
+      .set('Authorization', `Bearer ${admin.accessToken}`);
+
+    const res = await request(app)
+      .get('/api/admin/reports')
+      .set('Authorization', `Bearer ${admin.accessToken}`);
+
+    expect(res.body.data.reports[0].target).toMatchObject({
+      id: gig.id,
+      takenDown: false,
+      business: { id: business.userId, suspended: true },
+    });
+  });
+
+  it('carries takenDown on a gig an admin has taken down, but not on one its business closed', async () => {
+    const admin = await createAdmin('admin-queue-taken-down-admin@example.com');
+    const reporter = await registerSeeker('admin-queue-taken-down-reporter@example.com');
+    const business = await registerBusiness('admin-queue-taken-down-business@example.com');
+    const takenDownGig = await createGig(business.accessToken, { title: 'Taken down gig' });
+    const selfClosedGig = await createGig(business.accessToken, { title: 'Self-closed gig' });
+
+    await createOpenReport(reporter.userId, takenDownGig.id, { targetType: 'gig' });
+    await createOpenReport(reporter.userId, selfClosedGig.id, { targetType: 'gig' });
+
+    await request(app)
+      .patch(`/api/admin/gigs/${takenDownGig.id}/close`)
+      .set('Authorization', `Bearer ${admin.accessToken}`);
+    await request(app)
+      .patch(`/api/gigs/${selfClosedGig.id}/close`)
+      .set('Authorization', `Bearer ${business.accessToken}`);
+
+    const res = await request(app)
+      .get('/api/admin/reports')
+      .set('Authorization', `Bearer ${admin.accessToken}`);
+
+    const byTargetId = new Map(res.body.data.reports.map((report) => [report.targetId, report]));
+    expect(byTargetId.get(takenDownGig.id).target.takenDown).toBe(true);
+    expect(byTargetId.get(selfClosedGig.id).target.takenDown).toBe(false);
+  });
+
   it('still returns a report whose gig target has since been hard-deleted, with a null target summary', async () => {
     const admin = await createAdmin('admin-queue-deleted-gig-admin@example.com');
     const reporter = await registerSeeker('admin-queue-deleted-gig-reporter@example.com');
@@ -289,6 +403,7 @@ describe('GET /api/admin/reports', () => {
 
     const profileFindSpy = jest.spyOn(Profile, 'find');
     const gigFindSpy = jest.spyOn(Gig, 'find');
+    const userFindSpy = jest.spyOn(User, 'find');
 
     const res = await request(app)
       .get('/api/admin/reports')
@@ -299,12 +414,15 @@ describe('GET /api/admin/reports', () => {
     // One batched Profile.find for reporters, one for user targets, one more
     // inside gig.service.js for the gig's posting business — a fixed number
     // regardless of how many of the ten rows are which type, never one query
-    // per row.
+    // per row. Suspension state for every target account and gig business is
+    // one more User.find (GL-455).
     expect(profileFindSpy).toHaveBeenCalledTimes(3);
     expect(gigFindSpy).toHaveBeenCalledTimes(1);
+    expect(userFindSpy).toHaveBeenCalledTimes(1);
 
     profileFindSpy.mockRestore();
     gigFindSpy.mockRestore();
+    userFindSpy.mockRestore();
   });
 
   it('mounts no write verb on the admin reports route', async () => {
