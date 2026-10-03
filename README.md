@@ -292,6 +292,31 @@ Don't reach for `git commit --no-verify` to skip this — it only defers the sam
 
 ---
 
+## Build and install
+
+The Android app is built in Expo's cloud with EAS, so no local Android toolchain is needed. Builds are APKs installed directly — there is no Play Store listing. Both profiles are defined in `app/eas.json` and point at the production API with the mock turned off.
+
+**One-time setup.** Be a member of the `giglanka` organisation on expo.dev, then `npm install -g eas-cli` and `eas login`.
+
+**Build** — run from `app/`:
+
+```bash
+eas build -p android --profile preview       # for testing, built from develop
+eas build -p android --profile production    # for release, built from the v1.0.0 tag
+```
+
+**Where builds appear.** On expo.dev under the `giglanka` organisation → the `gig-lanka` project → **Builds**: https://expo.dev/accounts/giglanka/projects/gig-lanka/builds. Each build has an install link and a QR code, and the APK can be downloaded from the same page.
+
+**Installing an APK from an EAS link.**
+
+1. On the Android phone, allow installs from unknown sources when prompted (Settings → Apps → special access → Install unknown apps → your browser).
+2. Open the build link on the phone, or scan its QR code, and download the APK.
+3. Open the downloaded file and tap **Install**. Uninstall any earlier Gig Lanka build first.
+
+**Never remove `EXPO_PUBLIC_USE_MOCK: "false"` from a profile in `app/eas.json`.** The app treats an unset value as "use the mock", and `app/.env` is never seen by EAS, so that line is the only thing keeping the mock out of a build.
+
+---
+
 ## Rules for an agent implementing a sub-task
 
 1. **Read `docs/api-contract.md` first** if the task touches an endpoint or an API call. The response envelope is fixed and both sides depend on it.
