@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Ionicons } from '@expo/vector-icons';
 import { Pressable, Text, View } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 
@@ -26,9 +27,7 @@ export default function LoginScreen() {
   // AccountSettingsScreen does for passwordChanged, so the notice survives
   // the effect below clearing the param instead of flashing and vanishing.
   const [passwordResetNotice, setPasswordResetNotice] = useState(false);
-  const [seenPasswordResetParam, setSeenPasswordResetParam] = useState(
-    route.params?.passwordReset,
-  );
+  const [seenPasswordResetParam, setSeenPasswordResetParam] = useState(route.params?.passwordReset);
   if (route.params?.passwordReset !== seenPasswordResetParam) {
     setSeenPasswordResetParam(route.params?.passwordReset);
     if (route.params?.passwordReset) {
@@ -93,18 +92,25 @@ export default function LoginScreen() {
         onChangeText={setPassword}
         containerClassName="mb-0"
         disabled={submitting}
+        rightSlot={
+          <Pressable
+            onPress={() => setShowPassword((prev) => !prev)}
+            disabled={submitting}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
+          >
+            <Ionicons
+              name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+              size={22}
+              color="#A3A4AE"
+            />
+          </Pressable>
+        }
       />
-      <View className="mb-7 mt-3 flex-row items-center justify-between">
-        <Pressable
-          onPress={() => navigation.navigate('ForgotPassword')}
-          disabled={submitting}
-        >
+      <View className="mb-7 mt-3 flex-row items-center">
+        <Pressable onPress={() => navigation.navigate('ForgotPassword')} disabled={submitting}>
           <Text className="text-[13px] font-semibold text-signal">Forgot password?</Text>
-        </Pressable>
-        <Pressable onPress={() => setShowPassword((prev) => !prev)} disabled={submitting}>
-          <Text className="text-[13px] font-semibold text-ink">
-            {showPassword ? 'Hide password' : 'Show password'}
-          </Text>
         </Pressable>
       </View>
 
