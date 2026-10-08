@@ -124,7 +124,7 @@ export default function MyReportsScreen() {
 
   return (
     <Screen>
-      <ScreenHeader title="My reports" small onBack={() => navigation.goBack()} />
+      <ScreenHeader title="My reports" flush small onBack={() => navigation.goBack()} />
 
       <Text className="mb-3 text-[11.5px] text-muted-dark">
         Reports go to the Gig Lanka team. The person or business you reported is never told who

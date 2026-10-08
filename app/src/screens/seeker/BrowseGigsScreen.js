@@ -265,7 +265,7 @@ export default function BrowseGigsScreen({ guest = false, onSignIn }) {
 
   return (
     <Screen edges={['top']}>
-      <ScreenHeader title="Find a gig" />
+      <ScreenHeader title="Find a gig" flush />
 
       <TextInput
         value={searchText}

@@ -271,6 +271,7 @@ export default function ReportsScreen() {
     <Screen edges={['top', 'bottom']}>
       <ScreenHeader
         title="Reports"
+        flush
         rightSlot={
           <Pressable onPress={() => setLogoutConfirmVisible(true)}>
             <Text className="text-[14px] font-bold text-signal">Log out</Text>

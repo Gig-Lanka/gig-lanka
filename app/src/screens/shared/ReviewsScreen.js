@@ -163,7 +163,7 @@ export default function ReviewsScreen() {
 
   return (
     <Screen edges={['top', 'bottom']}>
-      <ScreenHeader title="Reviews" small onBack={handleBack} />
+      <ScreenHeader title="Reviews" flush small onBack={handleBack} />
 
       {subject ? (
         <View className="flex-row items-center gap-[11px] pb-3">
