@@ -8,7 +8,7 @@ import ResetPasswordScreen from '../screens/auth/ResetPasswordScreen';
 
 const Stack = createNativeStackNavigator();
 
-export default function AuthStack({ initialRouteName = 'RoleSelect', onContinueAsGuest }) {
+export default function AuthStack({ initialRouteName = 'Login', onContinueAsGuest }) {
   return (
     <Stack.Navigator initialRouteName={initialRouteName} screenOptions={{ headerShown: false }}>
       <Stack.Screen name="RoleSelect">
