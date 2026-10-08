@@ -7,6 +7,7 @@ const VARIANT_STYLES = {
   muted: 'bg-haze text-muted-dark',
   warning: 'bg-warning-soft text-warning-ink',
   danger: 'bg-danger-soft text-danger-ink',
+  info: 'bg-info-soft text-info-ink',
 };
 
 export default function Badge({ children, variant = 'neutral', className, ...props }) {

@@ -281,6 +281,7 @@ function BadgeSection() {
         <Badge variant="muted">Muted</Badge>
         <Badge variant="warning">Warning</Badge>
         <Badge variant="danger">Danger</Badge>
+        <Badge variant="info">Info</Badge>
       </View>
     </Section>
   );
