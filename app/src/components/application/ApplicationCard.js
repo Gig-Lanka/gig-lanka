@@ -4,17 +4,17 @@ import Badge from '../ui/Badge';
 import { APPLICATION_STATUSES } from '../../constants/enums';
 import { formatPay, formatRelativeTime } from '../../utils/format';
 
-// §12 of the mockup source: Applied and Viewed neutral, Shortlisted and
-// Hired positive, Rejected / Withdrawn / Closed muted grey - never alarm
-// red, even for a rejection. Completed carries the same positive variant as
-// Hired - the mockups predate GL-218 and have no frame for this status.
+// Kept in sync with ApplicantRow.js's map so a status reads the same colour
+// on both sides. Applied is orange, Viewed amber, Shortlisted blue, Hired /
+// Completed green, Rejected the app's danger red; Withdrawn and Closed stay
+// muted grey since neither is a verdict on the applicant.
 const BADGE_VARIANT_BY_STATUS = {
-  applied: 'neutral',
-  viewed: 'neutral',
-  shortlisted: 'positive',
+  applied: 'strong',
+  viewed: 'warning',
+  shortlisted: 'info',
   hired: 'positive',
   completed: 'positive',
-  rejected: 'muted',
+  rejected: 'danger',
   withdrawn: 'muted',
   closed_filled: 'muted',
 };

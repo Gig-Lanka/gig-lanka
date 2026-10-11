@@ -168,6 +168,7 @@ export default function ApplicantsScreen() {
     <Screen edges={isScoped ? ['top', 'bottom'] : ['top']}>
       <ScreenHeader
         title="Applicants"
+        flush
         small={isScoped}
         onBack={isScoped ? () => navigation.goBack() : undefined}
       />

@@ -83,7 +83,7 @@ export default function SavedGigsScreen() {
 
   return (
     <Screen edges={['top']}>
-      <ScreenHeader title="Saved" />
+      <ScreenHeader title="Saved" flush />
 
       {error ? (
         <EmptyState message={error} actionLabel="Retry" onAction={handleRetry} />

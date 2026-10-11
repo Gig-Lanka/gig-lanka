@@ -1,10 +1,21 @@
 import { Pressable, Text, View } from 'react-native';
 
-export default function ScreenHeader({ title, small = false, onBack, rightSlot, className }) {
+// `flush` drops the header's own horizontal padding. Use it inside <Screen>,
+// which already pads its children - otherwise the title is indented twice and
+// no longer lines up with the content below it.
+export default function ScreenHeader({
+  title,
+  small = false,
+  flush = false,
+  onBack,
+  rightSlot,
+  className,
+}) {
   return (
     <View
       className={[
-        'min-h-12 flex-row items-center justify-between gap-3 px-[22px] pb-[10px] pt-4',
+        'min-h-12 flex-row items-center justify-between gap-3 pb-[10px] pt-4',
+        flush ? '' : 'px-[22px]',
         className,
       ]
         .filter(Boolean)

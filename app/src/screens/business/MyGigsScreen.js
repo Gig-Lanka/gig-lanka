@@ -102,7 +102,7 @@ export default function MyGigsScreen() {
 
   return (
     <Screen edges={['top']}>
-      <ScreenHeader title="My Gigs" rightSlot={headerActions} />
+      <ScreenHeader title="My Gigs" flush rightSlot={headerActions} />
 
       {error ? (
         <EmptyState message={error} actionLabel="Retry" onAction={handleRetry} />

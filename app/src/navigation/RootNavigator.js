@@ -110,14 +110,9 @@ function AppStack({ role }) {
 export default function RootNavigator() {
   const { status, user } = useAuth();
 
-  // A brand-new install should land on RoleSelect (choose seeker/business,
-  // sign up) - but anyone who signs out after having been authenticated
-  // already has an account, so they belong on Login instead. Adjusted
-  // during render rather than in an effect, per React's own pattern for
-  // deriving state from a prior render's value - it only ever flips
-  // false → true, guarded so it can't loop.
+  // Adjusted during render rather than in an effect, per React's own
+  // pattern for deriving state from a prior render's value.
   const [prevStatus, setPrevStatus] = useState(status);
-  const [wasAuthenticated, setWasAuthenticated] = useState(status === AUTH_STATUS.AUTHENTICATED);
   // Browsing without an account (GL-172) is a third leaf under
   // UNAUTHENTICATED, not a fourth AUTH_STATUS - signing in for real still
   // goes through the same bootstrap/login/logout status transitions either
@@ -136,7 +131,6 @@ export default function RootNavigator() {
   if (status !== prevStatus) {
     setPrevStatus(status);
     if (status === AUTH_STATUS.AUTHENTICATED) {
-      setWasAuthenticated(true);
       setGuestMode(false);
     }
   }
@@ -203,9 +197,6 @@ export default function RootNavigator() {
   }
 
   return (
-    <AuthStack
-      initialRouteName={wasAuthenticated ? 'Login' : 'RoleSelect'}
-      onContinueAsGuest={() => setGuestMode(true)}
-    />
+    <AuthStack initialRouteName="Login" onContinueAsGuest={() => setGuestMode(true)} />
   );
 }

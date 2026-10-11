@@ -205,7 +205,7 @@ export default function CompletedGigsScreen() {
 
   return (
     <Screen>
-      <ScreenHeader title="Completed" small onBack={() => navigation.goBack()} />
+      <ScreenHeader title="Completed" flush small onBack={() => navigation.goBack()} />
 
       {error ? (
         <EmptyState message={error} actionLabel="Retry" onAction={handleRetry} />

@@ -67,6 +67,12 @@ module.exports = {
         'warning-soft': '#FFF3DF',
         'warning-ink': '#96570A',
 
+        // Blue badge pair, used for the Shortlisted application status. Not in
+        // the mockups' `:root` set - added in the same soft/ink shape as the
+        // success / warning / danger pairs above so Badge can treat it alike.
+        'info-soft': '#E8F1FD',
+        'info-ink': '#1F5FAE',
+
         // GL-90 — the mockup's `.field-hint` placeholder color is a literal
         // #A3A4AE, not one of the `:root` custom properties, so it has no
         // named token of its own upstream. Added here so TextInput's

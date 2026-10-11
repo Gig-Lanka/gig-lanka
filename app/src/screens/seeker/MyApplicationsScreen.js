@@ -95,7 +95,7 @@ export default function MyApplicationsScreen() {
 
   return (
     <Screen edges={['top']}>
-      <ScreenHeader title="Applications" rightSlot={completedAction} />
+      <ScreenHeader title="Applications" flush rightSlot={completedAction} />
 
       {error ? (
         <EmptyState message={error} actionLabel="Retry" onAction={handleRetry} />

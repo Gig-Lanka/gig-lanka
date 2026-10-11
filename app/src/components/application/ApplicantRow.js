@@ -7,14 +7,18 @@ import { formatRelativeTime } from '../../utils/format';
 
 // Same variant map as ApplicationCard.js (the seeker's row) - duplicated
 // rather than shared, the same rule GL-118 and GL-121 followed for the two
-// gig cards: no role branching inside either component.
+// gig cards: no role branching inside either component. Each live state has
+// its own colour (applied orange, viewed amber, then green once the
+// application is moving forward: shortlisted blue, hired / completed green),
+// rejected is the app's danger red, and withdrawn / closed stay muted grey
+// since neither is a verdict on the person.
 const BADGE_VARIANT_BY_STATUS = {
-  applied: 'neutral',
-  viewed: 'neutral',
-  shortlisted: 'positive',
+  applied: 'strong',
+  viewed: 'warning',
+  shortlisted: 'info',
   hired: 'positive',
   completed: 'positive',
-  rejected: 'muted',
+  rejected: 'danger',
   withdrawn: 'muted',
   closed_filled: 'muted',
 };
